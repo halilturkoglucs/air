@@ -214,22 +214,30 @@ describe("AIR CLI", () => {
     const directory = await mkdtemp(resolve(tmpdir(), "air-cli-pack-"));
     const semantic = resolve(directory, "semantic.json");
     const live = resolve(directory, "live.json");
+    const compatibility = resolve(directory, "target-compatibility.json");
     const destination = resolve(directory, "pack");
     const identity = { air: { sha256: "a".repeat(64) }, suite: { sha256: "b".repeat(64) } };
     await writeFile(semantic, JSON.stringify({ format: "air.dev/verification-evidence/v0.1", ...identity, summary: { passed: 1 } }));
     await writeFile(live, JSON.stringify({ format: "air.dev/live-verification-evidence/v0.1", ...identity, summary: { passed: 1 } }));
+    await writeFile(compatibility, JSON.stringify({
+      format: "air.dev/target-compatibility/v0.1",
+      airVersion: "air.dev/v0.8",
+      results: [],
+    }));
 
     const exitCode = await runCli([
       "evidence-pack",
       "--artifact", `semantic=${semantic}`,
       "--artifact", `live=${live}`,
+      "--artifact", `target-compatibility=${compatibility}`,
       "--output", destination,
     ], output.io);
 
-    expect(exitCode).toBe(0);
+    expect(exitCode, output.stderr()).toBe(0);
     const manifest = JSON.parse(await readFile(resolve(destination, "manifest.json"), "utf8"));
     expect(manifest.format).toBe("air.dev/evidence-pack/v0.1");
-    expect(manifest.artifacts).toHaveLength(2);
+    expect(manifest.artifacts).toHaveLength(3);
+    expect(manifest.artifacts.map((artifact: { format: string }) => artifact.format)).toContain("air.dev/target-compatibility/v0.1");
     expect(manifest.artifacts[0].sha256).toMatch(/^[a-f0-9]{64}$/);
 
     const verifyOutput = captureIo();

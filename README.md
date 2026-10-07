@@ -29,6 +29,17 @@ npm install --global @halilturkoglucs/air
 air --help
 ```
 
+Or install it from the project Homebrew tap:
+
+```bash
+brew install halilturkoglucs/tap/air-ir
+air --help
+```
+
+The formula is named `air-ir` because Homebrew core already uses `air` for an
+unrelated package. Both formulae install an `air` executable and therefore
+cannot be installed together.
+
 Or work from source:
 
 ```bash

@@ -98,13 +98,20 @@ jobs:
           .venv/bin/pyright app.py
       - name: Start generated targets
         run: |
-          DATABASE_URL="$NEXT_DATABASE_URL" pnpm --dir artifacts/ledger-nextjs run start -- -p 3001 > artifacts/nextjs.log 2>&1 &
+          PORT=3001 DATABASE_URL="$NEXT_DATABASE_URL" pnpm --dir artifacts/ledger-nextjs run start > artifacts/nextjs.log 2>&1 &
           AIR_PORT=3002 DATABASE_URL="$RUST_DATABASE_URL" artifacts/ledger-rust/target/release/air-ledger > artifacts/rust.log 2>&1 &
           AIR_PORT=3003 DATABASE_URL="$PYTHON_DATABASE_URL" artifacts/ledger-python/.venv/bin/uvicorn app:app --app-dir artifacts/ledger-python --host 127.0.0.1 --port 3003 > artifacts/python.log 2>&1 &
           for url in http://127.0.0.1:3001/air-runtime/ready http://127.0.0.1:3002/air-runtime/ready http://127.0.0.1:3003/air-runtime/ready; do
             for attempt in $(seq 1 60); do
               curl --fail --silent "$url" && break
-              if [ "$attempt" = 60 ]; then exit 1; fi
+              if [ "$attempt" = 60 ]; then
+                echo "::error::Generated target did not become ready: $url"
+                for log in artifacts/nextjs.log artifacts/rust.log artifacts/python.log; do
+                  echo "===== $log ====="
+                  cat "$log"
+                done
+                exit 1
+              fi
               sleep 1
             done
           done
