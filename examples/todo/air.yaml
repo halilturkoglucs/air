@@ -1,0 +1,55 @@
+apiVersion: air.dev/v0.2
+kind: Application
+metadata:
+  name: todo
+  displayName: AIR Todo
+  description: A minimal application used to verify the AIR v0.2 semantic boundary.
+  version: 0.2.0
+spec:
+  entities:
+    Todo:
+      description: A task that can be completed.
+      fields:
+        id:
+          type: uuid
+          primaryKey: true
+          generated: uuid
+        title:
+          type: string
+          required: true
+          validation:
+            minLength: 1
+            maxLength: 200
+        completed:
+          type: boolean
+          default: false
+        createdAt:
+          type: datetime
+          generated: created-at
+  http:
+    operations:
+      - id: listTodos
+        method: GET
+        path: /todos
+        entity: Todo
+        action: list
+      - id: createTodo
+        method: POST
+        path: /todos
+        entity: Todo
+        action: create
+      - id: readTodo
+        method: GET
+        path: /todos/{id}
+        entity: Todo
+        action: read
+      - id: updateTodo
+        method: PATCH
+        path: /todos/{id}
+        entity: Todo
+        action: update
+      - id: deleteTodo
+        method: DELETE
+        path: /todos/{id}
+        entity: Todo
+        action: delete

@@ -1,0 +1,25 @@
+name: Feature request
+description: Propose a semantic, target, verification, or adoption capability.
+title: "[proposal] "
+labels: [proposal]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Describe the user problem independently of a preferred implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: semantics
+    attributes:
+      label: Proposed semantics
+      description: Explain portability, validation, migration, and verification implications.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+    validations:
+      required: true

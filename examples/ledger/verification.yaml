@@ -1,0 +1,85 @@
+apiVersion: air.dev/verification/v0.1
+kind: VerificationSuite
+scenarios:
+  - id: transferMovesFundsAtomically
+    command: transferFunds
+    given:
+      input: &transferInput
+        transferId: 33333333-3333-4333-8333-333333333333
+        ownerId: aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa
+        fromAccountId: 11111111-1111-4111-8111-111111111111
+        toAccountId: 22222222-2222-4222-8222-222222222222
+        amount: 30
+        expectedFromVersion: 0
+        expectedToVersion: 0
+        idempotencyKey: 44444444-4444-4444-8444-444444444444
+      principal: &principal
+        ownerId: aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa
+      state:
+        Account:
+          - &source
+            id: 11111111-1111-4111-8111-111111111111
+            ownerId: aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa
+            balance: 100
+            version: 0
+            createdAt: 2025-01-01T00:00:00.000Z
+          - &destination
+            id: 22222222-2222-4222-8222-222222222222
+            ownerId: bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb
+            balance: 50
+            version: 0
+            createdAt: 2025-01-01T00:00:00.000Z
+    expect:
+      output: &transfer
+        id: 33333333-3333-4333-8333-333333333333
+        ownerId: aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa
+        fromAccountId: 11111111-1111-4111-8111-111111111111
+        toAccountId: 22222222-2222-4222-8222-222222222222
+        amount: 30
+        idempotencyKey: 44444444-4444-4444-8444-444444444444
+        createdAt: 2026-01-01T00:00:00.000Z
+      state: &completedState
+        Account:
+          - id: 11111111-1111-4111-8111-111111111111
+            ownerId: aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa
+            balance: 70
+            version: 1
+            createdAt: 2025-01-01T00:00:00.000Z
+          - id: 22222222-2222-4222-8222-222222222222
+            ownerId: bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb
+            balance: 80
+            version: 1
+            createdAt: 2025-01-01T00:00:00.000Z
+        Transfer:
+          - *transfer
+
+  - id: transferRollsBackForInsufficientFunds
+    command: transferFunds
+    given:
+      input:
+        transferId: 33333333-3333-4333-8333-333333333333
+        ownerId: aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa
+        fromAccountId: 11111111-1111-4111-8111-111111111111
+        toAccountId: 22222222-2222-4222-8222-222222222222
+        amount: 130
+        expectedFromVersion: 0
+        expectedToVersion: 0
+        idempotencyKey: 44444444-4444-4444-8444-444444444444
+      principal: *principal
+      state: &initialState
+        Account:
+          - *source
+          - *destination
+    expect:
+      error: INSUFFICIENT_FUNDS
+      state: *initialState
+
+  - id: transferReplaysIdempotentResult
+    command: transferFunds
+    given:
+      input: *transferInput
+      principal: *principal
+      state: *completedState
+    expect:
+      output: *transfer
+      state: *completedState

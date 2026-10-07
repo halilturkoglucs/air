@@ -1,0 +1,285 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://air.dev/schema/air-0.7.schema.json",
+  "title": "AIR Application v0.7",
+  "description": "AIR semantics with named atomic updates, idempotency replay, and bounded conflict retries.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "metadata", "spec"],
+  "properties": {
+    "apiVersion": { "const": "air.dev/v0.7" },
+    "kind": { "const": "Application" },
+    "metadata": { "$ref": "https://air.dev/schema/air-0.4.schema.json#/$defs/metadata" },
+    "spec": { "$ref": "#/$defs/spec" }
+  },
+  "$defs": {
+    "identifier": { "$ref": "https://air.dev/schema/air-0.4.schema.json#/$defs/identifier" },
+    "errorCode": { "$ref": "https://air.dev/schema/air-0.4.schema.json#/$defs/errorCode" },
+    "inputReference": { "$ref": "https://air.dev/schema/air-0.4.schema.json#/$defs/inputReference" },
+    "valueReference": { "$ref": "https://air.dev/schema/air-0.4.schema.json#/$defs/valueReference" },
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entities"],
+      "properties": {
+        "entities": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": { "$ref": "#/$defs/identifier" },
+          "additionalProperties": { "$ref": "https://air.dev/schema/air-0.4.schema.json#/$defs/entity" }
+        },
+        "contracts": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": { "$ref": "#/$defs/identifier" },
+          "additionalProperties": { "$ref": "https://air.dev/schema/air-0.4.schema.json#/$defs/contract" }
+        },
+        "principals": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": { "$ref": "#/$defs/identifier" },
+          "additionalProperties": { "$ref": "https://air.dev/schema/air-0.4.schema.json#/$defs/contract" }
+        },
+        "commands": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": { "$ref": "#/$defs/identifier" },
+          "additionalProperties": { "$ref": "#/$defs/command" }
+        },
+        "http": { "$ref": "https://air.dev/schema/air-0.4.schema.json#/$defs/http" }
+      }
+    },
+    "command": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["input", "output", "effect"],
+      "properties": {
+        "description": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "input": { "$ref": "#/$defs/identifier" },
+        "output": { "$ref": "https://air.dev/schema/air-0.4.schema.json#/$defs/commandOutput" },
+        "errors": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": { "$ref": "#/$defs/errorCode" },
+          "additionalProperties": { "$ref": "https://air.dev/schema/air-0.4.schema.json#/$defs/commandError" }
+        },
+        "guards": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "https://air.dev/schema/air-0.4.schema.json#/$defs/existsGuard" }
+        },
+        "transaction": { "$ref": "#/$defs/transaction" },
+        "authorization": { "$ref": "#/$defs/authorization" },
+        "invariants": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/invariant" }
+        },
+        "effects": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": { "$ref": "#/$defs/identifier" },
+          "additionalProperties": { "$ref": "#/$defs/updateEffect" }
+        },
+        "idempotency": { "$ref": "#/$defs/idempotency" },
+        "effect": {
+          "oneOf": [
+            { "$ref": "https://air.dev/schema/air-0.4.schema.json#/$defs/createEffect" },
+            { "$ref": "#/$defs/updateEffect" }
+          ]
+        }
+      }
+    },
+    "transaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["isolation"],
+      "properties": {
+        "isolation": { "enum": ["read-committed", "repeatable-read", "serializable"] },
+        "conflictError": { "$ref": "#/$defs/errorCode" },
+        "retry": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["maxAttempts"],
+          "properties": { "maxAttempts": { "type": "integer", "minimum": 1, "maximum": 10 } }
+        }
+      }
+    },
+    "authorization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["principal", "unauthenticatedError", "rules"],
+      "properties": {
+        "principal": { "$ref": "#/$defs/identifier" },
+        "unauthenticatedError": { "$ref": "#/$defs/errorCode" },
+        "rules": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "oneOf": [
+              { "$ref": "https://air.dev/schema/air-0.5.schema.json#/$defs/inputEqualsPrincipalRule" },
+              { "$ref": "#/$defs/recordFieldEqualsPrincipalRule" }
+            ]
+          }
+        }
+      }
+    },
+    "recordFieldEqualsPrincipalRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "field", "principalField", "error"],
+      "properties": {
+        "kind": { "const": "record-field-equals-principal" },
+        "effect": { "$ref": "#/$defs/identifier" },
+        "field": { "$ref": "#/$defs/identifier" },
+        "principalField": { "$ref": "#/$defs/identifier" },
+        "error": { "$ref": "#/$defs/errorCode" }
+      }
+    },
+    "invariant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["condition", "error"],
+      "properties": {
+        "condition": { "$ref": "#/$defs/expression" },
+        "error": { "$ref": "#/$defs/errorCode" }
+      }
+    },
+    "expression": {
+      "oneOf": [
+        { "$ref": "#/$defs/comparisonExpression" },
+        { "$ref": "#/$defs/allExpression" },
+        { "$ref": "#/$defs/anyExpression" },
+        { "$ref": "#/$defs/notExpression" }
+      ]
+    },
+    "comparisonExpression": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["left", "operator", "right"],
+      "properties": {
+        "left": { "$ref": "#/$defs/operand" },
+        "operator": {
+          "enum": ["equals", "not-equals", "greater-than", "greater-than-or-equal", "less-than", "less-than-or-equal"]
+        },
+        "right": { "$ref": "#/$defs/operand" }
+      }
+    },
+    "allExpression": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["all"],
+      "properties": { "all": { "type": "array", "minItems": 2, "items": { "$ref": "#/$defs/expression" } } }
+    },
+    "anyExpression": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["any"],
+      "properties": { "any": { "type": "array", "minItems": 2, "items": { "$ref": "#/$defs/expression" } } }
+    },
+    "notExpression": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["not"],
+      "properties": { "not": { "$ref": "#/$defs/expression" } }
+    },
+    "operand": {
+      "oneOf": [
+        { "$ref": "#/$defs/inputOperand" },
+        { "$ref": "#/$defs/recordOperand" },
+        { "$ref": "#/$defs/principalOperand" },
+        { "$ref": "https://air.dev/schema/air-0.4.schema.json#/$defs/literalReference" }
+      ]
+    },
+    "inputOperand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["input"],
+      "properties": { "input": { "$ref": "#/$defs/identifier" } }
+    },
+    "recordOperand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["record"],
+      "properties": {
+        "record": {
+          "oneOf": [
+            { "$ref": "#/$defs/identifier" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["effect", "field"],
+              "properties": {
+                "effect": { "$ref": "#/$defs/identifier" },
+                "field": { "$ref": "#/$defs/identifier" }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "principalOperand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["principal"],
+      "properties": { "principal": { "$ref": "#/$defs/identifier" } }
+    },
+    "numericChange": {
+      "oneOf": [
+        { "type": "number", "not": { "const": 0 } },
+        { "$ref": "#/$defs/inputReference" }
+      ]
+    },
+    "assignment": {
+      "oneOf": [
+        { "$ref": "#/$defs/valueReference" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["increment"],
+          "properties": { "increment": { "$ref": "#/$defs/numericChange" } }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["decrement"],
+          "properties": { "decrement": { "$ref": "#/$defs/numericChange" } }
+        }
+      ]
+    },
+    "updateEffect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "entity", "identify", "values"],
+      "properties": {
+        "kind": { "const": "update" },
+        "entity": { "$ref": "#/$defs/identifier" },
+        "identify": { "$ref": "https://air.dev/schema/air-0.4.schema.json#/$defs/updateSelector" },
+        "preconditions": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "https://air.dev/schema/air-0.4.schema.json#/$defs/precondition" }
+        },
+        "values": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": { "$ref": "#/$defs/identifier" },
+          "additionalProperties": { "$ref": "#/$defs/assignment" }
+        }
+      }
+    },
+    "idempotency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["input", "entity", "field", "scopePrincipalField", "scopeField", "mode"],
+      "properties": {
+        "input": { "$ref": "#/$defs/identifier" },
+        "entity": { "$ref": "#/$defs/identifier" },
+        "field": { "$ref": "#/$defs/identifier" },
+        "scopePrincipalField": { "$ref": "#/$defs/identifier" },
+        "scopeField": { "$ref": "#/$defs/identifier" },
+        "mode": { "const": "replay" }
+      }
+    }
+  }
+}

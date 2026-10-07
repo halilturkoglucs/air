@@ -1,0 +1,25 @@
+{
+  "name": "@air/verifier",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./verification-0.1.schema.json": "./schema/verification-0.1.schema.json"
+  },
+  "files": ["dist", "schema"],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --clean",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@air/schema": "workspace:*",
+    "ajv": "^8.17.1",
+    "yaml": "^2.8.1"
+  }
+}

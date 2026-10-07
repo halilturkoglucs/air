@@ -1,0 +1,53 @@
+{
+  "name": "@halilturkoglucs/air",
+  "version": "0.9.0",
+  "description": "Application Intermediate Representation compiler, verifier, and multi-target generator.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/halilturkoglucs/air.git",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://github.com/halilturkoglucs/air#readme",
+  "bugs": "https://github.com/halilturkoglucs/air/issues",
+  "keywords": ["air", "compiler", "code-generation", "postgresql", "verification", "nextjs", "rust", "fastapi"],
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "air": "./dist/bin.js"
+  },
+  "files": ["dist", "README.md", "LICENSE", "NOTICE"],
+  "engines": { "node": ">=22" },
+  "publishConfig": { "access": "public" },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup --config tsup.config.ts",
+    "prepack": "node ../../scripts/prepare-cli-package.mjs && pnpm build",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "ajv": "^8.17.1",
+    "postgres": "^3.4.7",
+    "yaml": "^2.8.1"
+  },
+  "devDependencies": {
+    "@air/compiler-core": "workspace:*",
+    "@air/import-postgres": "workspace:*",
+    "@air/import-openapi": "workspace:*",
+    "@air/import-nextjs": "workspace:*",
+    "@air/language-server": "workspace:*",
+    "@air/parser": "workspace:*",
+    "@air/schema": "workspace:*",
+    "@air/target-nextjs": "workspace:*",
+    "@air/target-rust": "workspace:*",
+    "@air/target-python": "workspace:*",
+    "@air/verifier": "workspace:*",
+    "tsup": "^8.5.0"
+  }
+}

@@ -1,0 +1,151 @@
+name: AIR conformance
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  conformance:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      AIR_AUTH_SECRET: ci-secret-at-least-32-characters-long
+      NEXT_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/air_nextjs
+      RUST_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/air_rust
+      PYTHON_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/air_python
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99.0
+          components: rustfmt, clippy
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install workspace
+        run: pnpm install --frozen-lockfile
+      - name: Verify compiler workspace
+        run: |
+          pnpm typecheck
+          pnpm test
+      - name: Generate semantic evidence and targets
+        run: |
+          mkdir -p artifacts/evidence
+          node packages/cli/dist/bin.js target-check examples/ledger/air.yaml \
+            --require domain.commands --require domain.idempotency --json > artifacts/evidence/target-compatibility.json
+          node packages/cli/dist/bin.js verify examples/ledger/air.yaml \
+            --scenarios examples/ledger/verification.yaml \
+            --output artifacts/evidence/semantic.json
+          node packages/cli/dist/bin.js compile examples/ledger/air.yaml \
+            --target nextjs --deployment node --output artifacts/ledger-nextjs
+          node packages/cli/dist/bin.js compile examples/ledger/air.yaml \
+            --target rust --output artifacts/ledger-rust
+          node packages/cli/dist/bin.js compile examples/ledger/air.yaml \
+            --target python --output artifacts/ledger-python
+      - name: Create isolated databases
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -c 'CREATE DATABASE air_nextjs;'
+          psql -h 127.0.0.1 -U postgres -c 'CREATE DATABASE air_rust;'
+          psql -h 127.0.0.1 -U postgres -c 'CREATE DATABASE air_python;'
+      - name: Verify generated Next.js target
+        working-directory: artifacts/ledger-nextjs
+        env:
+          DATABASE_URL: ${{ env.NEXT_DATABASE_URL }}
+        run: |
+          pnpm install --no-frozen-lockfile
+          pnpm run db:generate
+          pnpm run db:migrate
+          pnpm run typecheck
+          pnpm test
+          pnpm run build
+      - name: Verify generated Rust target
+        working-directory: artifacts/ledger-rust
+        run: |
+          cargo fmt --check
+          cargo check
+          cargo test
+          cargo clippy -- -D warnings
+          cargo build --release
+      - name: Verify generated Python target
+        working-directory: artifacts/ledger-python
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install -r requirements-dev.txt
+          .venv/bin/python -m py_compile app.py
+          .venv/bin/ruff check app.py
+          .venv/bin/pyright app.py
+      - name: Start generated targets
+        run: |
+          DATABASE_URL="$NEXT_DATABASE_URL" pnpm --dir artifacts/ledger-nextjs run start -- -p 3001 > artifacts/nextjs.log 2>&1 &
+          AIR_PORT=3002 DATABASE_URL="$RUST_DATABASE_URL" artifacts/ledger-rust/target/release/air-ledger > artifacts/rust.log 2>&1 &
+          AIR_PORT=3003 DATABASE_URL="$PYTHON_DATABASE_URL" artifacts/ledger-python/.venv/bin/uvicorn app:app --app-dir artifacts/ledger-python --host 127.0.0.1 --port 3003 > artifacts/python.log 2>&1 &
+          for url in http://127.0.0.1:3001/air-runtime/ready http://127.0.0.1:3002/air-runtime/ready http://127.0.0.1:3003/air-runtime/ready; do
+            for attempt in $(seq 1 60); do
+              curl --fail --silent "$url" && break
+              if [ "$attempt" = 60 ]; then exit 1; fi
+              sleep 1
+            done
+          done
+      - name: Differential conformance and benchmarks
+        run: |
+          node packages/cli/dist/bin.js verify-differential examples/ledger/air.yaml \
+            --scenarios examples/ledger/verification.yaml \
+            --target nextjs=http://127.0.0.1:3001 \
+            --database-url nextjs="$NEXT_DATABASE_URL" \
+            --target rust=http://127.0.0.1:3002 \
+            --database-url rust="$RUST_DATABASE_URL" \
+            --target python=http://127.0.0.1:3003 \
+            --database-url python="$PYTHON_DATABASE_URL" \
+            --allow-database-reset \
+            --output artifacts/evidence/differential.json
+          node packages/cli/dist/bin.js benchmark-live examples/ledger/air.yaml \
+            --scenarios examples/ledger/verification.yaml \
+            --scenario transferReplaysIdempotentResult \
+            --base-url http://127.0.0.1:3002 --database-url "$RUST_DATABASE_URL" \
+            --warmup 5 --requests 50 --concurrency 5 \
+            --allow-database-reset --output artifacts/evidence/rust-replay.json
+          node packages/cli/dist/bin.js benchmark-live examples/ledger/air.yaml \
+            --scenarios examples/ledger/verification.yaml \
+            --scenario transferMovesFundsAtomically --workload conflict \
+            --base-url http://127.0.0.1:3002 --database-url "$RUST_DATABASE_URL" \
+            --warmup 2 --requests 10 --concurrency 10 \
+            --allow-database-reset --output artifacts/evidence/rust-conflict.json
+      - name: Assemble and verify evidence pack
+        run: |
+          node packages/cli/dist/bin.js evidence-pack \
+            --artifact semantic=artifacts/evidence/semantic.json \
+            --artifact differential=artifacts/evidence/differential.json \
+            --artifact rust-replay=artifacts/evidence/rust-replay.json \
+            --artifact rust-conflict=artifacts/evidence/rust-conflict.json \
+            --artifact target-compatibility=artifacts/evidence/target-compatibility.json \
+            --output artifacts/evidence-pack
+          node packages/cli/dist/bin.js evidence-verify artifacts/evidence-pack
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: air-conformance-evidence
+          path: |
+            artifacts/evidence-pack
+            artifacts/*.log

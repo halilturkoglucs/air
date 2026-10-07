@@ -1,0 +1,30 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "baseUrl": ".",
+    "paths": {
+      "@air/schema": ["packages/air-schema/src/index.ts"],
+      "@air/parser": ["packages/air-parser/src/index.ts"],
+      "@air/compiler-core": ["packages/compiler-core/src/index.ts"],
+      "@air/target-nextjs": ["packages/target-nextjs/src/index.ts"],
+      "@air/target-rust": ["packages/target-rust/src/index.ts"],
+      "@air/target-python": ["packages/target-python/src/index.ts"],
+      "@air/import-postgres": ["packages/import-postgres/src/index.ts"],
+      "@air/import-openapi": ["packages/import-openapi/src/index.ts"],
+      "@air/import-nextjs": ["packages/import-nextjs/src/index.ts"],
+      "@air/language-server": ["packages/language-server/src/index.ts"],
+      "@air/verifier": ["packages/verifier/src/index.ts"],
+      "@halilturkoglucs/air": ["packages/cli/src/index.ts"]
+    },
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "declaration": true,
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true
+  }
+}

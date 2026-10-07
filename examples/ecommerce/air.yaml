@@ -1,0 +1,253 @@
+apiVersion: air.dev/v0.6
+kind: Application
+metadata:
+  name: air-commerce
+  displayName: AIR Commerce
+  description: An authenticated transactional invariant reference application for AIR v0.6.
+  version: 0.6.0
+spec:
+  entities:
+    Customer:
+      fields:
+        id:
+          type: uuid
+          primaryKey: true
+          generated: uuid
+        email:
+          type: string
+          required: true
+          unique: true
+          validation:
+            minLength: 3
+            maxLength: 320
+        createdAt:
+          type: datetime
+          generated: created-at
+      relationships:
+        orders:
+          target: Order
+          cardinality: one-to-many
+          inverse: customer
+    Order:
+      fields:
+        id:
+          type: uuid
+          primaryKey: true
+          generated: uuid
+        customerId:
+          type: uuid
+          required: true
+        status:
+          type: string
+          default: pending
+          validation:
+            enum: [pending, paid, cancelled]
+        total:
+          type: number
+          required: true
+          validation:
+            minimum: 0
+        version:
+          type: integer
+          default: 0
+          validation:
+            minimum: 0
+        createdAt:
+          type: datetime
+          generated: created-at
+      relationships:
+        customer:
+          target: Customer
+          cardinality: many-to-one
+          inverse: orders
+          sourceField: customerId
+          targetField: id
+          onDelete: restrict
+  contracts:
+    PlaceOrderInput:
+      description: The explicit request contract for placing an order.
+      fields:
+        customerId:
+          type: uuid
+          required: true
+        total:
+          type: number
+          required: true
+          validation:
+            minimum: 0.01
+    MarkOrderPaidInput:
+      description: Identifies the pending order and the version the caller observed.
+      fields:
+        orderId:
+          type: uuid
+          required: true
+        expectedVersion:
+          type: integer
+          required: true
+          validation:
+            minimum: 0
+  principals:
+    CustomerPrincipal:
+      description: The authenticated customer identity available to owned commands.
+      fields:
+        customerId:
+          type: uuid
+          required: true
+        maximumOrderTotal:
+          type: number
+          required: true
+          validation:
+            minimum: 0.01
+  commands:
+    placeOrder:
+      description: Create an order for an existing customer as one transactional operation.
+      input: PlaceOrderInput
+      output:
+        entity: Order
+        fields: [id, customerId, status, total, version, createdAt]
+      errors:
+        UNAUTHENTICATED:
+          status: 401
+          message: Authentication required.
+          retryable: false
+        FORBIDDEN:
+          status: 403
+          message: Cannot place an order for another customer.
+          retryable: false
+        ORDER_LIMIT_EXCEEDED:
+          status: 422
+          message: Order total exceeds the customer's approved limit.
+          retryable: false
+        CUSTOMER_NOT_FOUND:
+          status: 404
+          message: Customer not found.
+          retryable: false
+      authorization:
+        principal: CustomerPrincipal
+        unauthenticatedError: UNAUTHENTICATED
+        rules:
+          - kind: input-equals-principal
+            input: customerId
+            principalField: customerId
+            error: FORBIDDEN
+      invariants:
+        - condition:
+            all:
+              - left: { input: total }
+                operator: greater-than
+                right: { literal: 0 }
+              - not:
+                  left: { input: total }
+                  operator: greater-than
+                  right: { principal: maximumOrderTotal }
+          error: ORDER_LIMIT_EXCEEDED
+      guards:
+        - kind: exists
+          entity: Customer
+          field: id
+          value:
+            input: customerId
+          error: CUSTOMER_NOT_FOUND
+      effect:
+        kind: create
+        entity: Order
+        values:
+          customerId:
+            input: customerId
+          total:
+            input: total
+    markOrderPaid:
+      description: Transition a pending order to paid using optimistic concurrency.
+      input: MarkOrderPaidInput
+      output:
+        entity: Order
+        fields: [id, customerId, status, total, version, createdAt]
+      errors:
+        UNAUTHENTICATED:
+          status: 401
+          message: Authentication required.
+          retryable: false
+        FORBIDDEN:
+          status: 403
+          message: Cannot update another customer's order.
+          retryable: false
+        ORDER_NOT_FOUND:
+          status: 404
+          message: Order not found.
+          retryable: false
+        ORDER_NOT_PENDING:
+          status: 409
+          message: Only pending orders can be marked paid.
+          retryable: false
+        VERSION_CONFLICT:
+          status: 409
+          message: Order was changed by another request.
+          retryable: true
+      authorization:
+        principal: CustomerPrincipal
+        unauthenticatedError: UNAUTHENTICATED
+        rules:
+          - kind: record-field-equals-principal
+            field: customerId
+            principalField: customerId
+            error: FORBIDDEN
+      transaction:
+        isolation: serializable
+        conflictError: VERSION_CONFLICT
+      effect:
+        kind: update
+        entity: Order
+        identify:
+          field: id
+          value:
+            input: orderId
+          error: ORDER_NOT_FOUND
+        preconditions:
+          - field: status
+            equals:
+              literal: pending
+            error: ORDER_NOT_PENDING
+          - field: version
+            equals:
+              input: expectedVersion
+            error: VERSION_CONFLICT
+        values:
+          status:
+            literal: paid
+          version:
+            increment: 1
+  http:
+    operations:
+      - id: listCustomers
+        method: GET
+        path: /customers
+        entity: Customer
+        action: list
+      - id: createCustomer
+        method: POST
+        path: /customers
+        entity: Customer
+        action: create
+      - id: readCustomer
+        method: GET
+        path: /customers/{id}
+        entity: Customer
+        action: read
+      - id: listOrders
+        method: GET
+        path: /orders
+        entity: Order
+        action: list
+      - id: placeOrder
+        method: POST
+        path: /orders/place
+        command: placeOrder
+      - id: markOrderPaid
+        method: POST
+        path: /orders/mark-paid
+        command: markOrderPaid
+      - id: readOrder
+        method: GET
+        path: /orders/{id}
+        entity: Order
+        action: read

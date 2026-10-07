@@ -1,0 +1,29 @@
+{
+  "name": "@air/schema",
+  "version": "0.7.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./air-0.1.schema.json": "./schema/air-0.1.schema.json",
+    "./air-0.2.schema.json": "./schema/air-0.2.schema.json",
+    "./air-0.3.schema.json": "./schema/air-0.3.schema.json",
+    "./air-0.4.schema.json": "./schema/air-0.4.schema.json",
+    "./air-0.5.schema.json": "./schema/air-0.5.schema.json",
+    "./air-0.6.schema.json": "./schema/air-0.6.schema.json",
+    "./air-0.7.schema.json": "./schema/air-0.7.schema.json"
+  },
+  "files": [
+    "dist",
+    "schema"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --clean",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  }
+}

@@ -1,0 +1,52 @@
+name: AIR pilot report
+description: Report adoption results from a real service or bounded prototype.
+title: "[pilot] "
+labels: [pilot]
+body:
+  - type: dropdown
+    id: path
+    attributes:
+      label: Adoption path
+      options:
+        - New AIR application
+        - PostgreSQL import
+        - OpenAPI import
+        - Next.js and Drizzle import
+        - Partial adoption of generated output
+    validations:
+      required: true
+  - type: input
+    id: target
+    attributes:
+      label: Target and versions
+      placeholder: nextjs 0.9.0, Node 22, PostgreSQL 16
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Outcome
+      description: What compiled, ran, or failed? Include the smallest reproducible AIR document when possible.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Conformance results, ownership report, benchmark manifest, and redacted diagnostics.
+    validations:
+      required: true
+  - type: textarea
+    id: friction
+    attributes:
+      label: Highest-friction step
+      description: Name one workflow that cost the most time or trust.
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety confirmation
+      options:
+        - label: The report contains no credentials, private customer data, or proprietary source code.
+          required: true

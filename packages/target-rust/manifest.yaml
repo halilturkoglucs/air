@@ -1,0 +1,84 @@
+{
+  "apiVersion": "air.dev/target-capabilities/v0.1",
+  "target": {
+    "id": "rust-axum",
+    "displayName": "Rust Axum",
+    "version": "0.1.0"
+  },
+  "capabilities": {
+    "http.crud": {
+      "support": "supported",
+      "constraints": [
+        {
+          "kind": "air-version",
+          "minimum": "air.dev/v0.1",
+          "maximum": "air.dev/v0.8"
+        }
+      ]
+    },
+    "http.collections": {
+      "support": "supported"
+    },
+    "domain.commands": {
+      "support": "conditional",
+      "conditions": [
+        "AIR v0.8 create/update/delete effects, named atomic updates, authorization, invariants, idempotency, and bounded retry are generated."
+      ],
+      "constraints": [
+        {
+          "kind": "primary-effect-in",
+          "values": [
+            "create",
+            "update",
+            "delete"
+          ]
+        }
+      ]
+    },
+    "authorization.ownership": {
+      "support": "supported"
+    },
+    "authorization.roles-scopes": {
+      "support": "supported"
+    },
+    "domain.invariants": {
+      "support": "supported"
+    },
+    "domain.multi_effect": {
+      "support": "conditional",
+      "constraints": [
+        {
+          "kind": "maximum-named-effects",
+          "value": 32
+        }
+      ]
+    },
+    "domain.idempotency": {
+      "support": "supported"
+    },
+    "domain.delete": {
+      "support": "supported"
+    },
+    "persistence.relational": {
+      "support": "conditional",
+      "conditions": [
+        "PostgreSQL through SQLx is the only persistence provider."
+      ],
+      "constraints": [
+        {
+          "kind": "option-in",
+          "option": "database",
+          "values": [
+            "postgres"
+          ]
+        }
+      ]
+    },
+    "deployment.container": {
+      "support": "supported"
+    },
+    "ui.web": {
+      "support": "unsupported"
+    }
+  }
+}

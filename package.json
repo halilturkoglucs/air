@@ -1,0 +1,42 @@
+{
+  "name": "air",
+  "version": "0.9.0",
+  "private": true,
+  "description": "A language-neutral application intermediate representation and compiler toolkit.",
+  "license": "Apache-2.0",
+  "repository": "github:halilturkoglucs/air",
+  "homepage": "https://github.com/halilturkoglucs/air#readme",
+  "type": "module",
+  "packageManager": "pnpm@11.19.0",
+  "scripts": {
+    "build": "pnpm -r --sort run build && node scripts/sync-target-manifests.mjs --check",
+    "typecheck": "pnpm -r --sort run typecheck",
+    "test": "pnpm build && vitest run",
+    "test:watch": "pnpm build && vitest",
+    "release:check": "pnpm typecheck && pnpm test",
+    "release:artifacts": "node scripts/release-artifacts.mjs",
+    "targets:sync": "node scripts/sync-target-manifests.mjs",
+    "targets:check": "node scripts/sync-target-manifests.mjs --check",
+    "air": "node packages/cli/dist/bin.js"
+  },
+  "devDependencies": {
+    "@halilturkoglucs/air": "workspace:*",
+    "@air/compiler-core": "workspace:*",
+    "@air/import-postgres": "workspace:*",
+    "@air/import-openapi": "workspace:*",
+    "@air/import-nextjs": "workspace:*",
+    "@air/language-server": "workspace:*",
+    "@air/parser": "workspace:*",
+    "@air/target-nextjs": "workspace:*",
+    "@air/target-rust": "workspace:*",
+    "@air/target-python": "workspace:*",
+    "@air/verifier": "workspace:*",
+    "@types/node": "^22.15.0",
+    "tsup": "^8.5.0",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.3"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

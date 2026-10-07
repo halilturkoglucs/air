@@ -1,0 +1,39 @@
+name: Bug report
+description: Report a reproducible compiler, verifier, importer, or generated-target problem.
+title: "[bug] "
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: AIR version
+      placeholder: 0.9.0
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options: [CLI, schema/parser, verifier, Next.js target, Rust target, Python target, importer, language server, packaging]
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Minimal reproduction
+      description: Include commands and the smallest non-sensitive AIR document that reproduces the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected and actual behavior
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety confirmation
+      options:
+        - label: This report contains no credentials, private customer data, or proprietary source code.
+          required: true

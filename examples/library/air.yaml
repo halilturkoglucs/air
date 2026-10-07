@@ -1,0 +1,101 @@
+apiVersion: air.dev/v0.8
+kind: Application
+metadata:
+  name: air-library
+  displayName: AIR Library
+  version: 0.8.0
+  description: Role- and scope-protected document collections with transactional deletion.
+spec:
+  entities:
+    Document:
+      fields:
+        id: { type: uuid, primaryKey: true }
+        ownerId: { type: uuid, nullable: false }
+        title: { type: string, nullable: false, validation: { minLength: 1, maxLength: 200 } }
+        status:
+          type: string
+          nullable: false
+          validation: { enum: [draft, published] }
+  contracts:
+    DeleteDocumentInput:
+      fields:
+        documentId: { type: uuid, required: true }
+        expectedStatus:
+          type: string
+          required: true
+          validation: { enum: [draft, published] }
+  principals:
+    OperatorPrincipal:
+      fields:
+        operatorId: { type: uuid, required: true }
+        role:
+          type: string
+          required: true
+          validation: { enum: [admin, editor, viewer] }
+        scope:
+          type: string
+          required: true
+          validation: { enum: [documents:read, documents:write] }
+  commands:
+    deleteDocument:
+      input: DeleteDocumentInput
+      output:
+        entity: Document
+        fields: [id, ownerId, title, status]
+      errors:
+        UNAUTHENTICATED: { status: 401, message: Authentication is required. }
+        FORBIDDEN: { status: 403, message: Administrator write access is required. }
+        DOCUMENT_NOT_FOUND: { status: 404, message: Document not found. }
+        DOCUMENT_CONFLICT: { status: 409, message: Document state changed., retryable: true }
+      authorization:
+        principal: OperatorPrincipal
+        unauthenticatedError: UNAUTHENTICATED
+        rules:
+          - kind: principal-field-in
+            principalField: role
+            values: [admin]
+            error: FORBIDDEN
+          - kind: principal-field-in
+            principalField: scope
+            values: [documents:write]
+            error: FORBIDDEN
+      transaction:
+        isolation: serializable
+        conflictError: DOCUMENT_CONFLICT
+      effect:
+        kind: delete
+        entity: Document
+        identify:
+          field: id
+          value: { input: documentId }
+          error: DOCUMENT_NOT_FOUND
+        preconditions:
+          - field: status
+            equals: { input: expectedStatus }
+            error: DOCUMENT_CONFLICT
+  http:
+    operations:
+      - id: listDocuments
+        method: GET
+        path: /documents
+        entity: Document
+        action: list
+        authorization:
+          principal: OperatorPrincipal
+          rules:
+            - kind: principal-field-in
+              principalField: role
+              values: [admin, editor]
+            - kind: principal-field-in
+              principalField: scope
+              values: [documents:read]
+        collection:
+          pagination: { defaultLimit: 20, maxLimit: 100 }
+          filters:
+            - { parameter: status, field: status, operator: equals }
+          orderBy:
+            - { field: title, direction: asc }
+      - id: deleteDocument
+        method: POST
+        path: /documents/delete
+        command: deleteDocument

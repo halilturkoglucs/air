@@ -1,0 +1,189 @@
+apiVersion: air.dev/v0.7
+kind: Application
+metadata:
+  name: air-ledger
+  displayName: AIR Ledger
+  description: Atomic, idempotent money transfers with ownership and balance invariants.
+  version: 0.7.0
+spec:
+  entities:
+    Account:
+      fields:
+        id:
+          type: uuid
+          primaryKey: true
+          generated: uuid
+        ownerId:
+          type: uuid
+          required: true
+        balance:
+          type: number
+          required: true
+          validation: { minimum: 0 }
+        version:
+          type: integer
+          default: 0
+          validation: { minimum: 0 }
+        createdAt:
+          type: datetime
+          generated: created-at
+    Transfer:
+      fields:
+        id:
+          type: uuid
+          primaryKey: true
+          required: true
+        ownerId:
+          type: uuid
+          required: true
+        fromAccountId:
+          type: uuid
+          required: true
+        toAccountId:
+          type: uuid
+          required: true
+        amount:
+          type: number
+          required: true
+          validation: { minimum: 0.01 }
+        idempotencyKey:
+          type: uuid
+          required: true
+          unique: true
+        createdAt:
+          type: datetime
+          generated: created-at
+  contracts:
+    TransferFundsInput:
+      fields:
+        transferId: { type: uuid, required: true }
+        ownerId: { type: uuid, required: true }
+        fromAccountId: { type: uuid, required: true }
+        toAccountId: { type: uuid, required: true }
+        amount:
+          type: number
+          required: true
+          validation: { minimum: 0.01 }
+        expectedFromVersion:
+          type: integer
+          required: true
+          validation: { minimum: 0 }
+        expectedToVersion:
+          type: integer
+          required: true
+          validation: { minimum: 0 }
+        idempotencyKey: { type: uuid, required: true }
+  principals:
+    LedgerPrincipal:
+      fields:
+        ownerId: { type: uuid, required: true }
+  commands:
+    transferFunds:
+      description: Debit one account, credit another, and record the transfer atomically.
+      input: TransferFundsInput
+      output:
+        entity: Transfer
+        fields: [id, ownerId, fromAccountId, toAccountId, amount, idempotencyKey, createdAt]
+      errors:
+        UNAUTHENTICATED: { status: 401, message: Authentication required. }
+        FORBIDDEN: { status: 403, message: The source account is not owned by this principal. }
+        SOURCE_NOT_FOUND: { status: 404, message: Source account not found. }
+        DESTINATION_NOT_FOUND: { status: 404, message: Destination account not found. }
+        SAME_ACCOUNT: { status: 422, message: Source and destination accounts must differ. }
+        INSUFFICIENT_FUNDS: { status: 422, message: Source account has insufficient funds. }
+        VERSION_CONFLICT:
+          status: 409
+          message: An account changed during the transfer.
+          retryable: true
+      authorization:
+        principal: LedgerPrincipal
+        unauthenticatedError: UNAUTHENTICATED
+        rules:
+          - kind: input-equals-principal
+            input: ownerId
+            principalField: ownerId
+            error: FORBIDDEN
+          - kind: record-field-equals-principal
+            effect: debitSource
+            field: ownerId
+            principalField: ownerId
+            error: FORBIDDEN
+      invariants:
+        - condition:
+            left: { input: fromAccountId }
+            operator: not-equals
+            right: { input: toAccountId }
+          error: SAME_ACCOUNT
+        - condition:
+            left:
+              record: { effect: debitSource, field: balance }
+            operator: greater-than-or-equal
+            right: { input: amount }
+          error: INSUFFICIENT_FUNDS
+      effects:
+        debitSource:
+          kind: update
+          entity: Account
+          identify:
+            field: id
+            value: { input: fromAccountId }
+            error: SOURCE_NOT_FOUND
+          preconditions:
+            - field: version
+              equals: { input: expectedFromVersion }
+              error: VERSION_CONFLICT
+          values:
+            balance: { decrement: { input: amount } }
+            version: { increment: 1 }
+        creditDestination:
+          kind: update
+          entity: Account
+          identify:
+            field: id
+            value: { input: toAccountId }
+            error: DESTINATION_NOT_FOUND
+          preconditions:
+            - field: version
+              equals: { input: expectedToVersion }
+              error: VERSION_CONFLICT
+          values:
+            balance: { increment: { input: amount } }
+            version: { increment: 1 }
+      idempotency:
+        input: idempotencyKey
+        entity: Transfer
+        field: idempotencyKey
+        scopePrincipalField: ownerId
+        scopeField: ownerId
+        mode: replay
+      transaction:
+        isolation: serializable
+        conflictError: VERSION_CONFLICT
+        retry:
+          maxAttempts: 3
+      effect:
+        kind: create
+        entity: Transfer
+        values:
+          id: { input: transferId }
+          ownerId: { input: ownerId }
+          fromAccountId: { input: fromAccountId }
+          toAccountId: { input: toAccountId }
+          amount: { input: amount }
+          idempotencyKey: { input: idempotencyKey }
+  http:
+    operations:
+      - id: listAccounts
+        method: GET
+        path: /accounts
+        entity: Account
+        action: list
+      - id: listTransfers
+        method: GET
+        path: /transfers
+        entity: Transfer
+        action: list
+      - id: transferFunds
+        method: POST
+        path: /transfers/execute
+        command: transferFunds

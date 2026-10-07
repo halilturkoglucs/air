@@ -1,0 +1,9 @@
+node_modules/
+.pnpm-store/
+.idea/
+dist/
+coverage/
+*.tsbuildinfo
+.DS_Store
+packages/cli/LICENSE
+packages/cli/NOTICE

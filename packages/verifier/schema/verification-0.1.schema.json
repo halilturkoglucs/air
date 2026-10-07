@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://air.dev/schema/verification-0.1.schema.json",
+  "title": "AIR Verification Suite v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "scenarios"],
+  "properties": {
+    "apiVersion": { "const": "air.dev/verification/v0.1" },
+    "kind": { "const": "VerificationSuite" },
+    "scenarios": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/scenario" }
+    }
+  },
+  "$defs": {
+    "identifier": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_]*$" },
+    "jsonObject": { "type": "object" },
+    "state": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": { "$ref": "#/$defs/jsonObject" }
+      }
+    },
+    "scenario": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "command", "given", "expect"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "description": { "type": "string", "minLength": 1 },
+        "command": { "$ref": "#/$defs/identifier" },
+        "given": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["input"],
+          "properties": {
+            "input": { "$ref": "#/$defs/jsonObject" },
+            "principal": { "$ref": "#/$defs/jsonObject" },
+            "state": { "$ref": "#/$defs/state" }
+          }
+        },
+        "expect": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["output"],
+              "properties": {
+                "output": { "$ref": "#/$defs/jsonObject" },
+                "state": { "$ref": "#/$defs/state" }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["error"],
+              "properties": {
+                "error": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]*$" },
+                "state": { "$ref": "#/$defs/state" }
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}
