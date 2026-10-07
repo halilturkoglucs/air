@@ -2,6 +2,11 @@
 
 All notable changes are recorded here. AIR follows the pre-1.0 policy in `docs/versioning.md`.
 
+## 0.9.2 - 2026-10-07
+
+- Derived CLI help and `--version` output from the published package metadata.
+- Added release guards that require the Git tag, workspace version, and npm package version to match.
+
 ## 0.9.1 - 2026-10-07
 
 - Fixed generated Next.js startup in the live conformance workflow.

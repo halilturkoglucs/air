@@ -33,6 +33,7 @@ import {
   verifySuite,
 } from "@air/verifier";
 import { createPostgresHttpLiveAdapter } from "./live-verifier.js";
+import packageJson from "../package.json" with { type: "json" };
 
 export interface CliIo {
   readonly stdout: (message: string) => void;
@@ -44,7 +45,9 @@ const defaultIo: CliIo = {
   stderr: (message) => process.stderr.write(message),
 };
 
-const HELP = `AIR compiler toolkit 0.9.0
+export const VERSION = packageJson.version;
+
+const HELP = `AIR compiler toolkit ${VERSION}
 
 Usage:
   air validate <file>                         Parse and validate AIR YAML
@@ -1357,7 +1360,7 @@ export async function runCli(args: readonly string[], io: CliIo = defaultIo): Pr
   }
 
   if (command === "--version" || command === "-v") {
-    io.stdout("0.9.0\n");
+    io.stdout(`${VERSION}\n`);
     return 0;
   }
 

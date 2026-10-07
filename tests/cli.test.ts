@@ -2,7 +2,8 @@ import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { runCli, type CliIo } from "@halilturkoglucs/air";
+import cliPackage from "../packages/cli/package.json" with { type: "json" };
+import { runCli, VERSION, type CliIo } from "@halilturkoglucs/air";
 
 function captureIo() {
   let stdout = "";
@@ -19,6 +20,18 @@ function captureIo() {
 }
 
 describe("AIR CLI", () => {
+  it("reports the published package version in help and version output", async () => {
+    expect(VERSION).toBe(cliPackage.version);
+
+    const help = captureIo();
+    expect(await runCli(["--help"], help.io)).toBe(0);
+    expect(help.stdout()).toContain(`AIR compiler toolkit ${cliPackage.version}`);
+
+    const version = captureIo();
+    expect(await runCli(["--version"], version.io)).toBe(0);
+    expect(version.stdout()).toBe(`${cliPackage.version}\n`);
+  });
+
   it("validates a file", async () => {
     const output = captureIo();
     const exitCode = await runCli(["validate", resolve("examples/todo/air.yaml")], output.io);

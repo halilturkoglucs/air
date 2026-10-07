@@ -1,6 +1,6 @@
 {
   "name": "@halilturkoglucs/air",
-  "version": "0.9.1",
+  "version": "0.9.2",
   "description": "Application Intermediate Representation compiler, verifier, and multi-target generator.",
   "license": "Apache-2.0",
   "repository": {
