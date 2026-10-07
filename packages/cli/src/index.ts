@@ -1054,6 +1054,7 @@ const EVIDENCE_FORMATS = new Set([
   "air.dev/live-verification-evidence/v0.1",
   "air.dev/differential-verification-evidence/v0.1",
   "air.dev/live-benchmark-evidence/v0.1",
+  "air.dev/target-compatibility/v0.1",
 ]);
 
 async function evidencePack(args: readonly string[], io: CliIo): Promise<number> {
@@ -1184,10 +1185,10 @@ async function evidenceVerify(args: readonly string[], io: CliIo): Promise<numbe
       }
       const airHash = (evidence.air as { sha256?: unknown } | undefined)?.sha256;
       const suiteHash = (evidence.suite as { sha256?: unknown } | undefined)?.sha256;
-      if (typeof manifest.airSha256 === "string" && airHash !== manifest.airSha256) {
+      if (typeof manifest.airSha256 === "string" && typeof airHash === "string" && airHash !== manifest.airSha256) {
         throw new Error(`AIR source hash mismatch for evidence artifact ${artifact.name}.`);
       }
-      if (typeof manifest.suiteSha256 === "string" && suiteHash !== manifest.suiteSha256) {
+      if (typeof manifest.suiteSha256 === "string" && typeof suiteHash === "string" && suiteHash !== manifest.suiteSha256) {
         throw new Error(`Verification-suite hash mismatch for evidence artifact ${artifact.name}.`);
       }
     }
