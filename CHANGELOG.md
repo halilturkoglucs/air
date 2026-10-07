@@ -2,6 +2,13 @@
 
 All notable changes are recorded here. AIR follows the pre-1.0 policy in `docs/versioning.md`.
 
+## 0.9.1 - 2026-10-07
+
+- Fixed generated Next.js startup in the live conformance workflow.
+- Added target-compatibility reports to checksum-verified evidence packs.
+- Normalized the published `air` binary path for npm 11.21.
+- Enabled npm trusted publishing from the GitHub release workflow.
+
 ## 0.9.0 - 2026-10-07
 
 - Added deterministic Next.js, Rust, and Python PostgreSQL targets with three-way differential verification.
