@@ -47,6 +47,9 @@ describe("Next.js target boundary", () => {
     expect(first.find((file) => file.path === "src/app/air-runtime/ready/route.ts")?.content).toContain(
       "checkDatabaseReady",
     );
+    expect(first.find((file) => file.path === "src/air/runtime.ts")?.content).toContain(
+      "AIR_ASYNC.realtime as Record<string",
+    );
   });
 
   it("hardens node deployments with a standalone container health check", async () => {
