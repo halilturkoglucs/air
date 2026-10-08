@@ -1,24 +1,24 @@
 # AIR schemas
 
-The public schemas are [`air-0.1.schema.json`](../packages/air-schema/schema/air-0.1.schema.json) through [`air-0.7.schema.json`](../packages/air-schema/schema/air-0.7.schema.json). AIR YAML is a human-friendly serialization of these JSON data models.
+The public application schemas are [`air-0.1.schema.json`](../packages/air-schema/schema/air-0.1.schema.json) through [`air-0.9.schema.json`](../packages/air-schema/schema/air-0.9.schema.json). System and Deployment documents have separate v0.1 schemas. AIR YAML is a human-friendly serialization of these JSON data models.
 
 ## Versioning
 
 Every document declares:
 
 ```yaml
-apiVersion: air.dev/v0.8
+apiVersion: air.dev/v0.9
 kind: Application
 ```
 
 Breaking semantic or structural changes require a new `apiVersion`. Parsers must reject unknown versions rather than guessing. Package versions and AIR schema versions are related but independent.
 
-The parser accepts v0.1 through v0.8. New documents should use v0.8. Migration to v0.8 preserves older semantics and never invents commands, principals, policies, invariants, effects, collections, or state transitions.
+The parser accepts v0.1 through v0.9. New documents should use v0.9. `air migrate` upgrades older applications without inventing asynchronous behavior; the v0.9 sections remain absent until explicitly authored.
 
 ## Top-level model
 
 ```yaml
-apiVersion: air.dev/v0.8
+apiVersion: air.dev/v0.9
 kind: Application
 metadata:
   name: example
@@ -29,6 +29,20 @@ spec:
 ```
 
 All objects are closed: unknown properties fail validation. This prevents misspellings from silently changing meaning and keeps target concepts out of the semantic model.
+
+## Complex services in v0.9
+
+Applications can declare versioned domain or integration events, point-to-point tasks, command `emits` and `enqueues` effects, durable consumers, UTC schedules, derived cached reads, and authenticated realtime channels. Payload mappings may read command input, the written record, the principal, or a literal. Semantic validation resolves every contract, command, event, task, operation, and invalidation reference.
+
+Every transported message uses the same envelope: `id`, `type`, `schemaVersion`, `occurredAt`, `producer`, `correlationId`, optional `causationId` and `orderingKey`, and `payload`. Delivery is at least once. Generated persistence uses a transactional outbox and durable consumer inbox; cross-system exactly-once delivery is intentionally not promised.
+
+Cached reads are derived from a declared canonical HTTP read. They specify TTL, maximum staleness, invalidating events, and `canonical-source` fallback. Cache data is never authoritative. Realtime channels declare subscriptions, client-command mappings, WebSocket/SSE transports, cursor resume, and bounded overflow behavior.
+
+## System and Deployment documents
+
+`air.dev/system/v0.1` joins multiple applications into named API, worker, scheduler, realtime, and orchestrator components. Logical channels connect event/task sources to consumers. Durable saga definitions support invoke, publish, wait, and delay steps with timeouts, retries, compensation, correlation, and terminal outcomes.
+
+`air.dev/deployment/v0.1` binds those logical resources to explicit providers and a deployment profile. Provider configuration stays out of application semantics. Plugins are named and version-locked; AIR never scans arbitrary installed packages. Supported first-party bindings are Kafka-compatible brokers (including Redpanda), RabbitMQ, PostgreSQL outbox/inbox queues, PostgreSQL persistence, and Redis derived caches.
 
 ## Identity, generation and nullability in v0.2
 

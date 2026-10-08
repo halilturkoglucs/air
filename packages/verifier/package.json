@@ -11,6 +11,7 @@
       "import": "./dist/index.js"
     },
     "./verification-0.1.schema.json": "./schema/verification-0.1.schema.json"
+    ,"./verification-0.2.schema.json": "./schema/verification-0.2.schema.json"
   },
   "files": ["dist", "schema"],
   "scripts": {

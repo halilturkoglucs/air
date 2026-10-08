@@ -1,5 +1,5 @@
 import { isDeepStrictEqual } from "node:util";
-import type { AirDocument, EntityDefinition, FieldDefinition } from "@air/schema";
+import type { AirDocument, EntityDefinition, EventDefinition, FieldDefinition } from "@air/schema";
 
 export type AirChangeImpact = "safe" | "review" | "breaking";
 
@@ -113,6 +113,25 @@ function compareNamedObjects(
   }
 }
 
+function compareEvents(
+  before: Readonly<Record<string, EventDefinition>>,
+  after: Readonly<Record<string, EventDefinition>>,
+  changes: AirSemanticChange[],
+): void {
+  const names = new Set([...Object.keys(before), ...Object.keys(after)]);
+  for (const name of [...names].sort()) {
+    const left = before[name]; const right = after[name]; const path = `/spec/events/${name}`;
+    if (!left && right) { change(changes, path, "added", "safe", `Add event ${name}.`, undefined, right); continue; }
+    if (left && !right) { change(changes, path, "removed", "breaking", `Remove event ${name}; existing producers and consumers become incompatible.`, left); continue; }
+    if (!left || !right || isDeepStrictEqual(left, right)) continue;
+    if (left.kind !== right.kind) change(changes, `${path}/kind`, "changed", "breaking", `Change event ${name} from ${left.kind} to ${right.kind}.`, left.kind, right.kind);
+    const leftMajor = Number(left.version.split(".")[0]); const rightMajor = Number(right.version.split(".")[0]);
+    if (left.payload !== right.payload) change(changes, `${path}/payload`, "changed", rightMajor > leftMajor ? "review" : "breaking", rightMajor > leftMajor ? `Change event ${name} payload with a major schema-version bump; review consumer migration.` : `Change event ${name} payload without a major schema-version bump.`, left.payload, right.payload);
+    if (left.version !== right.version) change(changes, `${path}/version`, "changed", rightMajor < leftMajor ? "breaking" : "review", `Change event ${name} schema version from ${left.version} to ${right.version}.`, left.version, right.version);
+    if (left.description !== right.description) change(changes, `${path}/description`, "changed", "safe", `Change event ${name} documentation.`, left.description, right.description);
+  }
+}
+
 export function diffAirDocuments(before: AirDocument, after: AirDocument): AirSemanticDiff {
   const changes: AirSemanticChange[] = [];
   if (before.metadata.name !== after.metadata.name) {
@@ -135,6 +154,12 @@ export function diffAirDocuments(before: AirDocument, after: AirDocument): AirSe
   compareNamedObjects("/spec/contracts", "contract", before.spec.contracts ?? {}, after.spec.contracts ?? {}, changes);
   compareNamedObjects("/spec/principals", "principal", before.spec.principals ?? {}, after.spec.principals ?? {}, changes);
   compareNamedObjects("/spec/commands", "command", before.spec.commands ?? {}, after.spec.commands ?? {}, changes);
+  compareEvents(before.spec.events ?? {}, after.spec.events ?? {}, changes);
+  compareNamedObjects("/spec/tasks", "task", before.spec.tasks ?? {}, after.spec.tasks ?? {}, changes);
+  compareNamedObjects("/spec/consumers", "consumer", before.spec.consumers ?? {}, after.spec.consumers ?? {}, changes);
+  compareNamedObjects("/spec/schedules", "schedule", before.spec.schedules ?? {}, after.spec.schedules ?? {}, changes);
+  compareNamedObjects("/spec/cachedReads", "cached read", before.spec.cachedReads ?? {}, after.spec.cachedReads ?? {}, changes);
+  compareNamedObjects("/spec/realtime", "realtime channel", before.spec.realtime ?? {}, after.spec.realtime ?? {}, changes);
   const beforeOperations = Object.fromEntries((before.spec.http?.operations ?? []).map((operation) => [operation.id, operation]));
   const afterOperations = Object.fromEntries((after.spec.http?.operations ?? []).map((operation) => [operation.id, operation]));
   compareNamedObjects("/spec/http/operations", "HTTP operation", beforeOperations, afterOperations, changes);

@@ -11,8 +11,8 @@ import { renderRustFiles } from "./render.js";
 import type { PlannedRustFile, ResolvedRustTargetOptions, RustTargetOptions } from "./types.js";
 
 const TARGET_ID = "rust-axum";
-const TARGET_VERSION = "0.1.0";
-const COMPILER_VERSION = "0.9.0";
+const TARGET_VERSION = "0.10.0";
+const COMPILER_VERSION = "0.10.0";
 const MANIFEST_PATH = ".air/manifest.json";
 const LOCK_PATH = ".air/lock.json";
 const ADOPTION_PATH = ".air/adoption.json";

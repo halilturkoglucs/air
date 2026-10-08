@@ -3,7 +3,7 @@
   "target": {
     "id": "rust-axum",
     "displayName": "Rust Axum",
-    "version": "0.1.0"
+    "version": "0.10.0"
   },
   "capabilities": {
     "http.crud": {
@@ -12,7 +12,7 @@
         {
           "kind": "air-version",
           "minimum": "air.dev/v0.1",
-          "maximum": "air.dev/v0.8"
+          "maximum": "air.dev/v0.9"
         }
       ]
     },
@@ -22,7 +22,7 @@
     "domain.commands": {
       "support": "conditional",
       "conditions": [
-        "AIR v0.8 create/update/delete effects, named atomic updates, authorization, invariants, idempotency, and bounded retry are generated."
+        "AIR v0.9 create/update/delete effects, named atomic updates, authorization, invariants, idempotency, bounded retry, and transactional message effects are generated."
       ],
       "constraints": [
         {
@@ -73,6 +73,42 @@
           ]
         }
       ]
+    },
+    "messaging.publish": {
+      "support": "supported"
+    },
+    "messaging.consume": {
+      "support": "supported"
+    },
+    "messaging.tasks": {
+      "support": "supported"
+    },
+    "messaging.ordering": {
+      "support": "supported"
+    },
+    "background.workers": {
+      "support": "supported"
+    },
+    "background.schedules": {
+      "support": "supported"
+    },
+    "background.long-running": {
+      "support": "supported"
+    },
+    "orchestration.sagas": {
+      "support": "supported"
+    },
+    "cache.derived": {
+      "support": "supported"
+    },
+    "realtime.websocket": {
+      "support": "supported"
+    },
+    "realtime.sse": {
+      "support": "supported"
+    },
+    "observability.opentelemetry": {
+      "support": "supported"
     },
     "deployment.container": {
       "support": "supported"

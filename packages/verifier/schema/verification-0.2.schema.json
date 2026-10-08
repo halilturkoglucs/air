@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://air.dev/schema/verification-0.2.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "scenarios"],
+  "properties": {
+    "apiVersion": { "const": "air.dev/verification/v0.2" },
+    "kind": { "const": "SystemVerificationSuite" },
+    "scenarios": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "steps"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "description": { "type": "string" },
+          "steps": { "type": "array", "items": { "$ref": "#/$defs/step" } }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "record": { "type": "object", "additionalProperties": true },
+    "step": {
+      "oneOf": [
+        { "type": "object", "additionalProperties": false, "required": ["invoke"], "properties": { "invoke": { "type": "object", "additionalProperties": false, "required": ["application", "command", "input"], "properties": { "application": { "type": "string" }, "command": { "type": "string" }, "input": { "$ref": "#/$defs/record" }, "principal": { "$ref": "#/$defs/record" } } } } },
+        { "type": "object", "additionalProperties": false, "required": ["publish"], "properties": { "publish": { "type": "object", "additionalProperties": false, "required": ["application", "event", "payload"], "properties": { "application": { "type": "string" }, "event": { "type": "string" }, "payload": { "$ref": "#/$defs/record" }, "correlationId": { "type": "string" }, "orderingKey": { "type": "string" } } } } },
+        { "type": "object", "additionalProperties": false, "required": ["advance"], "properties": { "advance": { "type": "object", "additionalProperties": false, "required": ["seconds"], "properties": { "seconds": { "type": "integer", "minimum": 0 } } } } },
+        { "type": "object", "additionalProperties": false, "required": ["connect"], "properties": { "connect": { "type": "object", "additionalProperties": false, "required": ["client", "application", "channel"], "properties": { "client": { "type": "string" }, "application": { "type": "string" }, "channel": { "type": "string" }, "principal": { "$ref": "#/$defs/record" }, "cursor": { "type": "integer", "minimum": 0 } } } } },
+        { "type": "object", "additionalProperties": false, "required": ["disconnect"], "properties": { "disconnect": { "type": "object", "additionalProperties": false, "required": ["client"], "properties": { "client": { "type": "string" } } } } },
+        { "type": "object", "additionalProperties": false, "required": ["clientCommand"], "properties": { "clientCommand": { "type": "object", "additionalProperties": false, "required": ["client", "type", "payload"], "properties": { "client": { "type": "string" }, "type": { "type": "string" }, "payload": { "$ref": "#/$defs/record" } } } } },
+        { "type": "object", "additionalProperties": false, "required": ["readCache"], "properties": { "readCache": { "type": "object", "additionalProperties": false, "required": ["application", "cache", "key"], "properties": { "application": { "type": "string" }, "cache": { "type": "string" }, "key": { "type": "string" } } } } },
+        { "type": "object", "additionalProperties": false, "required": ["duplicate"], "properties": { "duplicate": { "type": "object", "additionalProperties": false, "required": ["messageId"], "properties": { "messageId": { "type": "string" } } } } },
+        { "type": "object", "additionalProperties": false, "required": ["reorder"], "properties": { "reorder": { "type": "object", "additionalProperties": false, "required": ["messageIds"], "properties": { "messageIds": { "type": "array", "items": { "type": "string" } } } } } },
+        { "type": "object", "additionalProperties": false, "required": ["fail"], "properties": { "fail": { "type": "object", "additionalProperties": false, "required": ["dependency"], "properties": { "dependency": { "type": "string" } } } } },
+        { "type": "object", "additionalProperties": false, "required": ["recover"], "properties": { "recover": { "type": "object", "additionalProperties": false, "required": ["dependency"], "properties": { "dependency": { "type": "string" } } } } },
+        { "type": "object", "additionalProperties": false, "required": ["assert"], "properties": { "assert": { "type": "object", "additionalProperties": false, "properties": { "emitted": { "type": "array", "items": { "type": "string" } }, "deadLetters": { "type": "integer", "minimum": 0 }, "consumerDeliveries": { "type": "integer", "minimum": 0 }, "saga": { "type": "object", "additionalProperties": false, "required": ["name", "status"], "properties": { "name": { "type": "string" }, "status": { "enum": ["running", "completed", "compensated", "failed", "timed-out"] } } }, "frames": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 0 } }, "state": { "type": "object", "additionalProperties": { "type": "array", "items": { "$ref": "#/$defs/record" } } }, "cache": { "type": "object", "additionalProperties": { "enum": ["hit", "miss", "stale", "fallback"] } } } } } }
+      ]
+    }
+  }
+}

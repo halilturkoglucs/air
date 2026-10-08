@@ -1,22 +1,27 @@
-import { basename, relative, resolve } from "node:path";
+import { basename, dirname, relative, resolve } from "node:path";
 import { createHash } from "node:crypto";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { copyFile, mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import {
   AirMigrationError,
   AirParseError,
   AirValidationError,
+  type AirSourceDocument,
   loadAirFile,
   parseAir,
   migrateAirDocument,
   diffAirDocuments,
+  loadAirSourceFile,
   planAirEvolution,
   serializeAir,
 } from "@air/parser";
-import type { AirDocument } from "@air/schema";
+import type { AirDeploymentDocument, AirDocument, AirSystemDocument } from "@air/schema";
+import { loadComposition, planComposition } from "@air/composer";
+import { providerFor } from "@air/providers";
 import { importPostgres } from "@air/import-postgres";
 import { importOpenApiSource } from "@air/import-openapi";
 import { importNextjs } from "@air/import-nextjs";
+import { importSpring } from "@air/import-spring";
 import { startLanguageServer } from "@air/language-server";
 import { NextjsTargetAdapter, type NextjsTargetOptions } from "@air/target-nextjs";
 import { RustTargetAdapter, type RustTargetOptions } from "@air/target-rust";
@@ -27,10 +32,12 @@ import {
   benchmarkMutationScenario,
   benchmarkConflictScenario,
   parseVerificationSuite,
+  parseSystemVerificationSuite,
   VerificationParseError,
   verifyDifferentialSuite,
   verifyLiveSuite,
   verifySuite,
+  verifySystemSuite,
 } from "@air/verifier";
 import { createPostgresHttpLiveAdapter } from "./live-verifier.js";
 import packageJson from "../package.json" with { type: "json" };
@@ -71,6 +78,15 @@ Usage:
   air target-check <file> [options]           Solve target compatibility and preferences
   air lsp                                      Start the AIR language server over stdio
   air compile [file] --target <target> [options] Generate a target application
+  air compose <system> --deployment <file> --output <dir>
+                                              Generate a complete service topology
+  air dev <system> --deployment <file> [--output <dir>]
+                                              Compose and start a local topology
+  air verify-system <system> --scenarios <file> [--output <file>]
+                                              Verify asynchronous system behavior
+  air provider-check <deployment> [--json] [--live]
+                                               Validate provider bindings and health
+  air import-spring [options]                Import Spring messaging into reviewable AIR
   air help                                    Show this help
 
 Compile options:
@@ -84,8 +100,8 @@ Compile options:
   --detach                   Omit managed-mode ownership metadata
 
 Migrate options:
-  --to <version>             Target version (default: air.dev/v0.8)
-  --output <file>            Output file (default: <file>.v0.8.yaml)
+  --to <version>             Target version (default: air.dev/v0.9)
+  --output <file>            Output file (default: <file>.v0.9.yaml)
 
 PostgreSQL import options:
   --url <postgres-url>       PostgreSQL connection URL (required)
@@ -243,6 +259,34 @@ function inspect(document: AirDocument): string {
   if (commands.length > 0) lines.push(`Commands (${commands.length}): ${commands.join(", ")}`);
 
   return `${lines.join("\n")}\n`;
+}
+
+function inspectSource(document: AirSourceDocument): string {
+  if (document.kind === "Application") return inspect(document);
+  if (document.kind === "System") {
+    const system = document as AirSystemDocument;
+    return [
+      `System: ${system.metadata.displayName ?? system.metadata.name}`,
+      `Name: ${system.metadata.name}`,
+      `AIR version: ${system.apiVersion}`,
+      `Applications (${Object.keys(system.spec.applications).length}): ${Object.keys(system.spec.applications).join(", ")}`,
+      `Components (${Object.keys(system.spec.components).length}): ${Object.keys(system.spec.components).join(", ")}`,
+      `Channels (${Object.keys(system.spec.channels ?? {}).length}): ${Object.keys(system.spec.channels ?? {}).join(", ")}`,
+      `Sagas (${Object.keys(system.spec.sagas ?? {}).length}): ${Object.keys(system.spec.sagas ?? {}).join(", ")}`,
+      "",
+    ].join("\n");
+  }
+  const deployment = document as AirDeploymentDocument;
+  return [
+    `Deployment: ${deployment.metadata.displayName ?? deployment.metadata.name}`,
+    `Name: ${deployment.metadata.name}`,
+    `AIR version: ${deployment.apiVersion}`,
+    `System: ${deployment.spec.system}`,
+    `Profile: ${deployment.spec.profile}`,
+    `Resources (${Object.keys(deployment.spec.resources).length}): ${Object.keys(deployment.spec.resources).join(", ")}`,
+    `Bindings (${Object.keys(deployment.spec.bindings).length})`,
+    "",
+  ].join("\n");
 }
 
 interface NextjsCompileArguments {
@@ -428,14 +472,229 @@ async function compile(args: readonly string[], io: CliIo): Promise<number> {
   }
 }
 
+interface CompositionArguments {
+  readonly system: string;
+  readonly deployment: string;
+  readonly output: string;
+}
+
+function parseCompositionArguments(args: readonly string[], defaultOutput = "dist/system"): CompositionArguments | string {
+  const [system, ...options] = args;
+  if (!system || system.startsWith("--")) return "A System document is required.";
+  let deployment: string | undefined;
+  let output = defaultOutput;
+  for (let index = 0; index < options.length; index += 1) {
+    const option = options[index];
+    const value = options[index + 1];
+    if ((option !== "--deployment" && option !== "--output") || !value || value.startsWith("--")) return `Invalid composition option: ${option ?? "<missing>"}.`;
+    index += 1;
+    if (option === "--deployment") deployment = value;
+    else output = value;
+  }
+  if (!deployment) return "--deployment <file> is required.";
+  return { system: resolve(system), deployment: resolve(deployment), output: resolve(output) };
+}
+
+async function compileSystemComponent(
+  componentName: string,
+  component: AirSystemDocument["spec"]["components"][string],
+  application: AirDocument,
+  outputDirectory: string,
+): Promise<{ readonly ok: boolean; readonly diagnostics: readonly string[] }> {
+  const targetOutput = resolve(outputDirectory, "components", componentName);
+  const result = component.target === "nextjs"
+    ? await new NextjsTargetAdapter().compile({ air: application, outputDirectory: targetOutput, mode: "managed", options: { frameworkVersion: "16.0.0", packageManager: "pnpm", deployment: "node", database: "postgres" } })
+    : component.target === "rust-axum"
+      ? await new RustTargetAdapter().compile({ air: application, outputDirectory: targetOutput, mode: "managed", options: { rustEdition: "2024", rustVersion: "1.99.0", deployment: "binary", database: "postgres" } })
+      : await new PythonTargetAdapter().compile({ air: application, outputDirectory: targetOutput, mode: "managed", options: { pythonVersion: "3.12", deployment: "process", database: "postgres" } });
+  await writeFile(resolve(targetOutput, ".air/component.json"), `${JSON.stringify({ format: "air.dev/component/v0.1", name: componentName, role: component.role, target: component.target, application: component.application }, null, 2)}\n`, "utf8");
+  return {
+    ok: result.status === "success",
+    diagnostics: result.diagnostics.map((item) => `${item.severity.toUpperCase()} ${item.code}: ${item.message}`),
+  };
+}
+
+async function composeSystem(args: readonly string[], io: CliIo): Promise<number> {
+  const parsed = parseCompositionArguments(args);
+  if (typeof parsed === "string") {
+    io.stderr(`${parsed}\nUsage: air compose <system> --deployment <file> --output <dir>\n`);
+    return 2;
+  }
+  try {
+    const bundle = await loadComposition(parsed.system, parsed.deployment);
+    const declaredSystem = resolve(dirname(parsed.deployment), bundle.deployment.spec.system);
+    if (declaredSystem !== parsed.system) throw new Error(`Deployment references ${declaredSystem}, not ${parsed.system}.`);
+    const plan = planComposition(bundle);
+    for (const diagnostic of plan.diagnostics) io.stderr(`${diagnostic.severity.toUpperCase()} ${diagnostic.code}${diagnostic.path ? ` ${diagnostic.path}` : ""}: ${diagnostic.message}\n`);
+    if (plan.diagnostics.some((item) => item.severity === "error")) return 1;
+    await mkdir(parsed.output, { recursive: true });
+    for (const artifact of plan.artifacts) {
+      const artifactPath = resolve(parsed.output, artifact.path);
+      await mkdir(dirname(artifactPath), { recursive: true });
+      await writeFile(artifactPath, artifact.content, { encoding: "utf8", flag: "wx" });
+    }
+    let generated = 0;
+    for (const [name, component] of Object.entries(bundle.system.spec.components)) {
+      const result = await compileSystemComponent(name, component, bundle.applications[component.application]!, parsed.output);
+      for (const diagnostic of result.diagnostics) io.stderr(`${name}: ${diagnostic}\n`);
+      if (!result.ok) return 1;
+      generated += 1;
+    }
+    io.stdout(`Composed ${bundle.system.metadata.name} in ${parsed.output}\n  ${generated} component(s), ${plan.providerPlans.length} resource(s), profile: ${bundle.deployment.spec.profile}\n`);
+    return 0;
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "EEXIST") io.stderr("Composition output contains compiler-owned files; refusing to overwrite them.\n");
+    else io.stderr(formatError(error));
+    return 1;
+  }
+}
+
+async function devSystem(args: readonly string[], io: CliIo): Promise<number> {
+  const parsed = parseCompositionArguments(args, ".air/dev");
+  if (typeof parsed === "string") { io.stderr(`${parsed}\nUsage: air dev <system> --deployment <file> [--output <dir>]\n`); return 2; }
+  const composed = await composeSystem([parsed.system, "--deployment", parsed.deployment, "--output", parsed.output], io);
+  if (composed !== 0) return composed;
+  try {
+    const bundle = await loadComposition(parsed.system, parsed.deployment);
+    if (["compose", "docker"].includes(bundle.deployment.spec.profile)) {
+      return await new Promise<number>((complete) => {
+        const child = spawn("docker", ["compose", "-f", resolve(parsed.output, "compose.yaml"), "up", "--build"], { cwd: parsed.output, stdio: "inherit" });
+        child.once("error", (error) => { io.stderr(`${error.message}\n`); complete(1); });
+        child.once("exit", (code) => complete(code ?? 1));
+      });
+    }
+    if (bundle.deployment.spec.profile !== "process") {
+      io.stderr(`air dev supports process, docker, and compose profiles; ${bundle.deployment.spec.profile} is rendered for deployment instead.\n`);
+      return 1;
+    }
+    const manifest = JSON.parse(await readFile(resolve(parsed.output, "processes.json"), "utf8")) as { processes: readonly { name: string; cwd: string; command: string }[] };
+    const children = manifest.processes.map((processDefinition) => {
+      const child = spawn(processDefinition.command, { cwd: resolve(parsed.output, processDefinition.cwd), shell: true, stdio: "inherit", env: { ...process.env, AIR_COMPONENT_NAME: processDefinition.name } });
+      child.once("error", (error) => io.stderr(`${processDefinition.name}: ${error.message}\n`));
+      return child;
+    });
+    const stop = (): void => { for (const child of children) child.kill("SIGTERM"); };
+    process.once("SIGINT", stop); process.once("SIGTERM", stop);
+    return await new Promise<number>((complete) => {
+      let remaining = children.length; let code = 0;
+      for (const child of children) child.once("exit", (status) => { if (status) code = status; remaining -= 1; if (remaining === 0) complete(code); });
+    });
+  } catch (error) { io.stderr(formatError(error)); return 1; }
+}
+
+async function providerCheck(args: readonly string[], io: CliIo): Promise<number> {
+  const [deploymentArgument, ...options] = args;
+  if (!deploymentArgument || options.some((value) => value !== "--json" && value !== "--live")) {
+    io.stderr("Usage: air provider-check <deployment> [--json] [--live]\n");
+    return 2;
+  }
+  try {
+    const deployment = await loadAirSourceFile(resolve(deploymentArgument));
+    if (deployment.kind !== "Deployment") throw new Error("provider-check requires a Deployment document.");
+    const deploymentPath = resolve(deploymentArgument);
+    const systemPath = resolve(dirname(deploymentPath), deployment.spec.system);
+    const plan = planComposition(await loadComposition(systemPath, deploymentPath));
+    const diagnostics = [...plan.diagnostics];
+    const live: { resource: string; ready: boolean; roundTrip?: boolean }[] = [];
+    if (options.includes("--live") && !diagnostics.some((item) => item.severity === "error")) for (const resource of plan.providerPlans) {
+      const plugin = providerFor(resource.provider, resource.kind);
+      const configuration = Object.fromEntries(Object.entries(resource.environment).map(([name, environmentName]) => [name, process.env[environmentName] ?? ""]));
+      const missing = Object.entries(configuration).filter(([, value]) => !value).map(([name]) => name);
+      if (missing.length > 0) { diagnostics.push({ severity: "error", code: "PROVIDER_ENVIRONMENT_MISSING", message: `${resource.logicalName} requires environment value(s): ${missing.join(", ")}.` }); live.push({ resource: resource.logicalName, ready: false }); continue; }
+      if (!plugin) continue;
+      if (resource.kind === "broker" && plugin.createConformanceAdapter) {
+        const adapter = await plugin.createConformanceAdapter(configuration);
+        try {
+          const health = await adapter.health();
+          const channel = `air-provider-check-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+          const id = `air-provider-check-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+          const pending = adapter.receive(channel, { timeoutMs: 5_000 });
+          await adapter.publish(channel, { id, type: "air.provider.check", schemaVersion: "1.0.0", occurredAt: new Date().toISOString(), producer: "air", correlationId: id, payload: {} });
+          const received = await pending;
+          const roundTrip = received?.id === id;
+          live.push({ resource: resource.logicalName, ready: health.ready, roundTrip });
+          diagnostics.push(...health.diagnostics);
+          if (!health.ready) diagnostics.push({ severity: "error", code: "PROVIDER_NOT_READY", message: `${resource.logicalName} did not pass its health check.` });
+          if (!roundTrip) diagnostics.push({ severity: "error", code: "PROVIDER_ROUND_TRIP", message: `${resource.logicalName} did not complete the live publish/receive check.` });
+        } finally { await adapter.close(); }
+      } else if (plugin.health) {
+        const health = await plugin.health(configuration); live.push({ resource: resource.logicalName, ready: health.ready }); diagnostics.push(...health.diagnostics);
+        if (!health.ready) diagnostics.push({ severity: "error", code: "PROVIDER_NOT_READY", message: `${resource.logicalName} did not pass its health check.` });
+      }
+    }
+    const report = { valid: !diagnostics.some((item) => item.severity === "error"), deployment: deployment.metadata.name, profile: deployment.spec.profile, providers: plan.providerPlans, live, diagnostics };
+    if (options.includes("--json")) io.stdout(`${JSON.stringify(report, null, 2)}\n`);
+    else {
+      io.stdout(`Provider check: ${report.valid ? "PASS" : "FAIL"} ${deployment.metadata.name}\n`);
+      for (const provider of report.providers) io.stdout(`  ${provider.logicalName}: ${provider.provider} (${provider.kind})\n`);
+      for (const diagnostic of report.diagnostics) io.stderr(`  ${diagnostic.severity.toUpperCase()} ${diagnostic.code}: ${diagnostic.message}\n`);
+    }
+    return report.valid ? 0 : 1;
+  } catch (error) {
+    io.stderr(formatError(error));
+    return 1;
+  }
+}
+
+async function verifySystem(args: readonly string[], io: CliIo): Promise<number> {
+  const [systemArgument, ...options] = args;
+  if (!systemArgument) { io.stderr("Usage: air verify-system <system> --scenarios <file> [--output <file>]\n"); return 2; }
+  let scenarioFile: string | undefined;
+  let outputFile: string | undefined;
+  for (let index = 0; index < options.length; index += 1) {
+    const option = options[index];
+    const value = options[index + 1];
+    if ((option !== "--scenarios" && option !== "--output") || !value || value.startsWith("--")) { io.stderr("Usage: air verify-system <system> --scenarios <file> [--output <file>]\n"); return 2; }
+    index += 1;
+    if (option === "--scenarios") scenarioFile = value; else outputFile = value;
+  }
+  if (!scenarioFile) { io.stderr("Usage: air verify-system <system> --scenarios <file> [--output <file>]\n"); return 2; }
+  try {
+    const systemPath = resolve(systemArgument);
+    const systemDocument = await loadAirSourceFile(systemPath);
+    if (systemDocument.kind !== "System") throw new Error("verify-system requires a System document.");
+    const applications = Object.fromEntries(await Promise.all(Object.entries(systemDocument.spec.applications).map(async ([name, reference]) => [name, await loadAirFile(resolve(dirname(systemPath), reference.source))] as const)));
+    const [systemSource, suiteSource] = await Promise.all([
+      readFile(systemPath, "utf8"),
+      readFile(resolve(scenarioFile), "utf8"),
+    ]);
+    const suite = parseSystemVerificationSuite(suiteSource);
+    const results = verifySystemSuite(systemDocument, applications, suite);
+    const evidence = {
+      format: "air.dev/system-evidence/v0.2",
+      generatedAt: new Date().toISOString(),
+      system: {
+        name: systemDocument.metadata.name,
+        apiVersion: systemDocument.apiVersion,
+        sha256: createHash("sha256").update(systemSource).digest("hex"),
+      },
+      suite: {
+        apiVersion: suite.apiVersion,
+        sha256: createHash("sha256").update(suiteSource).digest("hex"),
+      },
+      topology: systemDocument.spec,
+      scenarios: results,
+    };
+    if (outputFile) await writeFile(resolve(outputFile), `${JSON.stringify(evidence, null, 2)}\n`, { encoding: "utf8", flag: "wx" });
+    for (const result of results) {
+      io.stdout(`${result.passed ? "PASS" : "FAIL"} ${result.id}\n`);
+      for (const diagnostic of result.diagnostics) io.stderr(`  ${diagnostic}\n`);
+    }
+    return results.every((result) => result.passed) ? 0 : 1;
+  } catch (error) {
+    io.stderr(formatError(error));
+    return 1;
+  }
+}
+
 async function migrate(args: readonly string[], io: CliIo): Promise<number> {
   const [file, ...options] = args;
   if (!file || file.startsWith("--")) {
-    io.stderr("Usage: air migrate <file> [--to air.dev/v0.8] [--output <file>]\n");
+    io.stderr("Usage: air migrate <file> [--to air.dev/v0.9] [--output <file>]\n");
     return 2;
   }
-  let target = "air.dev/v0.8";
-  let output = `${file}.v0.8.yaml`;
+  let target = "air.dev/v0.9";
+  let output = `${file}.v0.9.yaml`;
   for (let index = 0; index < options.length; index += 1) {
     const option = options[index];
     const value = options[index + 1];
@@ -454,7 +713,8 @@ async function migrate(args: readonly string[], io: CliIo): Promise<number> {
     target !== "air.dev/v0.5" &&
     target !== "air.dev/v0.6" &&
     target !== "air.dev/v0.7" &&
-    target !== "air.dev/v0.8"
+    target !== "air.dev/v0.8" &&
+    target !== "air.dev/v0.9"
   ) {
     io.stderr(`Unsupported migration target: ${target}.\n`);
     return 2;
@@ -610,6 +870,38 @@ async function importNextjsCommand(args: readonly string[], io: CliIo): Promise<
       return 1;
     }
     io.stderr(formatError(error));
+    return 1;
+  }
+}
+
+async function importSpringCommand(args: readonly string[], io: CliIo): Promise<number> {
+  let inputDirectory: string | undefined;
+  let outputFile: string | undefined;
+  let reportFile: string | undefined;
+  let applicationName: string | undefined;
+  const usage = "Usage: air import-spring --input <directory> --output <file> [--report <file>] [--name <name>]\n";
+  for (let index = 0; index < args.length; index += 1) {
+    const option = args[index]; const value = args[index + 1];
+    if (!option || !["--input", "--output", "--report", "--name"].includes(option) || !value || value.startsWith("--")) { io.stderr(usage); return 2; }
+    index += 1;
+    if (option === "--input") inputDirectory = value;
+    else if (option === "--output") outputFile = value;
+    else if (option === "--report") reportFile = value;
+    else applicationName = value;
+  }
+  if (!inputDirectory || !outputFile) { io.stderr(usage); return 2; }
+  try {
+    const result = await importSpring(resolve(inputDirectory), applicationName ? { applicationName } : {});
+    const source = serializeAir(result.document);
+    parseAir(source, outputFile);
+    await writeFile(resolve(outputFile), source, { encoding: "utf8", flag: "wx" });
+    if (reportFile) await writeFile(resolve(reportFile), `${JSON.stringify({ format: "air.dev/spring-import-report/v0.1", discoveries: result.discoveries, diagnostics: result.diagnostics }, null, 2)}\n`, { encoding: "utf8", flag: "wx" });
+    for (const diagnostic of result.diagnostics) io.stderr(`${diagnostic.severity.toUpperCase()} ${diagnostic.code} ${diagnostic.source}${diagnostic.line ? `:${diagnostic.line}` : ""}: ${diagnostic.message}\n`);
+    io.stdout(`Imported Spring declarations into ${resolve(outputFile)}\n  ${result.discoveries.length} discovery item(s), ${result.diagnostics.length} review diagnostic(s)\n`);
+    return 0;
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "EEXIST") io.stderr("Import output already exists; refusing to overwrite it.\n");
+    else io.stderr(formatError(error));
     return 1;
   }
 }
@@ -1054,6 +1346,7 @@ async function benchmarkLive(args: readonly string[], io: CliIo): Promise<number
 
 const EVIDENCE_FORMATS = new Set([
   "air.dev/verification-evidence/v0.1",
+  "air.dev/system-evidence/v0.2",
   "air.dev/live-verification-evidence/v0.1",
   "air.dev/differential-verification-evidence/v0.1",
   "air.dev/live-benchmark-evidence/v0.1",
@@ -1094,7 +1387,7 @@ async function evidencePack(args: readonly string[], io: CliIo): Promise<number>
       if (typeof parsed.format !== "string" || !EVIDENCE_FORMATS.has(parsed.format)) {
         throw new Error(`Artifact ${name} has unsupported evidence format ${String(parsed.format)}.`);
       }
-      const air = parsed.air as { sha256?: unknown } | undefined;
+      const air = (parsed.air ?? parsed.system) as { sha256?: unknown } | undefined;
       const suite = parsed.suite as { sha256?: unknown } | undefined;
       return {
         name,
@@ -1186,7 +1479,7 @@ async function evidenceVerify(args: readonly string[], io: CliIo): Promise<numbe
       if (evidence.format !== artifact.format || !EVIDENCE_FORMATS.has(artifact.format)) {
         throw new Error(`Evidence format mismatch for artifact ${artifact.name}.`);
       }
-      const airHash = (evidence.air as { sha256?: unknown } | undefined)?.sha256;
+      const airHash = ((evidence.air ?? evidence.system) as { sha256?: unknown } | undefined)?.sha256;
       const suiteHash = (evidence.suite as { sha256?: unknown } | undefined)?.sha256;
       if (typeof manifest.airSha256 === "string" && typeof airHash === "string" && airHash !== manifest.airSha256) {
         throw new Error(`AIR source hash mismatch for evidence artifact ${artifact.name}.`);
@@ -1365,9 +1658,14 @@ export async function runCli(args: readonly string[], io: CliIo = defaultIo): Pr
   }
 
   if (command === "compile") return compile(args.slice(1), io);
+  if (command === "compose") return composeSystem(args.slice(1), io);
+  if (command === "dev") return devSystem(args.slice(1), io);
+  if (command === "provider-check") return providerCheck(args.slice(1), io);
+  if (command === "verify-system") return verifySystem(args.slice(1), io);
   if (command === "import-postgres") return importPostgresCommand(args.slice(1), io);
   if (command === "import-openapi") return importOpenApiCommand(args.slice(1), io);
   if (command === "import-nextjs") return importNextjsCommand(args.slice(1), io);
+  if (command === "import-spring") return importSpringCommand(args.slice(1), io);
   if (command === "migrate") return migrate(args.slice(1), io);
   if (command === "verify") return verify(args.slice(1), io);
   if (command === "verify-live") return verifyLive(args.slice(1), io);
@@ -1402,15 +1700,13 @@ export async function runCli(args: readonly string[], io: CliIo = defaultIo): Pr
 
   const filePath = resolve(file);
   try {
-    const document = await loadAirFile(filePath);
+    const document = await loadAirSourceFile(filePath);
     if (command === "validate") {
-      io.stdout(
-        `Valid AIR document: ${filePath}\n` +
-          `  ${Object.keys(document.spec.entities).length} entity/entities, ` +
-          `${document.spec.http?.operations.length ?? 0} HTTP operation(s)\n`,
-      );
+      if (document.kind === "Application") io.stdout(`Valid AIR document: ${filePath}\n  ${Object.keys(document.spec.entities).length} entity/entities, ${document.spec.http?.operations.length ?? 0} HTTP operation(s)\n`);
+      else if (document.kind === "System") io.stdout(`Valid AIR System document: ${filePath}\n  ${Object.keys(document.spec.components).length} component(s), ${Object.keys(document.spec.channels ?? {}).length} channel(s)\n`);
+      else io.stdout(`Valid AIR Deployment document: ${filePath}\n  ${Object.keys(document.spec.resources).length} resource(s), profile: ${document.spec.profile}\n`);
     } else {
-      io.stdout(inspect(document));
+      io.stdout(inspectSource(document));
     }
     return 0;
   } catch (error) {

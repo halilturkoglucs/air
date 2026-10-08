@@ -8,6 +8,7 @@ import {
   AIR_SCHEMA_V0_6,
   AIR_SCHEMA_V0_7,
   AIR_SCHEMA_V0_8,
+  AIR_SCHEMA_V0_9,
   AIR_API_VERSION_V0_1,
   AIR_API_VERSION_V0_2,
   AIR_API_VERSION_V0_3,
@@ -16,6 +17,7 @@ import {
   AIR_API_VERSION_V0_6,
   AIR_API_VERSION_V0_7,
   AIR_API_VERSION_V0_8,
+  AIR_API_VERSION_V0_9,
   type AirDocument,
   type ConstraintValue,
   type ContractFieldDefinition,
@@ -23,6 +25,7 @@ import {
   type FieldDefinition,
   type InvariantExpression,
   type InvariantOperand,
+  type MessageValueReference,
   type PrimitiveType,
 } from "@air/schema";
 
@@ -48,6 +51,7 @@ const validateSchemaV0_5 = ajv.compile<AirDocument>(AIR_SCHEMA_V0_5);
 const validateSchemaV0_6 = ajv.compile<AirDocument>(AIR_SCHEMA_V0_6);
 const validateSchemaV0_7 = ajv.compile<AirDocument>(AIR_SCHEMA_V0_7);
 const validateSchemaV0_8 = ajv.compile<AirDocument>(AIR_SCHEMA_V0_8);
+const validateSchemaV0_9 = ajv.compile<AirDocument>(AIR_SCHEMA_V0_9);
 
 function schemaIssue(error: ErrorObject): ValidationIssue {
   const property =
@@ -169,7 +173,8 @@ function validateSemantics(document: AirDocument): ValidationIssue[] {
     document.apiVersion === AIR_API_VERSION_V0_5 ||
     document.apiVersion === AIR_API_VERSION_V0_6 ||
     document.apiVersion === AIR_API_VERSION_V0_7 ||
-    document.apiVersion === AIR_API_VERSION_V0_8;
+    document.apiVersion === AIR_API_VERSION_V0_8 ||
+    document.apiVersion === AIR_API_VERSION_V0_9;
 
   for (const [entityName, entity] of Object.entries(document.spec.entities)) {
     if (explicitDataSemantics) {
@@ -377,7 +382,8 @@ function validateSemantics(document: AirDocument): ValidationIssue[] {
     document.apiVersion === AIR_API_VERSION_V0_5 ||
     document.apiVersion === AIR_API_VERSION_V0_6 ||
     document.apiVersion === AIR_API_VERSION_V0_7 ||
-    document.apiVersion === AIR_API_VERSION_V0_8
+    document.apiVersion === AIR_API_VERSION_V0_8 ||
+    document.apiVersion === AIR_API_VERSION_V0_9
   ) {
     const contracts = document.spec.contracts ?? {};
     const principals = document.spec.principals ?? {};
@@ -1464,6 +1470,193 @@ function validateSemantics(document: AirDocument): ValidationIssue[] {
     }
   }
 
+  if (document.apiVersion === AIR_API_VERSION_V0_9) {
+    const contracts = document.spec.contracts ?? {};
+    const principals = document.spec.principals ?? {};
+    const commands = document.spec.commands ?? {};
+    const events = document.spec.events ?? {};
+    const tasks = document.spec.tasks ?? {};
+    const operations = new Map((document.spec.http?.operations ?? []).map((operation) => [operation.id, operation]));
+
+    const requireContract = (name: string, path: string, code: string): void => {
+      if (!contracts[name]) issues.push(semanticIssue(path, code, `Contract ${name} is not declared.`));
+    };
+
+    for (const [eventName, event] of Object.entries(events)) {
+      requireContract(event.payload, `/spec/events/${eventName}/payload`, "event.unknown_payload_contract");
+    }
+    for (const [taskName, task] of Object.entries(tasks)) {
+      requireContract(task.payload, `/spec/tasks/${taskName}/payload`, "task.unknown_payload_contract");
+      if (task.result) requireContract(task.result, `/spec/tasks/${taskName}/result`, "task.unknown_result_contract");
+    }
+
+    for (const [commandName, command] of Object.entries(commands)) {
+      const commandPath = `/spec/commands/${commandName}`;
+      const input = contracts[command.input];
+      const principal = command.authorization ? principals[command.authorization.principal] : undefined;
+      const resolveMessageValue = (reference: MessageValueReference, path: string): FieldDefinition | ContractFieldDefinition | undefined => {
+        if ("input" in reference) {
+          const field = input?.fields[reference.input];
+          if (!field) issues.push(semanticIssue(`${path}/input`, "message.unknown_input_field", `${command.input}.${reference.input} is not declared.`));
+          return field;
+        }
+        if ("principal" in reference) {
+          const field = principal?.fields[reference.principal];
+          if (!field) issues.push(semanticIssue(`${path}/principal`, "message.unknown_principal_field", `Authorized principal field ${reference.principal} is not declared.`));
+          return field;
+        }
+        if ("record" in reference) {
+          const selected = typeof reference.record === "string"
+            ? command.effect
+            : command.effects?.[reference.record.effect];
+          const fieldName = typeof reference.record === "string" ? reference.record : reference.record.field;
+          const field = selected ? document.spec.entities[selected.entity]?.fields[fieldName] : undefined;
+          if (!field) issues.push(semanticIssue(`${path}/record`, "message.unknown_record_field", `Record field ${fieldName} is not available to command ${commandName}.`));
+          return field;
+        }
+        return undefined;
+      };
+      const validatePayload = (
+        payload: Readonly<Record<string, MessageValueReference>>,
+        contractName: string | undefined,
+        path: string,
+      ): void => {
+        const contract = contractName ? contracts[contractName] : undefined;
+        if (!contract) return;
+        for (const [fieldName, reference] of Object.entries(payload)) {
+          const target = contract.fields[fieldName];
+          if (!target) {
+            issues.push(semanticIssue(`${path}/${fieldName}`, "message.unknown_payload_field", `${contractName}.${fieldName} is not declared.`));
+            continue;
+          }
+          if ("literal" in reference) {
+            if (target.type === "json" || !scalarValueMatchesField(target, reference.literal)) {
+              issues.push(semanticIssue(`${path}/${fieldName}`, "message.payload_type_mismatch", `Literal does not match ${contractName}.${fieldName} type ${target.type}.`));
+            }
+          } else {
+            const source = resolveMessageValue(reference, `${path}/${fieldName}`);
+            if (source && source.type !== target.type) {
+              issues.push(semanticIssue(`${path}/${fieldName}`, "message.payload_type_mismatch", `Source type ${source.type} does not match ${contractName}.${fieldName} type ${target.type}.`));
+            }
+          }
+        }
+        for (const [fieldName, field] of Object.entries(contract.fields)) {
+          if (field.required && !(fieldName in payload)) {
+            issues.push(semanticIssue(path, "message.missing_payload_field", `Required payload field ${contractName}.${fieldName} is not mapped.`));
+          }
+        }
+      };
+
+      for (const [index, emission] of (command.emits ?? []).entries()) {
+        const path = `${commandPath}/emits/${index}`;
+        const event = events[emission.event];
+        if (!event) issues.push(semanticIssue(`${path}/event`, "message.unknown_event", `Event ${emission.event} is not declared.`));
+        validatePayload(emission.payload, event?.payload, `${path}/payload`);
+        if (emission.key) {
+          const key = resolveMessageValue(emission.key, `${path}/key`);
+          if (key?.type === "json" || key?.nullable) issues.push(semanticIssue(`${path}/key`, "message.invalid_ordering_key", "Ordering keys must be non-null portable scalars."));
+        }
+      }
+      for (const [index, enqueue] of (command.enqueues ?? []).entries()) {
+        const path = `${commandPath}/enqueues/${index}`;
+        const task = tasks[enqueue.task];
+        if (!task) issues.push(semanticIssue(`${path}/task`, "message.unknown_task", `Task ${enqueue.task} is not declared.`));
+        validatePayload(enqueue.payload, task?.payload, `${path}/payload`);
+        if (enqueue.key) {
+          const key = resolveMessageValue(enqueue.key, `${path}/key`);
+          if (key?.type === "json" || key?.nullable) issues.push(semanticIssue(`${path}/key`, "message.invalid_ordering_key", "Ordering keys must be non-null portable scalars."));
+        }
+      }
+    }
+
+    for (const [consumerName, consumer] of Object.entries(document.spec.consumers ?? {})) {
+      const path = `/spec/consumers/${consumerName}`;
+      const event = "event" in consumer.source ? events[consumer.source.event] : undefined;
+      const task = "task" in consumer.source ? tasks[consumer.source.task] : undefined;
+      if ("event" in consumer.source && !event) issues.push(semanticIssue(`${path}/source/event`, "consumer.unknown_event", `Event ${consumer.source.event} is not declared.`));
+      if ("task" in consumer.source && !task) issues.push(semanticIssue(`${path}/source/task`, "consumer.unknown_task", `Task ${consumer.source.task} is not declared.`));
+      const command = commands[consumer.command];
+      if (!command) issues.push(semanticIssue(`${path}/command`, "consumer.unknown_command", `Command ${consumer.command} is not declared.`));
+      const sourceContract = contracts[event?.payload ?? task?.payload ?? ""];
+      const inputContract = command ? contracts[command.input] : undefined;
+      for (const [fieldName, mapping] of Object.entries(consumer.input)) {
+        const target = inputContract?.fields[fieldName];
+        if (!target) {
+          issues.push(semanticIssue(`${path}/input/${fieldName}`, "consumer.unknown_input_field", `Command input field ${fieldName} is not declared.`));
+          continue;
+        }
+        if ("payload" in mapping) {
+          const source = sourceContract?.fields[mapping.payload];
+          if (!source) issues.push(semanticIssue(`${path}/input/${fieldName}/payload`, "consumer.unknown_payload_field", `Payload field ${mapping.payload} is not declared.`));
+          else if (source.type !== target.type) issues.push(semanticIssue(`${path}/input/${fieldName}`, "consumer.input_type_mismatch", `Payload type ${source.type} does not match command input type ${target.type}.`));
+        } else if (!["string", "uuid", "datetime"].includes(target.type)) {
+          issues.push(semanticIssue(`${path}/input/${fieldName}/envelope`, "consumer.envelope_type_mismatch", `Envelope metadata cannot populate ${target.type}.`));
+        }
+      }
+      for (const [fieldName, field] of Object.entries(inputContract?.fields ?? {})) {
+        if (field.required && !(fieldName in consumer.input)) issues.push(semanticIssue(`${path}/input`, "consumer.missing_input_field", `Required command input field ${fieldName} is not mapped.`));
+      }
+      if (consumer.deadLetter && !tasks[consumer.deadLetter]) issues.push(semanticIssue(`${path}/deadLetter`, "consumer.unknown_dead_letter", `Dead-letter task ${consumer.deadLetter} is not declared.`));
+    }
+
+    for (const [scheduleName, schedule] of Object.entries(document.spec.schedules ?? {})) {
+      const path = `/spec/schedules/${scheduleName}`;
+      const command = commands[schedule.command];
+      if (!command) {
+        issues.push(semanticIssue(`${path}/command`, "schedule.unknown_command", `Command ${schedule.command} is not declared.`));
+        continue;
+      }
+      const contract = contracts[command.input];
+      for (const [fieldName, field] of Object.entries(contract?.fields ?? {})) {
+        const value = schedule.input?.[fieldName];
+        if (field.required && value === undefined) issues.push(semanticIssue(`${path}/input`, "schedule.missing_input_field", `Required command input field ${fieldName} is not supplied.`));
+        if (value !== undefined && (field.type === "json" || !scalarValueMatchesField(field, value))) issues.push(semanticIssue(`${path}/input/${fieldName}`, "schedule.input_type_mismatch", `Scheduled value does not match ${command.input}.${fieldName}.`));
+      }
+      for (const fieldName of Object.keys(schedule.input ?? {})) {
+        if (!contract?.fields[fieldName]) issues.push(semanticIssue(`${path}/input/${fieldName}`, "schedule.unknown_input_field", `${command.input}.${fieldName} is not declared.`));
+      }
+    }
+
+    for (const [cacheName, cache] of Object.entries(document.spec.cachedReads ?? {})) {
+      const path = `/spec/cachedReads/${cacheName}`;
+      const operation = operations.get(cache.operation);
+      if (!operation) issues.push(semanticIssue(`${path}/operation`, "cache.unknown_operation", `HTTP operation ${cache.operation} is not declared.`));
+      else if (operation.method !== "GET" || !("entity" in operation) || !["read", "list"].includes(operation.action)) issues.push(semanticIssue(`${path}/operation`, "cache.operation_not_read", "Cached operations must be GET entity read or list operations."));
+      for (const [index, eventName] of cache.invalidatedBy.entries()) {
+        if (!events[eventName]) issues.push(semanticIssue(`${path}/invalidatedBy/${index}`, "cache.unknown_event", `Invalidating event ${eventName} is not declared.`));
+      }
+    }
+
+    for (const [channelName, channel] of Object.entries(document.spec.realtime ?? {})) {
+      const path = `/spec/realtime/${channelName}`;
+      const principal = channel.principal ? principals[channel.principal] : undefined;
+      if (channel.principal && !principal) issues.push(semanticIssue(`${path}/principal`, "realtime.unknown_principal", `Principal ${channel.principal} is not declared.`));
+      for (const [index, subscription] of channel.subscriptions.entries()) {
+        const event = events[subscription.event];
+        if (!event) {
+          issues.push(semanticIssue(`${path}/subscriptions/${index}/event`, "realtime.unknown_event", `Event ${subscription.event} is not declared.`));
+          continue;
+        }
+        const payload = contracts[event.payload];
+        for (const [filterIndex, filter] of (subscription.filters ?? []).entries()) {
+          const filterPath = `${path}/subscriptions/${index}/filters/${filterIndex}`;
+          const payloadField = payload?.fields[filter.payloadField];
+          const principalField = principal?.fields[filter.principalField];
+          if (!payloadField) issues.push(semanticIssue(`${filterPath}/payloadField`, "realtime.unknown_payload_field", `${event.payload}.${filter.payloadField} is not declared.`));
+          if (!principalField) issues.push(semanticIssue(`${filterPath}/principalField`, "realtime.unknown_principal_field", `Principal field ${filter.principalField} is not declared.`));
+          if (payloadField && principalField && payloadField.type !== principalField.type) issues.push(semanticIssue(filterPath, "realtime.filter_type_mismatch", "Realtime filter fields must have matching types."));
+        }
+      }
+      const messageTypes = new Set<string>();
+      for (const [index, inbound] of (channel.commands ?? []).entries()) {
+        if (messageTypes.has(inbound.type)) issues.push(semanticIssue(`${path}/commands/${index}/type`, "realtime.duplicate_command_type", `Realtime message type ${inbound.type} is duplicated.`));
+        messageTypes.add(inbound.type);
+        if (!commands[inbound.command]) issues.push(semanticIssue(`${path}/commands/${index}/command`, "realtime.unknown_command", `Command ${inbound.command} is not declared.`));
+      }
+      if ((channel.commands?.length ?? 0) > 0 && !channel.transports.includes("websocket")) issues.push(semanticIssue(`${path}/transports`, "realtime.commands_require_websocket", "Bidirectional commands require the websocket transport."));
+    }
+  }
+
   return issues;
 }
 
@@ -1489,6 +1682,8 @@ export function validateAir(value: unknown): ValidationResult {
                   ? validateSchemaV0_7
                   : apiVersion === AIR_API_VERSION_V0_8
                     ? validateSchemaV0_8
+                    : apiVersion === AIR_API_VERSION_V0_9
+                      ? validateSchemaV0_9
                 : undefined;
 
   if (!validateSchema) {
@@ -1500,7 +1695,7 @@ export function validateAir(value: unknown): ValidationResult {
           instancePath: "/apiVersion",
           schemaPath: "#/properties/apiVersion",
           params: {},
-          message: "must be a supported AIR version (air.dev/v0.1 through air.dev/v0.8)",
+          message: "must be a supported AIR version (air.dev/v0.1 through air.dev/v0.9)",
         }),
       ],
     };

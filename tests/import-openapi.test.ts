@@ -57,7 +57,7 @@ describe("OpenAPI importer", () => {
     const result = importOpenApiSource(source, { applicationName: "pets" });
 
     expect(validateAir(result.air).valid).toBe(true);
-    expect(result.air.apiVersion).toBe("air.dev/v0.8");
+    expect(result.air.apiVersion).toBe("air.dev/v0.9");
     expect(result.air.spec.entities.Pet?.fields).toMatchObject({
       id: { type: "uuid", primaryKey: true },
       name: { type: "string", validation: { minLength: 1, maxLength: 100 } },
@@ -84,6 +84,6 @@ describe("OpenAPI importer", () => {
     expect(stdout).toContain("Imported OpenAPI");
     expect(stderr).toContain("OPENAPI_SECURITY_REQUIRES_POLICY_REVIEW");
     expect((await loadAirFile(output)).metadata.name).toBe("pets");
-    expect(await readFile(output, "utf8")).toContain("apiVersion: air.dev/v0.8");
+    expect(await readFile(output, "utf8")).toContain("apiVersion: air.dev/v0.9");
   });
 });

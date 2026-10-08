@@ -21,11 +21,33 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      rabbitmq:
+        image: rabbitmq:4-management
+        ports:
+          - 5672:5672
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
     env:
       AIR_AUTH_SECRET: ci-secret-at-least-32-characters-long
       NEXT_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/air_nextjs
       RUST_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/air_rust
       PYTHON_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/air_python
+      DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/postgres
+      KAFKA_URL: 127.0.0.1:9092
+      RABBITMQ_URL: amqp://guest:guest@127.0.0.1:5672
+      REDIS_URL: redis://127.0.0.1:6379
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -48,6 +70,39 @@ jobs:
         run: |
           pnpm typecheck
           pnpm test
+      - name: Start Kafka-compatible Redpanda
+        run: |
+          docker run --detach --name redpanda --publish 9092:9092 redpandadata/redpanda:v24.1.21 \
+            redpanda start --overprovisioned --smp 1 --memory 512M --reserve-memory 0M \
+            --node-id 0 --check=false --kafka-addr 0.0.0.0:9092 \
+            --advertise-kafka-addr 127.0.0.1:9092
+          for attempt in $(seq 1 60); do
+            docker exec redpanda rpk cluster info && break
+            test "$attempt" != 60
+            sleep 1
+          done
+      - name: Verify complex-service providers and deterministic system behavior
+        run: |
+          for deployment in deployment.compose.yaml deployment.rabbitmq.yaml deployment.postgres.yaml; do
+            node packages/cli/dist/bin.js provider-check "examples/complex-commerce/$deployment" --live --json \
+              > "artifacts-${deployment%.yaml}.json"
+          done
+          mkdir -p artifacts/evidence
+          for provider in kafka rabbitmq postgres; do
+            node packages/cli/dist/bin.js verify-system examples/complex-commerce/system.air.yaml \
+              --scenarios examples/complex-commerce/verification.yaml \
+              --output "artifacts/evidence/system-$provider.json"
+          done
+          node packages/cli/dist/bin.js compose examples/complex-commerce/system.air.yaml \
+            --deployment examples/complex-commerce/deployment.compose.yaml \
+            --output artifacts/complex-commerce
+          pnpm --dir artifacts/complex-commerce/components/ordersApi install --no-frozen-lockfile
+          pnpm --dir artifacts/complex-commerce/components/ordersApi run typecheck
+          cargo fmt --manifest-path artifacts/complex-commerce/components/inventoryWorker/Cargo.toml --check
+          cargo check --manifest-path artifacts/complex-commerce/components/inventoryWorker/Cargo.toml
+          python -m py_compile \
+            artifacts/complex-commerce/components/billingService/app.py \
+            artifacts/complex-commerce/components/billingService/air_runtime.py
       - name: Generate semantic evidence and targets
         run: |
           mkdir -p artifacts/evidence
@@ -149,10 +204,17 @@ jobs:
             --artifact target-compatibility=artifacts/evidence/target-compatibility.json \
             --output artifacts/evidence-pack
           node packages/cli/dist/bin.js evidence-verify artifacts/evidence-pack
+          node packages/cli/dist/bin.js evidence-pack \
+            --artifact kafka=artifacts/evidence/system-kafka.json \
+            --artifact rabbitmq=artifacts/evidence/system-rabbitmq.json \
+            --artifact postgres=artifacts/evidence/system-postgres.json \
+            --output artifacts/system-evidence-pack
+          node packages/cli/dist/bin.js evidence-verify artifacts/system-evidence-pack
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: air-conformance-evidence
           path: |
             artifacts/evidence-pack
+            artifacts/system-evidence-pack
             artifacts/*.log

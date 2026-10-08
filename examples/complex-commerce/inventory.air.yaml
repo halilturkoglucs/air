@@ -1,0 +1,60 @@
+apiVersion: air.dev/v0.9
+kind: Application
+metadata: { name: inventory, displayName: Inventory Worker, version: 0.10.0 }
+spec:
+  entities:
+    Reservation:
+      fields:
+        id: { type: uuid, primaryKey: true, generated: uuid }
+        orderId: { type: uuid, required: true, unique: true }
+        status: { type: string, default: reserved, validation: { enum: [reserved, released] } }
+  contracts:
+    OrderPlacedPayload:
+      fields:
+        orderId: { type: uuid, required: true }
+        customerId: { type: uuid, required: true }
+    ReserveInventoryInput:
+      fields:
+        orderId: { type: uuid, required: true }
+    InventoryReservedPayload:
+      fields:
+        orderId: { type: uuid, required: true }
+        reservationId: { type: uuid, required: true }
+  commands:
+    reserveInventory:
+      input: ReserveInventoryInput
+      output: { entity: Reservation, fields: [id, orderId, status] }
+      emits:
+        - event: InventoryReserved
+          key: { input: orderId }
+          payload:
+            orderId: { input: orderId }
+            reservationId: { record: id }
+      effect:
+        kind: create
+        entity: Reservation
+        values:
+          orderId: { input: orderId }
+    releaseInventory:
+      input: ReserveInventoryInput
+      output: { entity: Reservation, fields: [id, orderId, status] }
+      errors:
+        NOT_FOUND: { status: 404, message: Reservation not found. }
+        CONFLICT: { status: 409, message: Reservation changed., retryable: true }
+      transaction: { isolation: serializable, conflictError: CONFLICT }
+      effect:
+        kind: update
+        entity: Reservation
+        identify: { field: orderId, value: { input: orderId }, error: NOT_FOUND }
+        values: { status: { literal: released } }
+  events:
+    OrderPlaced: { kind: integration, version: 1.0.0, payload: OrderPlacedPayload }
+    InventoryReserved: { kind: integration, version: 1.0.0, payload: InventoryReservedPayload }
+  consumers:
+    reserveOnOrderPlaced:
+      source: { event: OrderPlaced }
+      command: reserveInventory
+      input:
+        orderId: { payload: orderId }
+      retry: { maxAttempts: 5, backoffMs: 100 }
+  http: { operations: [] }

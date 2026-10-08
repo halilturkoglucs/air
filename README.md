@@ -5,7 +5,7 @@
 
 AIR is an experimental, language-neutral Application Intermediate Representation. Application semantics are the source of truth; Next.js, Rust, databases, and deployment platforms are replaceable compilation targets.
 
-The current prototype accepts AIR v0.1–v0.8 and includes:
+AIR CLI v0.10 accepts application documents from v0.1 through v0.9 and adds provider-neutral system and deployment documents:
 
 - entities, relationships, CRUD HTTP operations, contracts, principals, and declared errors
 - transactional create/update/delete commands, guards, preconditions, ownership, role/scope policies, and invariant expressions
@@ -19,6 +19,11 @@ The current prototype accepts AIR v0.1–v0.8 and includes:
 - deterministic capability solving across the Next.js, Rust, and Python targets
 - production runtime health/readiness, structured errors, graceful Rust shutdown, and container health checks
 - checksum-verified evidence packs and a full GitHub Actions conformance workflow
+- versioned domain/integration events, point-to-point tasks, consumers, schedules, derived caches, WebSocket/SSE channels, and a standard message envelope
+- at-least-once delivery through transactional outboxes and durable inbox deduplication; AIR does not claim cross-system exactly-once delivery
+- multi-application topology, durable saga definitions, and deterministic system verification with virtual brokers, caches, clocks, schedulers, and realtime sessions
+- explicit, version-locked Kafka/Redpanda, RabbitMQ, PostgreSQL outbox, and Redis plugins through the public plugin SDK
+- process, Docker Compose, Kubernetes/Helm, and Terraform-to-existing-Kubernetes deployment rendering
 
 ## Quick start
 
@@ -119,6 +124,15 @@ pnpm air evidence-verify ledger-evidence-pack
 # Check target feasibility before generating anything:
 pnpm air target-check examples/ledger/air.yaml \
   --require domain.commands --prefer ui.web --json
+
+# Compose and verify the mixed Next.js/Rust/Python complex-service reference:
+pnpm air compose examples/complex-commerce/system.air.yaml \
+  --deployment examples/complex-commerce/deployment.compose.yaml \
+  --output dist/complex-commerce
+pnpm air verify-system examples/complex-commerce/system.air.yaml \
+  --scenarios examples/complex-commerce/verification.yaml \
+  --output complex-system-evidence.json
+pnpm air provider-check examples/complex-commerce/deployment.compose.yaml --live
 ```
 
 Import an existing PostgreSQL schema:
@@ -142,6 +156,11 @@ pnpm air import-nextjs \
   --output imported-next.air.yaml \
   --report imported-next.report.json
 
+pnpm air import-spring \
+  --input existing-spring-service \
+  --output imported-spring.air.yaml \
+  --report imported-spring.report.json
+
 pnpm air diff before.air.yaml after.air.yaml --output semantic-diff.json
 pnpm air plan-migration before.air.yaml after.air.yaml --output migration-plan.json
 
@@ -157,16 +176,21 @@ The PostgreSQL importer reads catalog metadata only. Reverse importers preserve 
 - `packages/air-parser` — YAML parsing, migration, and semantic validation
 - `packages/compiler-core` — target interfaces, diagnostics, artifacts, and provenance
 - `packages/verifier` — canonical execution plus normalized live-target response/state comparison
+- `packages/plugin-sdk` — public, versioned provider and deployer plugin interfaces
+- `packages/providers` — first-party Kafka/Redpanda, RabbitMQ, PostgreSQL outbox, and Redis bindings
+- `packages/composer` — System/Deployment planning and process, Compose, Kubernetes/Helm, and Terraform rendering
 - `packages/target-nextjs` — Next.js App Router, Drizzle, PostgreSQL, JWT boundary, and web console
 - `packages/target-rust` — experimental Axum, SQLx, PostgreSQL, JWT boundary, and container output
 - `packages/target-python` — FastAPI, psycopg, PostgreSQL, JWT boundary, and container output
 - `packages/import-postgres` — PostgreSQL catalog reverse compiler
 - `packages/import-openapi` — OpenAPI 3.x reverse compiler with review diagnostics
 - `packages/import-nextjs` — conventional Drizzle schema and App Router reverse compiler
+- `packages/import-spring` — conservative messaging, scheduling, and Spring Integration discovery
 - `packages/language-server` — stdio LSP server with shared validation, completion, hover, symbols, and pull diagnostics
 - `packages/cli` — validation, migration, import, compilation, verification, benchmarking, evidence, evolution, ownership, and LSP workflows
 - `examples/ecommerce` — ownership, state transition, and invariant reference application
 - `examples/ledger` — atomic multi-record transfer, rollback, idempotency, and retry reference application
+- `examples/complex-commerce` — mixed-language events, consumers, saga, cache, schedule, and realtime reference system
 
 ## Managed and detached output
 
@@ -180,14 +204,15 @@ Managed regeneration may replace owned files and refuses to overwrite unowned fi
 
 ## Current verification status
 
-- compiler workspace: 81 tests, TypeScript typecheck, and build pass
+- compiler workspace: TypeScript typecheck, build, and the full automated test suite pass
 - generated Next.js ledger: generated tests, typecheck, production build, PostgreSQL migration, live HTTP/API transaction tests, and rendered browser state pass
 - PostgreSQL importer: exercised against PostgreSQL 16 and the isolated ledger schema
 - generated Rust ledger: `cargo fmt --check`, `cargo check`, strict Clippy, tests, PostgreSQL migration, and all three live HTTP/database verification scenarios pass
 - generated Python ledger: Pydantic validation, pooled psycopg access, Ruff, Pyright, syntax compilation, PostgreSQL migration, restart-safe migration tracking, and all three live scenarios pass
 - three-target differential gate: Next.js, Rust, and Python produce matching HTTP statuses, normalized outputs, and PostgreSQL post-state for all ledger scenarios
 - generated runtime controls: `/air-runtime/health` and database-backed `/air-runtime/ready` are emitted by all three targets
-- CI automation: [the conformance workflow](.github/workflows/conformance.yml) builds all targets, runs three-way differential verification plus replay/conflict benchmarks, then uploads a checksum-verified evidence pack
+- complex-service gate: the same deterministic saga/cache/realtime suite is checked alongside live Redpanda/Kafka, RabbitMQ, PostgreSQL-outbox, and Redis provider round trips
+- CI automation: [the conformance workflow](.github/workflows/conformance.yml) builds all targets, runs three-way differential verification plus replay/conflict benchmarks, verifies mixed-language generation and live providers, then uploads checksum-verified evidence packs
 - release operations: gated, checksummed release-candidate archives, dependency automation, version/security policy, and a structured three-path pilot protocol
 
 See [the architecture](docs/architecture.md), [AIR schema guide](docs/air-schema.md), [verification model](docs/verification.md), [editor integration](docs/editor.md), [benchmarking methodology](docs/benchmarking.md), [pilot protocol](docs/pilots.md), [versioning policy](docs/versioning.md), and [product roadmap](docs/roadmap.md).

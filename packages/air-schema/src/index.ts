@@ -6,6 +6,9 @@ import airSchemaV0_5 from "../schema/air-0.5.schema.json" with { type: "json" };
 import airSchemaV0_6 from "../schema/air-0.6.schema.json" with { type: "json" };
 import airSchemaV0_7 from "../schema/air-0.7.schema.json" with { type: "json" };
 import airSchemaV0_8 from "../schema/air-0.8.schema.json" with { type: "json" };
+import airSchemaV0_9 from "../schema/air-0.9.schema.json" with { type: "json" };
+import systemSchemaV0_1 from "../schema/system-0.1.schema.json" with { type: "json" };
+import deploymentSchemaV0_1 from "../schema/deployment-0.1.schema.json" with { type: "json" };
 
 export * from "./types.js";
 
@@ -17,6 +20,9 @@ export const AIR_SCHEMA_V0_5 = airSchemaV0_5;
 export const AIR_SCHEMA_V0_6 = airSchemaV0_6;
 export const AIR_SCHEMA_V0_7 = airSchemaV0_7;
 export const AIR_SCHEMA_V0_8 = airSchemaV0_8;
+export const AIR_SCHEMA_V0_9 = airSchemaV0_9;
+export const SYSTEM_SCHEMA_V0_1 = systemSchemaV0_1;
+export const DEPLOYMENT_SCHEMA_V0_1 = deploymentSchemaV0_1;
 export type AirJsonSchema = typeof airSchema;
 export type AirJsonSchemaV0_2 = typeof airSchemaV0_2;
 export type AirJsonSchemaV0_3 = typeof airSchemaV0_3;
@@ -25,3 +31,6 @@ export type AirJsonSchemaV0_5 = typeof airSchemaV0_5;
 export type AirJsonSchemaV0_6 = typeof airSchemaV0_6;
 export type AirJsonSchemaV0_7 = typeof airSchemaV0_7;
 export type AirJsonSchemaV0_8 = typeof airSchemaV0_8;
+export type AirJsonSchemaV0_9 = typeof airSchemaV0_9;
+export type SystemJsonSchemaV0_1 = typeof systemSchemaV0_1;
+export type DeploymentJsonSchemaV0_1 = typeof deploymentSchemaV0_1;

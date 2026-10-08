@@ -29,19 +29,41 @@ jobs:
         run: |
           root_version="$(node --print "require('./package.json').version")"
           cli_version="$(node --print "require('./packages/cli/package.json').version")"
+          sdk_version="$(node --print "require('./packages/plugin-sdk/package.json').version")"
           tag_version="${GITHUB_REF_NAME#v}"
           test "$root_version" = "$cli_version"
+          test "$root_version" = "$sdk_version"
           test "$root_version" = "$tag_version"
       - name: Release gate
         run: pnpm release:check
+      - name: Verify npm package contents
+        run: |
+          npm pack --dry-run --cache "${RUNNER_TEMP}/npm-cache" --workspace=false ./packages/plugin-sdk
+          npm pack --dry-run --cache "${RUNNER_TEMP}/npm-cache" --workspace=false ./packages/cli
       - name: Create checksummed source artifact
         run: pnpm release:artifacts artifacts/release
       - name: Install npm publishing client
         if: startsWith(github.ref, 'refs/tags/v')
         run: npm install --global npm@11.21.0
-      - name: Check npm registry
+      - name: Check plugin SDK npm registry
         if: startsWith(github.ref, 'refs/tags/v')
-        id: npm-registry
+        id: sdk-npm-registry
+        working-directory: packages/plugin-sdk
+        run: |
+          package_name="$(node --print "require('./package.json').name")"
+          package_version="$(node --print "require('./package.json').version")"
+          if npm view "${package_name}@${package_version}" version >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Publish plugin SDK with provenance
+        if: startsWith(github.ref, 'refs/tags/v') && steps.sdk-npm-registry.outputs.exists != 'true'
+        working-directory: packages/plugin-sdk
+        run: npm publish --access public --provenance
+      - name: Check CLI npm registry
+        if: startsWith(github.ref, 'refs/tags/v')
+        id: cli-npm-registry
         working-directory: packages/cli
         run: |
           package_name="$(node --print "require('./package.json').name")"
@@ -52,10 +74,10 @@ jobs:
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
       - name: Publish npm package with provenance
-        if: startsWith(github.ref, 'refs/tags/v') && steps.npm-registry.outputs.exists != 'true'
+        if: startsWith(github.ref, 'refs/tags/v') && steps.cli-npm-registry.outputs.exists != 'true'
         working-directory: packages/cli
         run: |
-          npm publish --access public
+          npm publish --access public --provenance
       - name: Publish GitHub release
         if: startsWith(github.ref, 'refs/tags/v')
         env:

@@ -1,0 +1,17 @@
+apiVersion: air.dev/deployment/v0.1
+kind: Deployment
+metadata: { name: complex-commerce-rabbitmq }
+spec:
+  system: system.air.yaml
+  profile: compose
+  resources:
+    events: { kind: broker, provider: rabbitmq, environment: { URL: RABBITMQ_URL } }
+    cache: { kind: cache, provider: redis, environment: { URL: REDIS_URL } }
+    database: { kind: database, provider: postgres, environment: { URL: DATABASE_URL } }
+  bindings:
+    orderEvents: events
+    inventoryEvents: events
+    billingEvents: events
+    orders.orderById: cache
+  observability: { openTelemetry: true, endpointEnvironment: OTEL_EXPORTER_OTLP_ENDPOINT }
+

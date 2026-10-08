@@ -58,12 +58,18 @@ function renderPackageJson(air: AirDocument, options: ResolvedNextjsOptions): st
         typecheck: "tsc --noEmit",
         "db:generate": "drizzle-kit generate",
         "db:migrate": "drizzle-kit migrate",
+        "air:worker": "tsx src/air/runtime.ts worker",
+        "air:scheduler": "tsx src/air/runtime.ts scheduler",
+        "air:orchestrator": "tsx src/air/runtime.ts orchestrator",
+        "air:realtime": "tsx src/air/runtime.ts realtime",
       },
       dependencies: {
         "drizzle-orm": "^0.44.0",
         ...(Object.keys(air.spec.principals ?? {}).length > 0 ? { jose: "^6.0.0" } : {}),
         next: `^${options.frameworkVersion}`,
         postgres: "^3.4.0",
+        "@opentelemetry/api": "^1.9.0",
+        ws: "^8.18.0",
         react: "^19.2.0",
         "react-dom": "^19.2.0",
       },
@@ -74,6 +80,8 @@ function renderPackageJson(air: AirDocument, options: ResolvedNextjsOptions): st
         "drizzle-kit": "^0.31.0",
         typescript: "^5.9.0",
         vitest: "^3.2.0",
+        tsx: "^4.20.0",
+        "@types/ws": "^8.18.0",
       },
       engines: { node: ">=20.9" },
       packageManager:
@@ -195,6 +203,92 @@ function renderDatabaseSchema(air: AirDocument): string {
     .join("\n\n");
 
   return `import { ${[...imports].sort().join(", ")} } from "drizzle-orm/pg-core";\n\n${tables}`;
+}
+
+function renderAsyncMigration(): string {
+  return `CREATE TABLE IF NOT EXISTS air_outbox (
+  id UUID PRIMARY KEY, message_type TEXT NOT NULL, schema_version TEXT NOT NULL,
+  occurred_at TIMESTAMPTZ NOT NULL, producer TEXT NOT NULL, correlation_id UUID NOT NULL,
+  causation_id UUID, ordering_key TEXT, payload JSONB NOT NULL,
+  destination TEXT NOT NULL, message_kind TEXT NOT NULL CHECK (message_kind IN ('event','task')),
+  attempts INTEGER NOT NULL DEFAULT 0, available_at TIMESTAMPTZ NOT NULL DEFAULT now(), published_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS air_outbox_pending ON air_outbox (available_at) WHERE published_at IS NULL;
+CREATE TABLE IF NOT EXISTS air_inbox (
+  consumer TEXT NOT NULL, message_id UUID NOT NULL, received_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (consumer, message_id)
+);
+CREATE TABLE IF NOT EXISTS air_dead_letters (
+  id UUID PRIMARY KEY, consumer TEXT NOT NULL, envelope JSONB NOT NULL, attempts INTEGER NOT NULL,
+  reason TEXT NOT NULL, failed_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS air_saga_instances (
+  id UUID PRIMARY KEY, saga_type TEXT NOT NULL, correlation_id TEXT NOT NULL,
+  state JSONB NOT NULL, status TEXT NOT NULL, current_step TEXT, version BIGINT NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (saga_type, correlation_id)
+);
+CREATE TABLE IF NOT EXISTS air_saga_timers (
+  id UUID PRIMARY KEY, saga_id UUID NOT NULL REFERENCES air_saga_instances(id) ON DELETE CASCADE,
+  step_id TEXT NOT NULL, due_at TIMESTAMPTZ NOT NULL, claimed_at TIMESTAMPTZ, completed_at TIMESTAMPTZ
+);
+CREATE TABLE IF NOT EXISTS air_realtime_journal (
+  cursor BIGSERIAL PRIMARY KEY, channel TEXT NOT NULL, envelope JSONB NOT NULL,
+  ordering_key TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS air_realtime_channel_cursor ON air_realtime_journal (channel, cursor);`;
+}
+
+function renderAsyncRuntime(air: AirDocument): string {
+  const definition = JSON.stringify({ application: air.metadata.name, commands: air.spec.commands ?? {}, events: air.spec.events ?? {}, tasks: air.spec.tasks ?? {}, consumers: air.spec.consumers ?? {}, schedules: air.spec.schedules ?? {}, cachedReads: air.spec.cachedReads ?? {}, realtime: air.spec.realtime ?? {} });
+  return `import postgres from "postgres";
+import { randomUUID } from "node:crypto";
+import { WebSocketServer } from "ws";
+import { trace, metrics } from "@opentelemetry/api";
+import { sql as statement } from "drizzle-orm";
+
+export const AIR_ASYNC = ${definition} as const;
+const tracer = trace.getTracer("air.runtime");
+const meter = metrics.getMeter("air.runtime");
+const deliveries = meter.createCounter("air.consumer.deliveries");
+const retries = meter.createCounter("air.consumer.retries");
+const connections = meter.createUpDownCounter("air.realtime.connections");
+
+function database() { const url = process.env.DATABASE_URL; if (!url) throw new Error("DATABASE_URL is required."); return postgres(url, { prepare: false }); }
+function mapped(reference: Record<string, unknown>, input: Record<string, unknown>, record: Record<string, unknown>, principal: Record<string, unknown>): unknown { if ("input" in reference) return input[String(reference.input)]; if ("literal" in reference) return reference.literal; if ("principal" in reference) return principal[String(reference.principal)]; const selected = reference.record as string | { field: string }; return record[typeof selected === "string" ? selected : selected.field]; }
+export async function enqueueMessages(tx: { execute(query: unknown): Promise<unknown> }, commandName: keyof typeof AIR_ASYNC.commands, input: object, record: object, principal: object = {}): Promise<void> {
+  const inputValues = input as Record<string, unknown>; const recordValues = record as Record<string, unknown>; const principalValues = principal as Record<string, unknown>;
+  const command = AIR_ASYNC.commands[commandName] as { emits?: readonly any[]; enqueues?: readonly any[] };
+  for (const [kind, messages] of [["event", command.emits ?? []], ["task", command.enqueues ?? []]] as const) for (const message of messages) {
+    const name = message[kind]; const definition = (kind === "event" ? AIR_ASYNC.events : AIR_ASYNC.tasks)[name as never] as { version?: string };
+    const id = randomUUID(); const correlationId = randomUUID(); const payload = Object.fromEntries(Object.entries(message.payload).map(([key, value]) => [key, mapped(value as Record<string, unknown>, inputValues, recordValues, principalValues)])); const orderingKey = message.key ? String(mapped(message.key, inputValues, recordValues, principalValues)) : null;
+    await tx.execute(statement\`insert into air_outbox (id,message_type,schema_version,occurred_at,producer,correlation_id,ordering_key,payload,destination,message_kind) values (${"${id}"}::uuid,${"${name}"},${"${definition.version ?? \"1\"}"},now(),${"${AIR_ASYNC.application}"},${"${correlationId}"}::uuid,${"${orderingKey}"},${"${JSON.stringify(payload)}"}::jsonb,${"${name}"},${"${kind}"})\`);
+    if (kind === "event") for (const [channelName, channel] of Object.entries(AIR_ASYNC.realtime)) if (channel.subscriptions.some((subscription) => subscription.event === name)) await tx.execute(statement\`insert into air_realtime_journal (channel,envelope,ordering_key) values (${"${channelName}"},${"${JSON.stringify({ id, type: name, schemaVersion: definition.version ?? \"1\", producer: AIR_ASYNC.application, correlationId, orderingKey, payload })}"}::jsonb,${"${orderingKey}"})\`);
+  }
+}
+async function publish(envelope: unknown, destination: string): Promise<void> {
+  const provider = process.env.AIR_BROKER_PROVIDER ?? "postgres";
+  if (provider === "postgres") { const sql = database(); try { await sql\`select pg_notify(${"${destination}"}, ${"${JSON.stringify(envelope)}"})\`; } finally { await sql.end(); } return; }
+  const bridge = process.env.AIR_PROVIDER_BRIDGE_URL;
+  if (!bridge) throw new Error(\`AIR_PROVIDER_BRIDGE_URL is required for ${"${provider}"}.\`);
+  const response = await fetch(\`${"${bridge}"}/publish/${"${encodeURIComponent(destination)}"}\`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(envelope) });
+  if (!response.ok) throw new Error(\`Provider publish failed with ${"${response.status}"}.\`);
+}
+async function worker(): Promise<never> {
+  const sql = database();
+  for (;;) {
+    const rows = await sql.begin(async (tx) => tx\`select * from air_outbox where published_at is null and available_at <= now() order by occurred_at for update skip locked limit 100\`);
+    for (const row of rows) await tracer.startActiveSpan("air.outbox.publish", async (span) => { try { await publish({ id: row.id, type: row.message_type, schemaVersion: row.schema_version, occurredAt: row.occurred_at, producer: row.producer, correlationId: row.correlation_id, causationId: row.causation_id, orderingKey: row.ordering_key, payload: row.payload }, row.destination); await sql\`update air_outbox set published_at=now() where id=${"${row.id}"}\`; deliveries.add(1, { destination: row.destination }); } catch (error) { retries.add(1, { destination: row.destination }); await sql\`update air_outbox set attempts=attempts+1, available_at=now()+make_interval(secs => least(300, power(2, attempts)::int)) where id=${"${row.id}"}\`; span.recordException(error as Error); } finally { span.end(); } });
+    await new Promise((resolve) => setTimeout(resolve, rows.length ? 10 : 250));
+  }
+}
+async function scheduler(): Promise<never> { for (;;) { console.log(JSON.stringify({ level: "info", event: "air.scheduler.tick", schedules: Object.keys(AIR_ASYNC.schedules), timestamp: new Date().toISOString() })); await new Promise((resolve) => setTimeout(resolve, 1000)); } }
+async function orchestrator(): Promise<never> { const sql = database(); for (;;) { await sql\`update air_saga_timers set claimed_at=now() where id in (select id from air_saga_timers where completed_at is null and claimed_at is null and due_at <= now() for update skip locked limit 100)\`; await new Promise((resolve) => setTimeout(resolve, 250)); } }
+async function realtime(): Promise<never> { const sql = database(); const server = new WebSocketServer({ port: Number(process.env.AIR_PORT ?? 3000) }); server.on("connection", (socket, request) => { connections.add(1); let cursor = Number(new URL(request.url ?? "/", "http://air.local").searchParams.get("cursor") ?? 0); const timer = setInterval(async () => { const frames = await sql\`select cursor,envelope from air_realtime_journal where cursor > ${"${cursor}"} order by cursor limit 100\`; for (const frame of frames) { if (socket.bufferedAmount > 1024 * 1024) { socket.close(1013, "backpressure"); return; } socket.send(JSON.stringify({ cursor: frame.cursor, envelope: frame.envelope })); cursor = Number(frame.cursor); } }, 100); socket.on("close", () => { clearInterval(timer); connections.add(-1); }); }); return await new Promise<never>(() => undefined); }
+const role = process.argv[2] ?? process.env.AIR_COMPONENT_ROLE ?? "worker";
+if (role === "worker") await worker(); else if (role === "scheduler") await scheduler(); else if (role === "orchestrator") await orchestrator(); else if (role === "realtime") await realtime(); else throw new Error(\`Unknown AIR runtime role ${"${role}"}.\`);
+void randomUUID;
+`;
 }
 
 function validationOptions(field: FieldDefinition | ContractFieldDefinition): string {
@@ -779,6 +873,7 @@ ${primaryValues}
 ${returning}
         });
       if (!created) throw new Error(${json(`PostgreSQL did not return the result of command ${commandName}.`)});
+      await enqueueMessages(tx, ${json(commandName)}, input, created, ${principalType ? "principal" : "{ }"});
       return created;`;
   const isolationLevel = command.transaction?.isolation.replaceAll("-", " ") ?? "read committed";
   const retryAttempts = command.transaction?.retry?.maxAttempts ?? 1;
@@ -803,6 +898,7 @@ ${returning}
 import { getDb } from "@/db/client";
 import { ${schemaImports.join(", ")}, type ${outputEntity.pascal} } from "@/db/schema";
 import { DomainError, hasDatabaseErrorCode } from "@/domain/errors";
+import { enqueueMessages } from "@/air/runtime";
 import type { ${[inputType, principalType].filter(Boolean).join(", ")} } from "@/domain/contracts";
 
 export type ${outputType} = Pick<${outputEntity.pascal}, ${outputFields}>;
@@ -900,6 +996,7 @@ ${values}
 ${returning}
       });
     if (!created) throw new Error(${json(`PostgreSQL did not return the result of command ${commandName}.`)});
+    await enqueueMessages(tx, ${json(commandName)}, input, created, ${principalType ? "principal" : "{ }"});
     return created;`;
   } else {
     const identify = command.effect.identify;
@@ -933,6 +1030,7 @@ ${returning}
     if (!updated) {
       throw ${renderedDomainError(commandName, command, conflictError)};
     }
+    await enqueueMessages(tx, ${json(commandName)}, input, updated, ${principalType ? "principal" : "{ }"});
     return updated;`
       : `    const [deleted] = await tx
       .delete(${effectEntity.pluralCamel})
@@ -943,6 +1041,7 @@ ${returning}
     if (!deleted) {
       throw ${renderedDomainError(commandName, command, conflictError)};
     }
+    await enqueueMessages(tx, ${json(commandName)}, input, deleted, ${principalType ? "principal" : "{ }"});
     return deleted;`;
     effect = `    const [current] = await tx
       .select()
@@ -981,6 +1080,7 @@ ${inputAuthorization}${inputAuthorization ? "\n" : ""}${command.effect.kind === 
 import { getDb } from "@/db/client";
 import { ${schemaImports.join(", ")}, type ${outputEntity.pascal} } from "@/db/schema";
 import { DomainError, hasDatabaseErrorCode } from "@/domain/errors";
+import { enqueueMessages } from "@/air/runtime";
 import type { ${[inputType, principalType].filter(Boolean).join(", ")} } from "@/domain/contracts";
 
 export type ${outputType} = Pick<${outputEntity.pascal}, ${outputFields}>;
@@ -1668,6 +1768,8 @@ export function renderNextjsFiles(
       `import { sql } from "drizzle-orm";\nimport { drizzle } from "drizzle-orm/postgres-js";\nimport postgres from "postgres";\nimport * as schema from "./schema";\n\nlet database: ReturnType<typeof createDatabase> | undefined;\n\nfunction createDatabase() {\n  const connectionString = process.env.DATABASE_URL;\n  if (!connectionString) throw new Error("DATABASE_URL is required before accessing PostgreSQL.");\n  const client = postgres(connectionString, { prepare: false });\n  return drizzle(client, { schema });\n}\n\nexport function getDb(): ReturnType<typeof createDatabase> {\n  database ??= createDatabase();\n  return database;\n}\n\nexport async function checkDatabaseReady(): Promise<void> {\n  await getDb().execute(sql\`select 1\`);\n}`,
     ),
     planned("src/db/schema.ts", "source", ["/spec/entities"], renderDatabaseSchema(air)),
+    planned("drizzle/0000_air_async_runtime.sql", "source", ["/spec/events", "/spec/tasks", "/spec/consumers", "/spec/schedules", "/spec/realtime"], renderAsyncMigration()),
+    planned("src/air/runtime.ts", "source", ["/spec/events", "/spec/tasks", "/spec/consumers", "/spec/schedules", "/spec/cachedReads", "/spec/realtime"], renderAsyncRuntime(air)),
     planned("src/domain/errors.ts", "source", ["/spec/commands"], renderDomainErrors()),
     planned("src/domain/input.ts", "source", ["/spec/entities"], renderInputHelpers()),
     planned("src/domain/validation.test.ts", "test", ["/spec/entities"], renderValidationTests(air)),

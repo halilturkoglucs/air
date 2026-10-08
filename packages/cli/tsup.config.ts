@@ -12,6 +12,6 @@ export default defineConfig({
   // The public CLI bundles private AIR workspace packages. Mature third-party
   // runtimes remain normal npm dependencies so their native module formats are
   // preserved instead of being rewritten into the ESM bundle.
-  noExternal: [/^@air\//],
-  external: ["ajv", "yaml", "postgres"],
+  noExternal: [/^@air\//, /^@halilturkoglucs\/air-plugin-sdk$/],
+  external: ["ajv", "yaml", "postgres", "amqplib", "kafkajs", "redis"],
 });

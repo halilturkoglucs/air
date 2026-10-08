@@ -1,0 +1,56 @@
+apiVersion: air.dev/v0.9
+kind: Application
+metadata: { name: billing, displayName: Billing Service, version: 0.10.0 }
+spec:
+  entities:
+    Payment:
+      fields:
+        id: { type: uuid, primaryKey: true, generated: uuid }
+        orderId: { type: uuid, required: true, unique: true }
+        status: { type: string, default: captured, validation: { enum: [captured, refunded] } }
+  contracts:
+    InventoryReservedPayload:
+      fields:
+        orderId: { type: uuid, required: true }
+        reservationId: { type: uuid, required: true }
+    CapturePaymentInput:
+      fields:
+        orderId: { type: uuid, required: true }
+    PaymentCapturedPayload:
+      fields:
+        orderId: { type: uuid, required: true }
+        paymentId: { type: uuid, required: true }
+  commands:
+    capturePayment:
+      input: CapturePaymentInput
+      output: { entity: Payment, fields: [id, orderId, status] }
+      emits:
+        - event: PaymentCaptured
+          key: { input: orderId }
+          payload:
+            orderId: { input: orderId }
+            paymentId: { record: id }
+      effect:
+        kind: create
+        entity: Payment
+        values:
+          orderId: { input: orderId }
+  events:
+    InventoryReserved: { kind: integration, version: 1.0.0, payload: InventoryReservedPayload }
+    PaymentCaptured: { kind: integration, version: 1.0.0, payload: PaymentCapturedPayload }
+  consumers:
+    chargeOnInventoryReserved:
+      source: { event: InventoryReserved }
+      command: capturePayment
+      input:
+        orderId: { payload: orderId }
+      retry: { maxAttempts: 5, backoffMs: 100 }
+  schedules:
+    reconcilePayments:
+      cron: "0 * * * *"
+      timezone: UTC
+      command: capturePayment
+      input: { orderId: "00000000-0000-4000-8000-000000000999" }
+      concurrency: forbid
+      missedRun: run-once
+  http: { operations: [] }

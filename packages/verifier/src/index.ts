@@ -16,6 +16,8 @@ import type {
   InvariantOperand,
 } from "@air/schema";
 
+export * from "./system.js";
+
 export const VERIFICATION_API_VERSION = "air.dev/verification/v0.1" as const;
 export const VERIFICATION_KIND = "VerificationSuite" as const;
 

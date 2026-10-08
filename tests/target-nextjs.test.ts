@@ -12,9 +12,8 @@ import {
 describe("Next.js target boundary", () => {
   it("declares platform capabilities without adding them to AIR", () => {
     expect(nextjsCapabilityManifest.capabilities["http.crud"].support).toBe("supported");
-    expect(nextjsCapabilityManifest.capabilities["background.long-running"].support).toBe(
-      "unsupported",
-    );
+    expect(nextjsCapabilityManifest.capabilities["background.long-running"].support).toBe("supported");
+    expect(nextjsCapabilityManifest.capabilities["messaging.consume"].support).toBe("supported");
     expect(nextjsCapabilityManifest.capabilities["deployment.vercel"].support).toBe("supported");
     expect(nextjsCapabilityManifest.capabilities["authorization.ownership"].support).toBe(
       "conditional",
@@ -77,7 +76,7 @@ describe("Next.js target boundary", () => {
     expect(result.artifacts).toContainEqual(
       expect.objectContaining({
         path: ".air/manifest.json",
-        provenance: expect.objectContaining({ targetId: "nextjs", targetVersion: "0.9.0" }),
+        provenance: expect.objectContaining({ targetId: "nextjs", targetVersion: "0.10.0" }),
       }),
     );
     expect(result.artifacts).toContainEqual(

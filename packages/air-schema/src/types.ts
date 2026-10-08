@@ -6,8 +6,13 @@ export const AIR_API_VERSION_V0_5 = "air.dev/v0.5" as const;
 export const AIR_API_VERSION_V0_6 = "air.dev/v0.6" as const;
 export const AIR_API_VERSION_V0_7 = "air.dev/v0.7" as const;
 export const AIR_API_VERSION_V0_8 = "air.dev/v0.8" as const;
-export const AIR_API_VERSION = AIR_API_VERSION_V0_8;
+export const AIR_API_VERSION_V0_9 = "air.dev/v0.9" as const;
+export const AIR_API_VERSION = AIR_API_VERSION_V0_9;
 export const AIR_KIND = "Application" as const;
+export const SYSTEM_API_VERSION = "air.dev/system/v0.1" as const;
+export const SYSTEM_KIND = "System" as const;
+export const DEPLOYMENT_API_VERSION = "air.dev/deployment/v0.1" as const;
+export const DEPLOYMENT_KIND = "Deployment" as const;
 
 export type AirApiVersion =
   | typeof AIR_API_VERSION_V0_1
@@ -17,7 +22,8 @@ export type AirApiVersion =
   | typeof AIR_API_VERSION_V0_5
   | typeof AIR_API_VERSION_V0_6
   | typeof AIR_API_VERSION_V0_7
-  | typeof AIR_API_VERSION_V0_8;
+  | typeof AIR_API_VERSION_V0_8
+  | typeof AIR_API_VERSION_V0_9;
 export type AirKind = typeof AIR_KIND;
 
 export type PrimitiveType =
@@ -277,6 +283,89 @@ export interface CommandOutputDefinition {
   readonly fields: readonly string[];
 }
 
+export type MessageValueReference =
+  | CommandInputReference
+  | CommandLiteralReference
+  | InvariantPrincipalOperand
+  | InvariantRecordOperand;
+
+export interface MessageEmissionDefinition {
+  readonly event: string;
+  readonly payload: Readonly<Record<string, MessageValueReference>>;
+  readonly key?: MessageValueReference;
+}
+
+export interface TaskEnqueueDefinition {
+  readonly task: string;
+  readonly payload: Readonly<Record<string, MessageValueReference>>;
+  readonly key?: MessageValueReference;
+}
+
+export interface EventDefinition {
+  readonly kind: "domain" | "integration";
+  readonly version: string;
+  readonly payload: string;
+  readonly description?: string;
+}
+
+export interface TaskDefinition {
+  readonly payload: string;
+  readonly result?: string;
+  readonly description?: string;
+}
+
+export type ConsumerSource = { readonly event: string } | { readonly task: string };
+export type EnvelopeValueReference =
+  | { readonly payload: string }
+  | { readonly envelope: "id" | "occurredAt" | "correlationId" | "causationId" | "orderingKey" };
+
+export interface ConsumerDefinition {
+  readonly source: ConsumerSource;
+  readonly command: string;
+  readonly input: Readonly<Record<string, EnvelopeValueReference>>;
+  readonly retry?: { readonly maxAttempts: number; readonly backoffMs: number };
+  readonly deadLetter?: string;
+}
+
+export interface ScheduleDefinition {
+  readonly cron: string;
+  readonly timezone: "UTC";
+  readonly command: string;
+  readonly input?: Readonly<Record<string, ConstraintValue>>;
+  readonly concurrency: "forbid" | "allow" | "replace";
+  readonly missedRun: "skip" | "run-once";
+}
+
+export interface CachedReadDefinition {
+  readonly operation: string;
+  readonly ttlSeconds: number;
+  readonly maxStaleSeconds: number;
+  readonly invalidatedBy: readonly string[];
+  readonly fallback: "canonical-source";
+}
+
+export interface RealtimeSubscriptionDefinition {
+  readonly event: string;
+  readonly filters?: readonly {
+    readonly payloadField: string;
+    readonly principalField: string;
+  }[];
+}
+
+export interface RealtimeCommandDefinition {
+  readonly type: string;
+  readonly command: string;
+}
+
+export interface RealtimeChannelDefinition {
+  readonly principal?: string;
+  readonly subscriptions: readonly RealtimeSubscriptionDefinition[];
+  readonly commands?: readonly RealtimeCommandDefinition[];
+  readonly transports: readonly ("websocket" | "sse")[];
+  readonly resume: "cursor";
+  readonly buffer: { readonly maxMessages: number; readonly overflow: "disconnect" };
+}
+
 export interface CommandDefinition {
   readonly description?: string;
   readonly input: string;
@@ -288,6 +377,8 @@ export interface CommandDefinition {
   readonly invariants?: readonly CommandInvariantDefinition[];
   readonly effects?: Readonly<Record<string, CommandUpdateEffect>>;
   readonly idempotency?: CommandIdempotencyDefinition;
+  readonly emits?: readonly MessageEmissionDefinition[];
+  readonly enqueues?: readonly TaskEnqueueDefinition[];
   readonly effect: CommandEffect;
 }
 
@@ -361,6 +452,12 @@ export interface ApplicationSpec {
   readonly principals?: Readonly<Record<string, PrincipalDefinition>>;
   readonly commands?: Readonly<Record<string, CommandDefinition>>;
   readonly http?: HttpDefinition;
+  readonly events?: Readonly<Record<string, EventDefinition>>;
+  readonly tasks?: Readonly<Record<string, TaskDefinition>>;
+  readonly consumers?: Readonly<Record<string, ConsumerDefinition>>;
+  readonly schedules?: Readonly<Record<string, ScheduleDefinition>>;
+  readonly cachedReads?: Readonly<Record<string, CachedReadDefinition>>;
+  readonly realtime?: Readonly<Record<string, RealtimeChannelDefinition>>;
 }
 
 export interface AirDocument {
@@ -378,3 +475,77 @@ export type AirDocumentV0_5 = AirDocument & { readonly apiVersion: typeof AIR_AP
 export type AirDocumentV0_6 = AirDocument & { readonly apiVersion: typeof AIR_API_VERSION_V0_6 };
 export type AirDocumentV0_7 = AirDocument & { readonly apiVersion: typeof AIR_API_VERSION_V0_7 };
 export type AirDocumentV0_8 = AirDocument & { readonly apiVersion: typeof AIR_API_VERSION_V0_8 };
+export type AirDocumentV0_9 = AirDocument & { readonly apiVersion: typeof AIR_API_VERSION_V0_9 };
+
+export interface MessageEnvelope<TPayload = Readonly<Record<string, unknown>>> {
+  readonly id: string;
+  readonly type: string;
+  readonly schemaVersion: string;
+  readonly occurredAt: string;
+  readonly producer: string;
+  readonly correlationId: string;
+  readonly causationId?: string;
+  readonly orderingKey?: string;
+  readonly payload: TPayload;
+}
+
+export type ComponentRole = "api" | "worker" | "scheduler" | "orchestrator" | "realtime";
+export type ComponentTarget = "nextjs" | "rust-axum" | "python-fastapi";
+
+export interface SystemApplicationReference { readonly source: string }
+export interface SystemComponentDefinition {
+  readonly application: string;
+  readonly role: ComponentRole;
+  readonly target: ComponentTarget;
+  readonly dependsOn?: readonly string[];
+}
+export interface SystemChannelDefinition {
+  readonly kind: "event" | "task";
+  readonly source: string;
+  readonly consumers: readonly string[];
+  readonly ordered?: boolean;
+}
+export type SagaStepDefinition =
+  | { readonly id: string; readonly kind: "invoke"; readonly application: string; readonly command: string; readonly compensate?: string }
+  | { readonly id: string; readonly kind: "publish"; readonly application: string; readonly event: string }
+  | { readonly id: string; readonly kind: "wait"; readonly application: string; readonly event: string; readonly timeoutSeconds: number }
+  | { readonly id: string; readonly kind: "delay"; readonly seconds: number };
+export interface SagaDefinition {
+  readonly trigger: { readonly application: string; readonly event: string };
+  readonly correlation: string;
+  readonly retry: { readonly maxAttempts: number; readonly backoffMs: number };
+  readonly steps: readonly SagaStepDefinition[];
+}
+export interface AirSystemDocument {
+  readonly apiVersion: typeof SYSTEM_API_VERSION;
+  readonly kind: typeof SYSTEM_KIND;
+  readonly metadata: ApplicationMetadata;
+  readonly spec: {
+    readonly applications: Readonly<Record<string, SystemApplicationReference>>;
+    readonly components: Readonly<Record<string, SystemComponentDefinition>>;
+    readonly channels?: Readonly<Record<string, SystemChannelDefinition>>;
+    readonly sagas?: Readonly<Record<string, SagaDefinition>>;
+  };
+}
+
+export type DeploymentProfile = "process" | "docker" | "compose" | "kubernetes" | "terraform-kubernetes";
+export type DeploymentResourceDefinition =
+  | { readonly kind: "broker"; readonly provider: "kafka" | "rabbitmq" | "postgres"; readonly environment?: Readonly<Record<string, string>> }
+  | { readonly kind: "cache"; readonly provider: "redis"; readonly environment?: Readonly<Record<string, string>> }
+  | { readonly kind: "database"; readonly provider: "postgres"; readonly environment?: Readonly<Record<string, string>> };
+export interface AirDeploymentDocument {
+  readonly apiVersion: typeof DEPLOYMENT_API_VERSION;
+  readonly kind: typeof DEPLOYMENT_KIND;
+  readonly metadata: ApplicationMetadata;
+  readonly spec: {
+    readonly system: string;
+    readonly profile: DeploymentProfile;
+    readonly resources: Readonly<Record<string, DeploymentResourceDefinition>>;
+    readonly bindings: Readonly<Record<string, string>>;
+    readonly observability: {
+      readonly openTelemetry: true;
+      readonly endpointEnvironment: string;
+    };
+    readonly components?: Readonly<Record<string, { readonly replicas?: number }>>;
+  };
+}

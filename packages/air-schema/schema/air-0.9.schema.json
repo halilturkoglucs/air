@@ -1,0 +1,304 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://air.dev/schema/air-0.9.schema.json",
+  "title": "AIR Application v0.9",
+  "description": "AIR semantics with portable events, tasks, workers, schedules, caches, and realtime channels.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "metadata", "spec"],
+  "properties": {
+    "apiVersion": { "const": "air.dev/v0.9" },
+    "kind": { "const": "Application" },
+    "metadata": { "$ref": "https://air.dev/schema/air-0.4.schema.json#/$defs/metadata" },
+    "spec": { "$ref": "#/$defs/spec" }
+  },
+  "$defs": {
+    "identifier": { "$ref": "https://air.dev/schema/air-0.4.schema.json#/$defs/identifier" },
+    "errorCode": { "$ref": "https://air.dev/schema/air-0.4.schema.json#/$defs/errorCode" },
+    "namedMap": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": { "$ref": "#/$defs/identifier" }
+    },
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entities"],
+      "properties": {
+        "entities": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": { "$ref": "#/$defs/identifier" },
+          "additionalProperties": { "$ref": "https://air.dev/schema/air-0.4.schema.json#/$defs/entity" }
+        },
+        "contracts": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": { "$ref": "#/$defs/identifier" },
+          "additionalProperties": { "$ref": "https://air.dev/schema/air-0.4.schema.json#/$defs/contract" }
+        },
+        "principals": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": { "$ref": "#/$defs/identifier" },
+          "additionalProperties": { "$ref": "https://air.dev/schema/air-0.4.schema.json#/$defs/contract" }
+        },
+        "commands": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": { "$ref": "#/$defs/identifier" },
+          "additionalProperties": { "$ref": "#/$defs/command" }
+        },
+        "http": { "$ref": "https://air.dev/schema/air-0.8.schema.json#/$defs/http" },
+        "events": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": { "$ref": "#/$defs/identifier" },
+          "additionalProperties": { "$ref": "#/$defs/event" }
+        },
+        "tasks": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": { "$ref": "#/$defs/identifier" },
+          "additionalProperties": { "$ref": "#/$defs/task" }
+        },
+        "consumers": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": { "$ref": "#/$defs/identifier" },
+          "additionalProperties": { "$ref": "#/$defs/consumer" }
+        },
+        "schedules": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": { "$ref": "#/$defs/identifier" },
+          "additionalProperties": { "$ref": "#/$defs/schedule" }
+        },
+        "cachedReads": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": { "$ref": "#/$defs/identifier" },
+          "additionalProperties": { "$ref": "#/$defs/cachedRead" }
+        },
+        "realtime": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": { "$ref": "#/$defs/identifier" },
+          "additionalProperties": { "$ref": "#/$defs/realtimeChannel" }
+        }
+      }
+    },
+    "command": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["input", "output", "effect"],
+      "properties": {
+        "description": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "input": { "$ref": "#/$defs/identifier" },
+        "output": { "$ref": "https://air.dev/schema/air-0.4.schema.json#/$defs/commandOutput" },
+        "errors": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": { "$ref": "#/$defs/errorCode" },
+          "additionalProperties": { "$ref": "https://air.dev/schema/air-0.4.schema.json#/$defs/commandError" }
+        },
+        "guards": { "type": "array", "minItems": 1, "items": { "$ref": "https://air.dev/schema/air-0.4.schema.json#/$defs/existsGuard" } },
+        "transaction": { "$ref": "https://air.dev/schema/air-0.7.schema.json#/$defs/transaction" },
+        "authorization": { "$ref": "https://air.dev/schema/air-0.8.schema.json#/$defs/commandAuthorization" },
+        "invariants": { "type": "array", "minItems": 1, "items": { "$ref": "https://air.dev/schema/air-0.7.schema.json#/$defs/invariant" } },
+        "effects": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": { "$ref": "#/$defs/identifier" },
+          "additionalProperties": { "$ref": "https://air.dev/schema/air-0.7.schema.json#/$defs/updateEffect" }
+        },
+        "idempotency": { "$ref": "https://air.dev/schema/air-0.7.schema.json#/$defs/idempotency" },
+        "emits": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/emission" } },
+        "enqueues": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/enqueue" } },
+        "effect": {
+          "oneOf": [
+            { "$ref": "https://air.dev/schema/air-0.4.schema.json#/$defs/createEffect" },
+            { "$ref": "https://air.dev/schema/air-0.7.schema.json#/$defs/updateEffect" },
+            { "$ref": "https://air.dev/schema/air-0.8.schema.json#/$defs/deleteEffect" }
+          ]
+        }
+      }
+    },
+    "messageValue": {
+      "oneOf": [
+        { "type": "object", "additionalProperties": false, "required": ["input"], "properties": { "input": { "$ref": "#/$defs/identifier" } } },
+        { "type": "object", "additionalProperties": false, "required": ["literal"], "properties": { "literal": {} } },
+        { "type": "object", "additionalProperties": false, "required": ["principal"], "properties": { "principal": { "$ref": "#/$defs/identifier" } } },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["record"],
+          "properties": {
+            "record": {
+              "oneOf": [
+                { "$ref": "#/$defs/identifier" },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["effect", "field"],
+                  "properties": { "effect": { "$ref": "#/$defs/identifier" }, "field": { "$ref": "#/$defs/identifier" } }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "messagePayload": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": { "$ref": "#/$defs/identifier" },
+      "additionalProperties": { "$ref": "#/$defs/messageValue" }
+    },
+    "emission": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event", "payload"],
+      "properties": { "event": { "$ref": "#/$defs/identifier" }, "payload": { "$ref": "#/$defs/messagePayload" }, "key": { "$ref": "#/$defs/messageValue" } }
+    },
+    "enqueue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["task", "payload"],
+      "properties": { "task": { "$ref": "#/$defs/identifier" }, "payload": { "$ref": "#/$defs/messagePayload" }, "key": { "$ref": "#/$defs/messageValue" } }
+    },
+    "event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "version", "payload"],
+      "properties": {
+        "kind": { "enum": ["domain", "integration"] },
+        "version": { "type": "string", "pattern": "^[1-9][0-9]*\\.[0-9]+\\.[0-9]+$" },
+        "payload": { "$ref": "#/$defs/identifier" },
+        "description": { "type": "string", "minLength": 1, "maxLength": 2000 }
+      }
+    },
+    "task": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["payload"],
+      "properties": {
+        "payload": { "$ref": "#/$defs/identifier" },
+        "result": { "$ref": "#/$defs/identifier" },
+        "description": { "type": "string", "minLength": 1, "maxLength": 2000 }
+      }
+    },
+    "consumerSource": {
+      "oneOf": [
+        { "type": "object", "additionalProperties": false, "required": ["event"], "properties": { "event": { "$ref": "#/$defs/identifier" } } },
+        { "type": "object", "additionalProperties": false, "required": ["task"], "properties": { "task": { "$ref": "#/$defs/identifier" } } }
+      ]
+    },
+    "envelopeValue": {
+      "oneOf": [
+        { "type": "object", "additionalProperties": false, "required": ["payload"], "properties": { "payload": { "$ref": "#/$defs/identifier" } } },
+        { "type": "object", "additionalProperties": false, "required": ["envelope"], "properties": { "envelope": { "enum": ["id", "occurredAt", "correlationId", "causationId", "orderingKey"] } } }
+      ]
+    },
+    "consumer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "command", "input"],
+      "properties": {
+        "source": { "$ref": "#/$defs/consumerSource" },
+        "command": { "$ref": "#/$defs/identifier" },
+        "input": { "type": "object", "minProperties": 1, "propertyNames": { "$ref": "#/$defs/identifier" }, "additionalProperties": { "$ref": "#/$defs/envelopeValue" } },
+        "retry": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["maxAttempts", "backoffMs"],
+          "properties": { "maxAttempts": { "type": "integer", "minimum": 1, "maximum": 100 }, "backoffMs": { "type": "integer", "minimum": 0, "maximum": 86400000 } }
+        },
+        "deadLetter": { "$ref": "#/$defs/identifier" }
+      }
+    },
+    "schedule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cron", "timezone", "command", "concurrency", "missedRun"],
+      "properties": {
+        "cron": { "type": "string", "pattern": "^\\S+\\s+\\S+\\s+\\S+\\s+\\S+\\s+\\S+$" },
+        "timezone": { "const": "UTC" },
+        "command": { "$ref": "#/$defs/identifier" },
+        "input": {
+          "type": "object",
+          "additionalProperties": {
+            "oneOf": [
+              { "type": "string" },
+              { "type": "number" },
+              { "type": "boolean" },
+              { "type": "null" }
+            ]
+          }
+        },
+        "concurrency": { "enum": ["forbid", "allow", "replace"] },
+        "missedRun": { "enum": ["skip", "run-once"] }
+      }
+    },
+    "cachedRead": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation", "ttlSeconds", "maxStaleSeconds", "invalidatedBy", "fallback"],
+      "properties": {
+        "operation": { "$ref": "#/$defs/identifier" },
+        "ttlSeconds": { "type": "integer", "minimum": 1, "maximum": 31536000 },
+        "maxStaleSeconds": { "type": "integer", "minimum": 0, "maximum": 31536000 },
+        "invalidatedBy": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/identifier" } },
+        "fallback": { "const": "canonical-source" }
+      }
+    },
+    "realtimeChannel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["subscriptions", "transports", "resume", "buffer"],
+      "properties": {
+        "principal": { "$ref": "#/$defs/identifier" },
+        "subscriptions": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["event"],
+            "properties": {
+              "event": { "$ref": "#/$defs/identifier" },
+              "filters": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["payloadField", "principalField"],
+                  "properties": { "payloadField": { "$ref": "#/$defs/identifier" }, "principalField": { "$ref": "#/$defs/identifier" } }
+                }
+              }
+            }
+          }
+        },
+        "commands": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["type", "command"],
+            "properties": { "type": { "$ref": "#/$defs/identifier" }, "command": { "$ref": "#/$defs/identifier" } }
+          }
+        },
+        "transports": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "enum": ["websocket", "sse"] } },
+        "resume": { "const": "cursor" },
+        "buffer": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["maxMessages", "overflow"],
+          "properties": { "maxMessages": { "type": "integer", "minimum": 1, "maximum": 100000 }, "overflow": { "const": "disconnect" } }
+        }
+      }
+    }
+  }
+}

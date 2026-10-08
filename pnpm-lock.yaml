@@ -14,6 +14,9 @@ importers:
       '@air/compiler-core':
         specifier: workspace:*
         version: link:packages/compiler-core
+      '@air/composer':
+        specifier: workspace:*
+        version: link:packages/composer
       '@air/import-nextjs':
         specifier: workspace:*
         version: link:packages/import-nextjs
@@ -23,12 +26,18 @@ importers:
       '@air/import-postgres':
         specifier: workspace:*
         version: link:packages/import-postgres
+      '@air/import-spring':
+        specifier: workspace:*
+        version: link:packages/import-spring
       '@air/language-server':
         specifier: workspace:*
         version: link:packages/language-server
       '@air/parser':
         specifier: workspace:*
         version: link:packages/air-parser
+      '@air/providers':
+        specifier: workspace:*
+        version: link:packages/providers
       '@air/target-nextjs':
         specifier: workspace:*
         version: link:packages/target-nextjs
@@ -44,6 +53,9 @@ importers:
       '@halilturkoglucs/air':
         specifier: workspace:*
         version: link:packages/cli
+      '@halilturkoglucs/air-plugin-sdk':
+        specifier: workspace:*
+        version: link:packages/plugin-sdk
       '@types/node':
         specifier: ^22.15.0
         version: 22.20.5
@@ -76,9 +88,18 @@ importers:
       ajv:
         specifier: ^8.17.1
         version: 8.20.0
+      amqplib:
+        specifier: ^0.10.8
+        version: 0.10.9
+      kafkajs:
+        specifier: ^2.2.4
+        version: 2.2.4
       postgres:
         specifier: ^3.4.7
         version: 3.4.9
+      redis:
+        specifier: ^5.8.3
+        version: 5.12.1
       yaml:
         specifier: ^2.8.1
         version: 2.9.1
@@ -86,6 +107,9 @@ importers:
       '@air/compiler-core':
         specifier: workspace:*
         version: link:../compiler-core
+      '@air/composer':
+        specifier: workspace:*
+        version: link:../composer
       '@air/import-nextjs':
         specifier: workspace:*
         version: link:../import-nextjs
@@ -95,12 +119,18 @@ importers:
       '@air/import-postgres':
         specifier: workspace:*
         version: link:../import-postgres
+      '@air/import-spring':
+        specifier: workspace:*
+        version: link:../import-spring
       '@air/language-server':
         specifier: workspace:*
         version: link:../language-server
       '@air/parser':
         specifier: workspace:*
         version: link:../air-parser
+      '@air/providers':
+        specifier: workspace:*
+        version: link:../providers
       '@air/schema':
         specifier: workspace:*
         version: link:../air-schema
@@ -116,6 +146,9 @@ importers:
       '@air/verifier':
         specifier: workspace:*
         version: link:../verifier
+      '@halilturkoglucs/air-plugin-sdk':
+        specifier: workspace:*
+        version: link:../plugin-sdk
       tsup:
         specifier: ^8.5.0
         version: 8.5.1(postcss@8.5.28)(typescript@5.9.3)(yaml@2.9.1)
@@ -125,6 +158,25 @@ importers:
       '@air/schema':
         specifier: workspace:*
         version: link:../air-schema
+
+  packages/composer:
+    dependencies:
+      '@air/parser':
+        specifier: workspace:*
+        version: link:../air-parser
+      '@air/providers':
+        specifier: workspace:*
+        version: link:../providers
+      '@air/schema':
+        specifier: workspace:*
+        version: link:../air-schema
+      '@halilturkoglucs/air-plugin-sdk':
+        specifier: workspace:*
+        version: link:../plugin-sdk
+    devDependencies:
+      tsup:
+        specifier: ^8.5.0
+        version: 8.5.1(postcss@8.5.28)(typescript@5.9.3)(yaml@2.9.1)
 
   packages/import-nextjs:
     dependencies:
@@ -150,11 +202,52 @@ importers:
         specifier: ^3.4.8
         version: 3.4.9
 
+  packages/import-spring:
+    dependencies:
+      '@air/schema':
+        specifier: workspace:*
+        version: link:../air-schema
+    devDependencies:
+      tsup:
+        specifier: ^8.5.0
+        version: 8.5.1(postcss@8.5.28)(typescript@5.9.3)(yaml@2.9.1)
+
   packages/language-server:
     dependencies:
       '@air/parser':
         specifier: workspace:*
         version: link:../air-parser
+
+  packages/plugin-sdk:
+    devDependencies:
+      tsup:
+        specifier: ^8.5.0
+        version: 8.5.1(postcss@8.5.28)(typescript@5.9.3)(yaml@2.9.1)
+
+  packages/providers:
+    dependencies:
+      '@halilturkoglucs/air-plugin-sdk':
+        specifier: workspace:*
+        version: link:../plugin-sdk
+      amqplib:
+        specifier: ^0.10.8
+        version: 0.10.9
+      kafkajs:
+        specifier: ^2.2.4
+        version: 2.2.4
+      postgres:
+        specifier: ^3.4.7
+        version: 3.4.9
+      redis:
+        specifier: ^5.8.3
+        version: 5.12.1
+    devDependencies:
+      '@types/amqplib':
+        specifier: ^0.10.7
+        version: 0.10.8
+      tsup:
+        specifier: ^8.5.0
+        version: 8.5.1(postcss@8.5.28)(typescript@5.9.3)(yaml@2.9.1)
 
   packages/target-nextjs:
     dependencies:
@@ -373,6 +466,42 @@ packages:
     os: [linux]
     libc: [glibc]
 
+  '@redis/bloom@5.12.1':
+    resolution: {integrity: sha512-PUUfv+ms7jgPSBVoo/DN4AkPHj4D5TZSd6SbJX7egzBplkYUcKmHRE8RKia7UtZ8bSQbLguLvxVO+asKtQfZWA==}
+    engines: {node: '>= 18.19.0'}
+    peerDependencies:
+      '@redis/client': ^5.12.1
+
+  '@redis/client@5.12.1':
+    resolution: {integrity: sha512-7aPGWeqA3uFm43o19umzdl16CEjK/JQGtSXVPevplTaOU3VJA/rseBC1QvYUz9lLDIMBimc4SW/zrW4S89BaCA==}
+    engines: {node: '>= 18.19.0'}
+    peerDependencies:
+      '@node-rs/xxhash': ^1.1.0
+      '@opentelemetry/api': '>=1 <2'
+    peerDependenciesMeta:
+      '@node-rs/xxhash':
+        optional: true
+      '@opentelemetry/api':
+        optional: true
+
+  '@redis/json@5.12.1':
+    resolution: {integrity: sha512-eOze75esLve4vfqDel7aMX08CNaiLLQS2fV8mpRN9NxPe1rVR4vQyYiW/OgtGUysF6QOr9ANhfxABKNOJfXdKg==}
+    engines: {node: '>= 18.19.0'}
+    peerDependencies:
+      '@redis/client': ^5.12.1
+
+  '@redis/search@5.12.1':
+    resolution: {integrity: sha512-ItlxbxC9cKI6IU1TLWoczwJCRb6TdmkEpWv05UrPawqaAnWGRu3rcIqsc5vN483T2fSociuyV1UkWIL5I4//2w==}
+    engines: {node: '>= 18.19.0'}
+    peerDependencies:
+      '@redis/client': ^5.12.1
+
+  '@redis/time-series@5.12.1':
+    resolution: {integrity: sha512-c6JL6E3EcZJuNqKFz+KM+l9l5mpcQiKvTwgA3blt5glWJ8hjDk0yeHN3beE/MpqYIQ8UEX44ItQzgkE/gCBELQ==}
+    engines: {node: '>= 18.19.0'}
+    peerDependencies:
+      '@redis/client': ^5.12.1
+
   '@rollup/rollup-android-arm-eabi@4.64.0':
     resolution: {integrity: sha512-FLLpX941CD/7aBvX3GqLGBM9OvY5PGXTryPJkG5r5/OuBpZpV5k45Uo3RxAvqd35tsyc3hH1bhtz921IKzoIzg==}
     cpu: [arm]
@@ -511,6 +640,9 @@ packages:
     cpu: [x64]
     os: [win32]
 
+  '@types/amqplib@0.10.8':
+    resolution: {integrity: sha512-vtDp8Pk1wsE/AuQ8/Rgtm6KUZYqcnTgNvEHwzCkX8rL7AGsC6zqAfKAAJhUZXFhM/Pp++tbnUHiam/8vVpPztA==}
+
   '@types/chai@5.2.3':
     resolution: {integrity: sha512-Mw558oeA9fFbv65/y4mHtXDs9bPnFMZAL/jxdPFUpOHHIXX91mcgEHbS5Lahr+pwZFR8A7GQleRWeI6cGFC2UA==}
 
@@ -545,12 +677,19 @@ packages:
   ajv@8.20.0:
     resolution: {integrity: sha512-Thbli+OlOj+iMPYFBVBfJ3OmCAnaSyNn4M1vz9T6Gka5Jt9ba/HIR56joy65tY6kx/FCF5VXNB819Y7/GUrBGA==}
 
+  amqplib@0.10.9:
+    resolution: {integrity: sha512-jwSftI4QjS3mizvnSnOrPGYiUnm1vI2OP1iXeOUz5pb74Ua0nbf6nPyyTzuiCLEE3fMpaJORXh2K/TQ08H5xGA==}
+    engines: {node: '>=10'}
+
   any-promise@1.3.0:
     resolution: {integrity: sha512-7UvmKalWRt1wgjL1RrGxoSJW/0QZFIegpeGvZG9kjp8vrRu55XTHbwnqq2GpXm9uLbcuhxm3IqX9OB4MZR1b2A==}
 
   assertion-error@2.0.1:
     resolution: {integrity: sha512-Izi8RQcffqCeNVgFigKli1ssklIbpHnCYc6AknXGYoB6grJqyeby7jv12JUQgmTAnIDnbck1uxksT4dzN3PWBA==}
     engines: {node: '>=12'}
+
+  buffer-more-ints@1.0.0:
+    resolution: {integrity: sha512-EMetuGFz5SLsT0QTnXzINh4Ksr+oo4i+UGTXEshiGCQWnsgSs7ZhJ8fzlwQ+OzEMs0MpDAMr1hxnblp5a4vcHg==}
 
   bundle-require@5.1.0:
     resolution: {integrity: sha512-3WrrOuZiyaaZPWiEt4G3+IffISVC9HYlWueJEBWED4ZH4aIAC2PnkdnuRrR94M+w6yGWn4AglWtJtBI8YqvgoA==}
@@ -569,6 +708,10 @@ packages:
   chokidar@4.0.3:
     resolution: {integrity: sha512-Qgzu8kfBvo+cA4962jnP1KkS6Dop5NS6g7R5LFYJr4b8Ub94PPQXUksCw9PvXoeXPRRddRNC5C1JQUR2SMGtnA==}
     engines: {node: '>= 14.16.0'}
+
+  cluster-key-slot@1.1.2:
+    resolution: {integrity: sha512-RMr0FhtfXemyinomL4hrWcYJxmX6deFdCxpJzhDttxgO1+bcCnkk+9drydLVDmAMG7NE6aN/fl4F7ucU/90gAA==}
+    engines: {node: '>=0.10.0'}
 
   commander@4.1.1:
     resolution: {integrity: sha512-NOKm8xhkzAjzFx8B2v5OAHT+u5pRQc2UCa2Vq9jYL/31o2wi9mxBA7LIFs3sV5VSC49z6pEhfbMULvShKj26WA==}
@@ -634,6 +777,10 @@ packages:
 
   json-schema-traverse@1.0.0:
     resolution: {integrity: sha512-NM8/P9n3XjXhIZn1lLhkFaACTOURQXjWhV4BA/RnOv8xvgqtqpAX9IO4mRQxSx1Rlo4tqzeqb0sOlruaOy3dug==}
+
+  kafkajs@2.2.4:
+    resolution: {integrity: sha512-j/YeapB1vfPT2iOIUn/vxdyKEuhuY2PxMBvf5JWux6iSaukAccrMtXEY/Lb7OvavDhOWME589bpLrEdnVHjfjA==}
+    engines: {node: '>=14.0.0'}
 
   lilconfig@3.1.3:
     resolution: {integrity: sha512-/vlFKAoH5Cgt3Ie+JLhRbwOsCQePABiU3tJ1egGvyQ+33R/vcwM2Zl2QR/LzjsBeItPt3oSVXapn+m4nQDvpzw==}
@@ -717,13 +864,23 @@ packages:
     resolution: {integrity: sha512-GD3qdB0x1z9xgFI6cdRD6xu2Sp2WCOEoe3mtnyB5Ee0XrrL5Pe+e4CCnJrRMnL1zYtRDZmQQVbvOttLnKDLnaw==}
     engines: {node: '>=12'}
 
+  querystringify@2.2.0:
+    resolution: {integrity: sha512-FIqgj2EUvTa7R50u0rGsyTftzjYmv/a3hO345bZNrqabNqjtgiDMgmo4mkUjd+nzU5oF3dClKqFIPUKybUyqoQ==}
+
   readdirp@4.1.2:
     resolution: {integrity: sha512-GDhwkLfywWL2s6vEjyhri+eXmfH6j1L7JE27WhqLeYzoh/A3DBaYGEj2H/HFZCn/kMfim73FXxEJTw06WtxQwg==}
     engines: {node: '>= 14.18.0'}
 
+  redis@5.12.1:
+    resolution: {integrity: sha512-LDsoVvb/CpoV9EN3FXvgvSHNJWuCIzl9MiO3ppOevuGLpSGJhwfQjpEwfFJcQvNSddHADDdZaWx0HnmMxRXG7g==}
+    engines: {node: '>= 18.19.0'}
+
   require-from-string@2.0.2:
     resolution: {integrity: sha512-Xf0nWe6RseziFMu+Ap9biiUbmplq6S9/p+7w7YXP/JBHhrUDDUhwa+vANyubuqfZWTveU//DYVGsDG7RKL/vEw==}
     engines: {node: '>=0.10.0'}
+
+  requires-port@1.0.0:
+    resolution: {integrity: sha512-KigOCHcocU3XODJxsu8i/j8T9tzT4adHiecwORRQ0ZZFcp7ahwXuRU1m+yuO90C5ZUyGeGfocHDI14M3L3yDAQ==}
 
   resolve-from@5.0.0:
     resolution: {integrity: sha512-qYg9KP24dD5qka9J47d0aVky0N+b4fTU89LN9iDnjB5waksiC49rvMB0PrUJQGoTmH50XPiqOvAjDfaijGxYZw==}
@@ -808,6 +965,9 @@ packages:
 
   undici-types@6.21.0:
     resolution: {integrity: sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==}
+
+  url-parse@1.5.10:
+    resolution: {integrity: sha512-WypcfiRhfeUP9vvF0j6rw0J3hrWrw6iZv3+22h6iRMJ/8z1Tj6XfLP4DsUix5MhMPnXpiHDoKyoZ/bdCkwBCiQ==}
 
   vite@7.3.6:
     resolution: {integrity: sha512-4XP60spRGjSZFf1qYH+dJIkK2znL3zQfl9KkOV9MkkRR/3Dls0dxaBsQPTloEc5BLXWPL9vsOxopxyKoMmDueg==}
@@ -997,6 +1157,26 @@ snapshots:
   '@napi-rs/lzma-linux-x64-gnu@1.5.1':
     optional: true
 
+  '@redis/bloom@5.12.1(@redis/client@5.12.1)':
+    dependencies:
+      '@redis/client': 5.12.1
+
+  '@redis/client@5.12.1':
+    dependencies:
+      cluster-key-slot: 1.1.2
+
+  '@redis/json@5.12.1(@redis/client@5.12.1)':
+    dependencies:
+      '@redis/client': 5.12.1
+
+  '@redis/search@5.12.1(@redis/client@5.12.1)':
+    dependencies:
+      '@redis/client': 5.12.1
+
+  '@redis/time-series@5.12.1(@redis/client@5.12.1)':
+    dependencies:
+      '@redis/client': 5.12.1
+
   '@rollup/rollup-android-arm-eabi@4.64.0':
     optional: true
 
@@ -1072,6 +1252,10 @@ snapshots:
   '@rollup/rollup-win32-x64-msvc@4.64.0':
     optional: true
 
+  '@types/amqplib@0.10.8':
+    dependencies:
+      '@types/node': 22.20.5
+
   '@types/chai@5.2.3':
     dependencies:
       '@types/deep-eql': 4.0.2
@@ -1105,9 +1289,16 @@ snapshots:
       json-schema-traverse: 1.0.0
       require-from-string: 2.0.2
 
+  amqplib@0.10.9:
+    dependencies:
+      buffer-more-ints: 1.0.0
+      url-parse: 1.5.10
+
   any-promise@1.3.0: {}
 
   assertion-error@2.0.1: {}
+
+  buffer-more-ints@1.0.0: {}
 
   bundle-require@5.1.0(esbuild@0.28.2):
     dependencies:
@@ -1121,6 +1312,8 @@ snapshots:
   chokidar@4.0.3:
     dependencies:
       readdirp: 4.1.2
+
+  cluster-key-slot@1.1.2: {}
 
   commander@4.1.1: {}
 
@@ -1190,6 +1383,8 @@ snapshots:
 
   json-schema-traverse@1.0.0: {}
 
+  kafkajs@2.2.4: {}
+
   lilconfig@3.1.3: {}
 
   lines-and-columns@1.2.4: {}
@@ -1254,9 +1449,24 @@ snapshots:
 
   postgres@3.4.9: {}
 
+  querystringify@2.2.0: {}
+
   readdirp@4.1.2: {}
 
+  redis@5.12.1:
+    dependencies:
+      '@redis/bloom': 5.12.1(@redis/client@5.12.1)
+      '@redis/client': 5.12.1
+      '@redis/json': 5.12.1(@redis/client@5.12.1)
+      '@redis/search': 5.12.1(@redis/client@5.12.1)
+      '@redis/time-series': 5.12.1(@redis/client@5.12.1)
+    transitivePeerDependencies:
+      - '@node-rs/xxhash'
+      - '@opentelemetry/api'
+
   require-from-string@2.0.2: {}
+
+  requires-port@1.0.0: {}
 
   resolve-from@5.0.0: {}
 
@@ -1364,6 +1574,11 @@ snapshots:
   ufo@1.6.4: {}
 
   undici-types@6.21.0: {}
+
+  url-parse@1.5.10:
+    dependencies:
+      querystringify: 2.2.0
+      requires-port: 1.0.0
 
   vite@7.3.6(@types/node@22.20.5)(yaml@2.9.1):
     dependencies:

@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://air.dev/schema/system-0.1.schema.json",
+  "title": "AIR System v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "metadata", "spec"],
+  "properties": {
+    "apiVersion": { "const": "air.dev/system/v0.1" },
+    "kind": { "const": "System" },
+    "metadata": { "$ref": "https://air.dev/schema/air-0.4.schema.json#/$defs/metadata" },
+    "spec": { "$ref": "#/$defs/spec" }
+  },
+  "$defs": {
+    "identifier": { "$ref": "https://air.dev/schema/air-0.4.schema.json#/$defs/identifier" },
+    "reference": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_-]*\\.[A-Za-z][A-Za-z0-9_-]*$" },
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["applications", "components"],
+      "properties": {
+        "applications": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": { "$ref": "#/$defs/identifier" },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["source"],
+            "properties": { "source": { "type": "string", "minLength": 1 } }
+          }
+        },
+        "components": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": { "$ref": "#/$defs/identifier" },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["application", "role", "target"],
+            "properties": {
+              "application": { "$ref": "#/$defs/identifier" },
+              "role": { "enum": ["api", "worker", "scheduler", "orchestrator", "realtime"] },
+              "target": { "enum": ["nextjs", "rust-axum", "python-fastapi"] },
+              "dependsOn": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/identifier" } }
+            }
+          }
+        },
+        "channels": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": { "$ref": "#/$defs/identifier" },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "source", "consumers"],
+            "properties": {
+              "kind": { "enum": ["event", "task"] },
+              "source": { "$ref": "#/$defs/reference" },
+              "consumers": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/identifier" } },
+              "ordered": { "type": "boolean" }
+            }
+          }
+        },
+        "sagas": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": { "$ref": "#/$defs/identifier" },
+          "additionalProperties": { "$ref": "#/$defs/saga" }
+        }
+      }
+    },
+    "saga": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["trigger", "correlation", "retry", "steps"],
+      "properties": {
+        "trigger": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["application", "event"],
+          "properties": { "application": { "$ref": "#/$defs/identifier" }, "event": { "$ref": "#/$defs/identifier" } }
+        },
+        "correlation": { "$ref": "#/$defs/identifier" },
+        "retry": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["maxAttempts", "backoffMs"],
+          "properties": { "maxAttempts": { "type": "integer", "minimum": 1, "maximum": 100 }, "backoffMs": { "type": "integer", "minimum": 0, "maximum": 86400000 } }
+        },
+        "steps": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/sagaStep" } }
+      }
+    },
+    "sagaStep": {
+      "oneOf": [
+        {
+          "type": "object", "additionalProperties": false, "required": ["id", "kind", "application", "command"],
+          "properties": { "id": { "$ref": "#/$defs/identifier" }, "kind": { "const": "invoke" }, "application": { "$ref": "#/$defs/identifier" }, "command": { "$ref": "#/$defs/identifier" }, "compensate": { "$ref": "#/$defs/identifier" } }
+        },
+        {
+          "type": "object", "additionalProperties": false, "required": ["id", "kind", "application", "event"],
+          "properties": { "id": { "$ref": "#/$defs/identifier" }, "kind": { "const": "publish" }, "application": { "$ref": "#/$defs/identifier" }, "event": { "$ref": "#/$defs/identifier" } }
+        },
+        {
+          "type": "object", "additionalProperties": false, "required": ["id", "kind", "application", "event", "timeoutSeconds"],
+          "properties": { "id": { "$ref": "#/$defs/identifier" }, "kind": { "const": "wait" }, "application": { "$ref": "#/$defs/identifier" }, "event": { "$ref": "#/$defs/identifier" }, "timeoutSeconds": { "type": "integer", "minimum": 1, "maximum": 31536000 } }
+        },
+        {
+          "type": "object", "additionalProperties": false, "required": ["id", "kind", "seconds"],
+          "properties": { "id": { "$ref": "#/$defs/identifier" }, "kind": { "const": "delay" }, "seconds": { "type": "integer", "minimum": 1, "maximum": 31536000 } }
+        }
+      ]
+    }
+  }
+}

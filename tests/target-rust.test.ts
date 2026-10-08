@@ -20,7 +20,7 @@ describe("Rust target boundary", () => {
     expect(first.map((file) => file.path)).toEqual(
       [...first.map((file) => file.path)].sort((left, right) => left.localeCompare(right)),
     );
-    expect(first.find((file) => file.path === "Cargo.toml")?.content).toContain('axum = "0.8"');
+    expect(first.find((file) => file.path === "Cargo.toml")?.content).toContain('axum = { version = "0.8", features = ["ws"] }');
     expect(first.find((file) => file.path === "Cargo.toml")?.content).toContain('rust-version = "1.99.0"');
     expect(first.find((file) => file.path === "rust-toolchain.toml")?.content).toContain('channel = "1.99.0"');
     expect(first.find((file) => file.path === "src/generated.rs")?.content).toContain("pub async fn create_todo");
