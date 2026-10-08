@@ -50,6 +50,7 @@ function renderPackageJson(air: AirDocument, options: ResolvedNextjsOptions): st
       name: air.metadata.name,
       version: air.metadata.version ?? "0.1.0",
       private: true,
+      type: "module",
       scripts: {
         dev: "next dev",
         build: "next build",
@@ -57,7 +58,7 @@ function renderPackageJson(air: AirDocument, options: ResolvedNextjsOptions): st
         test: "vitest run",
         typecheck: "tsc --noEmit",
         "db:generate": "drizzle-kit generate",
-        "db:migrate": "drizzle-kit migrate",
+        "db:migrate": "drizzle-kit migrate && tsx src/air/migrate.ts",
         "air:worker": "tsx src/air/runtime.ts worker",
         "air:scheduler": "tsx src/air/runtime.ts scheduler",
         "air:orchestrator": "tsx src/air/runtime.ts orchestrator",
@@ -243,6 +244,7 @@ function renderAsyncRuntime(air: AirDocument): string {
   const definition = JSON.stringify({ application: air.metadata.name, commands: air.spec.commands ?? {}, events: air.spec.events ?? {}, tasks: air.spec.tasks ?? {}, consumers: air.spec.consumers ?? {}, schedules: air.spec.schedules ?? {}, cachedReads: air.spec.cachedReads ?? {}, realtime: air.spec.realtime ?? {} });
   return `import postgres from "postgres";
 import { randomUUID } from "node:crypto";
+import { pathToFileURL } from "node:url";
 import { WebSocketServer } from "ws";
 import { trace, metrics } from "@opentelemetry/api";
 import { sql as statement } from "drizzle-orm";
@@ -285,9 +287,27 @@ async function worker(): Promise<never> {
 async function scheduler(): Promise<never> { for (;;) { console.log(JSON.stringify({ level: "info", event: "air.scheduler.tick", schedules: Object.keys(AIR_ASYNC.schedules), timestamp: new Date().toISOString() })); await new Promise((resolve) => setTimeout(resolve, 1000)); } }
 async function orchestrator(): Promise<never> { const sql = database(); for (;;) { await sql\`update air_saga_timers set claimed_at=now() where id in (select id from air_saga_timers where completed_at is null and claimed_at is null and due_at <= now() for update skip locked limit 100)\`; await new Promise((resolve) => setTimeout(resolve, 250)); } }
 async function realtime(): Promise<never> { const sql = database(); const server = new WebSocketServer({ port: Number(process.env.AIR_PORT ?? 3000) }); server.on("connection", (socket, request) => { connections.add(1); let cursor = Number(new URL(request.url ?? "/", "http://air.local").searchParams.get("cursor") ?? 0); const timer = setInterval(async () => { const frames = await sql\`select cursor,envelope from air_realtime_journal where cursor > ${"${cursor}"} order by cursor limit 100\`; for (const frame of frames) { if (socket.bufferedAmount > 1024 * 1024) { socket.close(1013, "backpressure"); return; } socket.send(JSON.stringify({ cursor: frame.cursor, envelope: frame.envelope })); cursor = Number(frame.cursor); } }, 100); socket.on("close", () => { clearInterval(timer); connections.add(-1); }); }); return await new Promise<never>(() => undefined); }
-const role = process.argv[2] ?? process.env.AIR_COMPONENT_ROLE ?? "worker";
-if (role === "worker") await worker(); else if (role === "scheduler") await scheduler(); else if (role === "orchestrator") await orchestrator(); else if (role === "realtime") await realtime(); else throw new Error(\`Unknown AIR runtime role ${"${role}"}.\`);
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const role = process.argv[2] ?? process.env.AIR_COMPONENT_ROLE ?? "worker";
+  if (role === "worker") await worker(); else if (role === "scheduler") await scheduler(); else if (role === "orchestrator") await orchestrator(); else if (role === "realtime") await realtime(); else throw new Error(\`Unknown AIR runtime role ${"${role}"}.\`);
+}
 void randomUUID;
+`;
+}
+
+function renderAsyncMigrationRunner(): string {
+  return `import { readFile } from "node:fs/promises";
+import postgres from "postgres";
+
+const databaseUrl = process.env.DATABASE_URL;
+if (!databaseUrl) throw new Error("DATABASE_URL is required.");
+const sql = postgres(databaseUrl, { max: 1, prepare: false });
+try {
+  const migration = await readFile(new URL("../../drizzle/0000_air_async_runtime.sql", import.meta.url), "utf8");
+  await sql.unsafe(migration);
+} finally {
+  await sql.end();
+}
 `;
 }
 
@@ -1769,6 +1789,7 @@ export function renderNextjsFiles(
     ),
     planned("src/db/schema.ts", "source", ["/spec/entities"], renderDatabaseSchema(air)),
     planned("drizzle/0000_air_async_runtime.sql", "source", ["/spec/events", "/spec/tasks", "/spec/consumers", "/spec/schedules", "/spec/realtime"], renderAsyncMigration()),
+    planned("src/air/migrate.ts", "source", ["/spec/events", "/spec/tasks", "/spec/consumers", "/spec/schedules", "/spec/realtime"], renderAsyncMigrationRunner()),
     planned("src/air/runtime.ts", "source", ["/spec/events", "/spec/tasks", "/spec/consumers", "/spec/schedules", "/spec/cachedReads", "/spec/realtime"], renderAsyncRuntime(air)),
     planned("src/domain/errors.ts", "source", ["/spec/commands"], renderDomainErrors()),
     planned("src/domain/input.ts", "source", ["/spec/entities"], renderInputHelpers()),

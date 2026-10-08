@@ -39,6 +39,7 @@ describe("Next.js target boundary", () => {
       expect.objectContaining({ path: "src/app/todos/[id]/route.ts", kind: "source" }),
     );
     const dynamicRoute = first.find((file) => file.path === "src/app/todos/[id]/route.ts");
+    expect(JSON.parse(first.find((file) => file.path === "package.json")?.content ?? "{}").type).toBe("module");
     expect(dynamicRoute?.content).toContain("params: Promise<{ readonly id: string }>");
     expect(dynamicRoute?.content).toContain("const { id } = await params");
     expect(first.find((file) => file.path === "src/app/air-runtime/health/route.ts")?.content).toContain(
@@ -49,6 +50,12 @@ describe("Next.js target boundary", () => {
     );
     expect(first.find((file) => file.path === "src/air/runtime.ts")?.content).toContain(
       "AIR_ASYNC.realtime as Record<string",
+    );
+    expect(first.find((file) => file.path === "src/air/runtime.ts")?.content).toContain(
+      "import.meta.url === pathToFileURL(process.argv[1]).href",
+    );
+    expect(first.find((file) => file.path === "src/air/migrate.ts")?.content).toContain(
+      "0000_air_async_runtime.sql",
     );
   });
 
