@@ -74,8 +74,13 @@ function entityMetadata(air: AirDocument): Record<string, { table: string; field
 function renderAsyncRuntime(air: AirDocument): string {
   const encoded = JSON.stringify(JSON.stringify({ application: air.metadata.name, events: air.spec.events ?? {}, tasks: air.spec.tasks ?? {}, consumers: air.spec.consumers ?? {}, schedules: air.spec.schedules ?? {}, cachedReads: air.spec.cachedReads ?? {}, realtime: air.spec.realtime ?? {} }));
   return `from __future__ import annotations
-import asyncio, json, logging, os, sys
+import asyncio
+import json
+import logging
+import os
+import sys
 from datetime import datetime, timezone
+from typing import Any, cast
 import psycopg
 from psycopg.rows import dict_row
 from opentelemetry import metrics, trace
@@ -89,7 +94,8 @@ RETRIES = METER.create_counter("air.consumer.retries")
 
 def database_url():
     value = os.getenv("DATABASE_URL")
-    if not value: raise RuntimeError("DATABASE_URL is required")
+    if not value:
+        raise RuntimeError("DATABASE_URL is required")
     return value
 
 async def publish(destination, envelope):
@@ -102,8 +108,8 @@ async def publish(destination, envelope):
 
 async def worker():
     while True:
-        with psycopg.connect(database_url(), autocommit=True, row_factory=dict_row) as connection:
-            rows = connection.execute("SELECT * FROM air_outbox WHERE published_at IS NULL AND available_at <= now() ORDER BY occurred_at FOR UPDATE SKIP LOCKED LIMIT 100").fetchall()
+        with psycopg.connect(database_url(), autocommit=True, row_factory=cast(Any, dict_row)) as connection:
+            rows = cast(list[dict[str, Any]], connection.execute("SELECT * FROM air_outbox WHERE published_at IS NULL AND available_at <= now() ORDER BY occurred_at FOR UPDATE SKIP LOCKED LIMIT 100").fetchall())
             for row in rows:
                 envelope = {"id": str(row["id"]), "type": row["message_type"], "schemaVersion": row["schema_version"], "occurredAt": row["occurred_at"].isoformat(), "producer": row["producer"], "correlationId": str(row["correlation_id"]), "causationId": str(row["causation_id"]) if row["causation_id"] else None, "orderingKey": row["ordering_key"], "payload": row["payload"]}
                 try:
@@ -129,17 +135,22 @@ async def orchestrator():
 
 async def main():
     role = sys.argv[1] if len(sys.argv) > 1 else os.getenv("AIR_COMPONENT_ROLE", "worker")
-    if role == "worker": await worker()
-    elif role == "scheduler": await scheduler()
-    elif role == "orchestrator": await orchestrator()
+    if role == "worker":
+        await worker()
+    elif role == "scheduler":
+        await scheduler()
+    elif role == "orchestrator":
+        await orchestrator()
     elif role == "realtime":
         import uvicorn
         from app import app
         config = uvicorn.Config(app, host="0.0.0.0", port=int(os.getenv("AIR_PORT", "3000")))
         await uvicorn.Server(config).serve()
-    else: raise RuntimeError(f"Unknown AIR runtime role {role}")
+    else:
+        raise RuntimeError(f"Unknown AIR runtime role {role}")
 
-if __name__ == "__main__": asyncio.run(main())
+if __name__ == "__main__":
+    asyncio.run(main())
 `;
 }
 
@@ -294,9 +305,12 @@ def reference(value: dict[str, Any], payload: dict[str, Any]) -> Any:
 
 
 def message_reference(value: dict[str, Any], payload: dict[str, Any], record: dict[str, Any], principal: dict[str, Any]) -> Any:
-    if "input" in value: return payload.get(value["input"])
-    if "literal" in value: return value["literal"]
-    if "principal" in value: return principal.get(value["principal"])
+    if "input" in value:
+        return payload.get(value["input"])
+    if "literal" in value:
+        return value["literal"]
+    if "principal" in value:
+        return principal.get(value["principal"])
     target = value["record"]
     return record.get(target if isinstance(target, str) else target["field"])
 
@@ -670,7 +684,8 @@ async def realtime_socket(websocket: WebSocket, channel_name: str):
         if not token or not secret:
             await websocket.close(code=4401)
             return
-        try: jwt.decode(token, secret, algorithms=["HS256"], options={"require": ["exp"]})
+        try:
+            jwt.decode(token, secret, algorithms=["HS256"], options={"require": ["exp"]})
         except jwt.PyJWTError:
             await websocket.close(code=4401)
             return
@@ -686,9 +701,12 @@ async def realtime_socket(websocket: WebSocket, channel_name: str):
             try:
                 request = await asyncio.wait_for(websocket.receive_json(), timeout=.1)
                 mapping = next((item for item in channel.get("commands", []) if item["type"] == request.get("type")), None)
-                if mapping: await websocket.send_json({"type": "reply", "requestId": request.get("id"), "accepted": True})
-            except asyncio.TimeoutError: pass
-    except WebSocketDisconnect: pass
+                if mapping:
+                    await websocket.send_json({"type": "reply", "requestId": request.get("id"), "accepted": True})
+            except asyncio.TimeoutError:
+                pass
+    except WebSocketDisconnect:
+        pass
 
 
 @app.get("/air-runtime/events/{channel_name}")

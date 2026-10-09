@@ -148,9 +148,9 @@ jobs:
         run: |
           python -m venv .venv
           .venv/bin/pip install -r requirements-dev.txt
-          .venv/bin/python -m py_compile app.py
-          .venv/bin/ruff check app.py
-          .venv/bin/pyright app.py
+          .venv/bin/python -m py_compile app.py air_runtime.py
+          .venv/bin/ruff check app.py air_runtime.py
+          .venv/bin/pyright app.py air_runtime.py
       - name: Start generated targets
         run: |
           PORT=3001 DATABASE_URL="$NEXT_DATABASE_URL" pnpm --dir artifacts/ledger-nextjs run start > artifacts/nextjs.log 2>&1 &
