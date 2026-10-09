@@ -9,9 +9,9 @@ AIR should earn trust as a semantic application compiler before optimizing runti
 - managed/detached lifecycle, provenance, overwrite protection, and compiler lockfile
 - generated Todo application installs, typechecks, tests, and builds
 
-## 1. Semantic credibility — AIR v0.8 complete
+## 1. Semantic credibility — AIR v0.9 complete
 
-AIR v0.2–v0.8 now covers:
+AIR v0.2–v0.9 now covers:
 
 - identity, uniqueness, defaults, generation, nullability, and owned foreign keys
 - closed request contracts, output projections, errors, guards, and create effects
@@ -24,6 +24,7 @@ AIR v0.2–v0.8 now covers:
 - role/scope membership rules, CRUD authorization, command delete effects, and bounded collections
 - a ledger reference that models atomic transfer without target annotations
 - a library reference that exercises authorization, deletion, conflict handling, pagination, filtering, and ordering
+- versioned events, tasks, transactional message effects, consumers, schedules, derived caches, and realtime channels
 
 Reviewable semantic diffs and deterministic schema-evolution plans now classify safe, review-required, and breaking changes, including backfill and data-loss warnings.
 
@@ -114,24 +115,37 @@ Next: quick fixes, workspace references, and schema-aware rename.
 - add topology alternatives and autonomous non-semantic preferences
 - stabilize a third-party target SDK after an external adapter passes conformance
 
-## 7. Release and pilots — release-candidate automation complete
+## 7. Complex services — AIR CLI v0.10 complete
+
+- closed Application v0.9, System v0.1, Deployment v0.1, and verification v0.2 schemas
+- standard envelopes, at-least-once delivery, transactional outbox, inbox deduplication, retries, and dead letters
+- persisted PostgreSQL saga/timer and realtime-journal structures
+- deterministic broker/cache/clock/scheduler/saga/realtime verification and system evidence packs
+- explicit plugin SDK with Kafka/Redpanda, RabbitMQ, PostgreSQL, and Redis reference providers
+- mixed Next.js API, Rust worker, and Python service generation with API, worker, scheduler, orchestrator, and realtime roles
+- process, Docker/Compose, Kubernetes/Helm, and Terraform Helm-release rendering
+- conservative Spring messaging, scheduling, and Integration Flow discovery
+- live provider checks and mixed-language complex-commerce gates in CI
+
+Next: run external provider/deployer plugins through conformance and execute real-world complex-service pilots.
+
+## 8. Release and pilots — release-candidate automation complete
 
 - checksummed source artifacts gated by build, typecheck, and tests
 - tag/manual GitHub Actions packaging, dependency update automation, security and versioning policy
 - structured pilot protocol and issue template for greenfield, import, and partial-adoption trials
 - next: execute three independent pilots and decide the public package/repository distribution model
 
-## 8. AI-native authoring
+## 9. AI-native authoring
 
 - accept model-proposed AIR patches, never opaque source trees as the primary artifact
 - validate proposals against schema, semantics, capabilities, and verification evidence
 - preserve proposal and acceptance provenance
 - require human review for security, destructive migration, and data-loss-sensitive changes
 
-## 9. Advanced research
+## 10. Advanced research
 
 - profiler-guided transformations accepted only when verification passes and measurements improve
-- UI IR, events, queues, workers, and realtime protocols
-- architecture/topology planning and service decomposition
+- UI IR and evidence-backed service decomposition recommendations
 - formal equivalence for selected command subsets
 - LLVM, SIMD, or assembly lowering only after multiple high-level targets pass identical suites

@@ -109,9 +109,21 @@ With `--workload mutation`, the runner derives independent fixtures from a canon
 
 ## Evidence packs
 
-`air evidence-pack` copies semantic, live, differential, and benchmark evidence into a new immutable directory. It rejects incompatible AIR or suite hashes and writes `manifest.json` with a SHA-256 checksum for every artifact. `air evidence-verify <directory>` reparses the evidence formats, checks source identities, rejects unsafe or duplicate paths, and fails if any artifact checksum changed.
+`air evidence-pack` copies semantic, system, live, differential, and benchmark evidence into a new immutable directory. It rejects incompatible AIR/System or suite hashes and writes `manifest.json` with a SHA-256 checksum for every artifact. `air evidence-verify <directory>` reparses the evidence formats, checks source identities, rejects unsafe or duplicate paths, and fails if any artifact checksum changed.
 
 The repository's [conformance workflow](../.github/workflows/conformance.yml) generates both targets from scratch, applies isolated PostgreSQL databases, runs native target gates, waits for database-backed readiness, executes differential conformance and a replay benchmark, verifies the evidence pack, and uploads the pack plus runtime logs.
+
+## System verification v0.2
+
+`air.dev/verification/v0.2` drives a deterministic virtual broker, cache, UTC clock, scheduler, saga store, and realtime-session journal for a complete System document. Steps can invoke commands, publish messages, advance time, connect or reconnect clients, issue client commands, read caches, inject duplicates or reordering, and fail or recover dependencies. Assertions cover emitted envelopes, delivery/deduplication, dead letters, eventual state, saga outcomes, cache observations, and realtime frames.
+
+```bash
+air verify-system examples/complex-commerce/system.air.yaml \
+  --scenarios examples/complex-commerce/verification.yaml \
+  --output system-evidence.json
+```
+
+`air.dev/system-evidence/v0.2` records System and suite hashes, topology, envelope and correlation traces, delivery outcomes, cache observations, saga history, and realtime frames. It is accepted by the same checksum-verified evidence-pack workflow.
 
 ## Runtime probes
 

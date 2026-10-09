@@ -18,7 +18,7 @@ Target options are typed separately. For example, a Next.js adapter may accept f
 
 Each capability is `supported`, `conditional`, or `unsupported`. Conditional support carries versioned machine-readable predicates such as required database, deployment, or explicit join-entity constraints. `air target-check <file>` infers semantic requirements, combines them with strict `--require` and advisory `--prefer` capabilities, and emits deterministic explanations in text or `air.dev/target-compatibility/v0.1` JSON.
 
-Manifests state platform limits before generation begins. The current solver ranks compatible targets and rejects unsupported or unsatisfied conditional capabilities before generation. Topology decomposition remains future work.
+Manifests state platform limits before generation begins. The current solver ranks compatible targets and rejects unsupported or unsatisfied conditional capabilities before generation. System topology is explicit rather than inferred: `air compose` resolves components, channels, and deployment bindings without silently decomposing an application.
 
 ## Adapter phases
 
@@ -56,4 +56,8 @@ The Rust target deliberately emits no UI. Many-to-many relations require explici
 
 `@air/target-python` is the third target. It emits FastAPI routes, Pydantic request models, a psycopg 3 connection pool, HS256 JWT verification, CRUD and bounded collection handlers, the shared transactional command semantics, restart-safe migration tracking, Uvicorn process output, and a health-checked container image. Generated development requirements include Ruff and Pyright gates. Its generic generated runtime keeps AIR semantics visible as data while still producing a standalone deployable service.
 
-The target supports AIR v0.8 authorization and create/update/delete primary effects, named locked updates, invariants, preconditions, scoped replay, and bounded retry of serialization, deadlock, and uniqueness races. It deliberately emits no UI, requires explicit join entities for many-to-many relations, and supports PostgreSQL only. Next.js, Rust, and Python match on success, rollback, and idempotent replay in the differential ledger suite.
+The target supports AIR v0.9 authorization and create/update/delete primary effects, named locked updates, invariants, preconditions, scoped replay, bounded retry, and asynchronous runtime roles. It deliberately emits no UI, requires explicit join entities for many-to-many relations, and supports PostgreSQL only. Next.js, Rust, and Python match on success, rollback, and idempotent replay in the differential ledger suite; the mixed-language complex-commerce system exercises their event, saga, cache, and realtime generation.
+
+## Provider and deployer plugins
+
+`@halilturkoglucs/air-plugin-sdk` separates infrastructure adapters from application semantics. Plugins declare capabilities, analyze a locked resource plan, render artifacts, optionally manage a local lifecycle, report health, and expose live-conformance adapters. Deployment documents name providers; the composition lock records the exact plugin id and version. AIR does not scan or execute arbitrary installed npm packages.

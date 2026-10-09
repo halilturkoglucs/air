@@ -49,6 +49,14 @@ function renderMigration(air: AirDocument): string {
       );
     }
   }
+  lines.push(`CREATE TABLE IF NOT EXISTS air_outbox (id UUID PRIMARY KEY, message_type TEXT NOT NULL, schema_version TEXT NOT NULL, occurred_at TIMESTAMPTZ NOT NULL, producer TEXT NOT NULL, correlation_id UUID NOT NULL, causation_id UUID, ordering_key TEXT, payload JSONB NOT NULL, destination TEXT NOT NULL, message_kind TEXT NOT NULL CHECK (message_kind IN ('event','task')), attempts INTEGER NOT NULL DEFAULT 0, available_at TIMESTAMPTZ NOT NULL DEFAULT now(), published_at TIMESTAMPTZ);`,
+    `CREATE INDEX IF NOT EXISTS air_outbox_pending ON air_outbox (available_at) WHERE published_at IS NULL;`,
+    `CREATE TABLE IF NOT EXISTS air_inbox (consumer TEXT NOT NULL, message_id UUID NOT NULL, received_at TIMESTAMPTZ NOT NULL DEFAULT now(), PRIMARY KEY (consumer, message_id));`,
+    `CREATE TABLE IF NOT EXISTS air_dead_letters (id UUID PRIMARY KEY, consumer TEXT NOT NULL, envelope JSONB NOT NULL, attempts INTEGER NOT NULL, reason TEXT NOT NULL, failed_at TIMESTAMPTZ NOT NULL DEFAULT now());`,
+    `CREATE TABLE IF NOT EXISTS air_saga_instances (id UUID PRIMARY KEY, saga_type TEXT NOT NULL, correlation_id TEXT NOT NULL, state JSONB NOT NULL, status TEXT NOT NULL, current_step TEXT, version BIGINT NOT NULL DEFAULT 0, created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now(), UNIQUE (saga_type, correlation_id));`,
+    `CREATE TABLE IF NOT EXISTS air_saga_timers (id UUID PRIMARY KEY, saga_id UUID NOT NULL REFERENCES air_saga_instances(id) ON DELETE CASCADE, step_id TEXT NOT NULL, due_at TIMESTAMPTZ NOT NULL, claimed_at TIMESTAMPTZ, completed_at TIMESTAMPTZ);`,
+    `CREATE TABLE IF NOT EXISTS air_realtime_journal (cursor BIGSERIAL PRIMARY KEY, channel TEXT NOT NULL, envelope JSONB NOT NULL, ordering_key TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT now());`,
+    `CREATE INDEX IF NOT EXISTS air_realtime_channel_cursor ON air_realtime_journal (channel, cursor);`);
   return `${lines.join("\n").trimEnd()}\n`;
 }
 
@@ -63,27 +71,111 @@ function entityMetadata(air: AirDocument): Record<string, { table: string; field
   }));
 }
 
+function renderAsyncRuntime(air: AirDocument): string {
+  const encoded = JSON.stringify(JSON.stringify({ application: air.metadata.name, events: air.spec.events ?? {}, tasks: air.spec.tasks ?? {}, consumers: air.spec.consumers ?? {}, schedules: air.spec.schedules ?? {}, cachedReads: air.spec.cachedReads ?? {}, realtime: air.spec.realtime ?? {} }));
+  return `from __future__ import annotations
+import asyncio
+import json
+import logging
+import os
+import sys
+from datetime import datetime, timezone
+from typing import Any, cast
+import psycopg
+from psycopg.rows import dict_row
+from opentelemetry import metrics, trace
+
+AIR_ASYNC = json.loads(${encoded})
+LOGGER = logging.getLogger("air.async")
+TRACER = trace.get_tracer("air.runtime")
+METER = metrics.get_meter("air.runtime")
+DELIVERIES = METER.create_counter("air.consumer.deliveries")
+RETRIES = METER.create_counter("air.consumer.retries")
+
+def database_url():
+    value = os.getenv("DATABASE_URL")
+    if not value:
+        raise RuntimeError("DATABASE_URL is required")
+    return value
+
+async def publish(destination, envelope):
+    provider = os.getenv("AIR_BROKER_PROVIDER", "postgres")
+    if provider == "postgres":
+        with psycopg.connect(database_url(), autocommit=True) as connection:
+            connection.execute("SELECT pg_notify(%s, %s)", (destination, json.dumps(envelope, default=str)))
+        return
+    raise RuntimeError(f"Provider {provider} must be attached through its explicitly configured AIR provider adapter")
+
+async def worker():
+    while True:
+        with psycopg.connect(database_url(), autocommit=True, row_factory=cast(Any, dict_row)) as connection:
+            rows = cast(list[dict[str, Any]], connection.execute("SELECT * FROM air_outbox WHERE published_at IS NULL AND available_at <= now() ORDER BY occurred_at FOR UPDATE SKIP LOCKED LIMIT 100").fetchall())
+            for row in rows:
+                envelope = {"id": str(row["id"]), "type": row["message_type"], "schemaVersion": row["schema_version"], "occurredAt": row["occurred_at"].isoformat(), "producer": row["producer"], "correlationId": str(row["correlation_id"]), "causationId": str(row["causation_id"]) if row["causation_id"] else None, "orderingKey": row["ordering_key"], "payload": row["payload"]}
+                try:
+                    await publish(row["destination"], envelope)
+                    connection.execute("UPDATE air_outbox SET published_at=now() WHERE id=%s", (row["id"],))
+                    DELIVERIES.add(1, {"destination": row["destination"]})
+                except Exception:
+                    LOGGER.exception("air.outbox.publish_failed")
+                    connection.execute("UPDATE air_outbox SET attempts=attempts+1, available_at=now()+make_interval(secs => least(300, power(2, attempts)::int)) WHERE id=%s", (row["id"],))
+                    RETRIES.add(1, {"destination": row["destination"]})
+        await asyncio.sleep(0.01 if rows else 0.25)
+
+async def scheduler():
+    while True:
+        LOGGER.info(json.dumps({"event": "air.scheduler.tick", "schedules": list(AIR_ASYNC["schedules"]), "timestamp": datetime.now(timezone.utc).isoformat()}))
+        await asyncio.sleep(1)
+
+async def orchestrator():
+    while True:
+        with psycopg.connect(database_url(), autocommit=True) as connection:
+            connection.execute("UPDATE air_saga_timers SET claimed_at=now() WHERE id IN (SELECT id FROM air_saga_timers WHERE completed_at IS NULL AND claimed_at IS NULL AND due_at <= now() FOR UPDATE SKIP LOCKED LIMIT 100)")
+        await asyncio.sleep(.25)
+
+async def main():
+    role = sys.argv[1] if len(sys.argv) > 1 else os.getenv("AIR_COMPONENT_ROLE", "worker")
+    if role == "worker":
+        await worker()
+    elif role == "scheduler":
+        await scheduler()
+    elif role == "orchestrator":
+        await orchestrator()
+    elif role == "realtime":
+        import uvicorn
+        from app import app
+        config = uvicorn.Config(app, host="0.0.0.0", port=int(os.getenv("AIR_PORT", "3000")))
+        await uvicorn.Server(config).serve()
+    else:
+        raise RuntimeError(f"Unknown AIR runtime role {role}")
+
+if __name__ == "__main__":
+    asyncio.run(main())
+`;
+}
+
 function renderApplication(air: AirDocument): string {
   const encodedAir = JSON.stringify(JSON.stringify(air));
   const encodedEntities = JSON.stringify(JSON.stringify(entityMetadata(air)));
   return `# Generated by AIR. Changes are overwritten in managed mode.
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
 import time
 from contextlib import asynccontextmanager
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, cast
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import jwt
 import psycopg
-from fastapi import Body, FastAPI, Request
+from fastapi import Body, FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.encoders import jsonable_encoder
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 from psycopg.errors import DeadlockDetected, DuplicateObject, DuplicateTable, SerializationFailure, UniqueViolation
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
@@ -210,6 +302,17 @@ def reference(value: dict[str, Any], payload: dict[str, Any]) -> Any:
     if "input" in value:
         return payload[value["input"]]
     return value.get("literal")
+
+
+def message_reference(value: dict[str, Any], payload: dict[str, Any], record: dict[str, Any], principal: dict[str, Any]) -> Any:
+    if "input" in value:
+        return payload.get(value["input"])
+    if "literal" in value:
+        return value["literal"]
+    if "principal" in value:
+        return principal.get(value["principal"])
+    target = value["record"]
+    return record.get(target if isinstance(target, str) else target["field"])
 
 
 def operand(value: dict[str, Any], payload: dict[str, Any], records: dict[str, dict[str, Any]]) -> Any:
@@ -350,7 +453,21 @@ def execute_command_once(command_name: str, payload: dict[str, Any], principal: 
                 ).fetchone()
             if row is None:
                 raise RuntimeError(f"Command {command_name} did not return its output row.")
-            return entity_row(primary["entity"], row)
+            output = entity_row(primary["entity"], row)
+            for kind, messages in (("event", command.get("emits", [])), ("task", command.get("enqueues", []))):
+                for message in messages:
+                    message_name = message[kind]
+                    definition = AIR["spec"]["events" if kind == "event" else "tasks"][message_name]
+                    message_id, correlation_id = uuid4(), uuid4()
+                    body = {name: message_reference(value, payload, output, principal) for name, value in message["payload"].items()}
+                    ordering_key = str(message_reference(message["key"], payload, output, principal)) if message.get("key") else None
+                    envelope = {"id": str(message_id), "type": message_name, "schemaVersion": definition.get("version", "1"), "occurredAt": datetime.now(timezone.utc).isoformat(), "producer": AIR["metadata"]["name"], "correlationId": str(correlation_id), "orderingKey": ordering_key, "payload": body}
+                    connection.execute("INSERT INTO air_outbox (id,message_type,schema_version,occurred_at,producer,correlation_id,ordering_key,payload,destination,message_kind) VALUES (%s,%s,%s,now(),%s,%s,%s,%s,%s,%s)", (message_id, message_name, definition.get("version", "1"), AIR["metadata"]["name"], correlation_id, ordering_key, json.dumps(body), message_name, kind))
+                    if kind == "event":
+                        for channel_name, channel in AIR["spec"].get("realtime", {}).items():
+                            if any(subscription["event"] == message_name for subscription in channel["subscriptions"]):
+                                connection.execute("INSERT INTO air_realtime_journal (channel,envelope,ordering_key) VALUES (%s,%s,%s)", (channel_name, json.dumps(envelope), ordering_key))
+            return output
 
 
 def execute_command(command_name: str, payload: dict[str, Any], principal: dict[str, Any]) -> dict[str, Any]:
@@ -553,6 +670,60 @@ for operation in AIR["spec"].get("http", {}).get("operations", []):
         app.add_api_route(operation["path"], list_endpoint(operation), methods=[operation["method"]], name=operation["id"])
     else:
         app.add_api_route(operation["path"], crud_endpoint(operation), methods=[operation["method"]], name=operation["id"])
+
+
+@app.websocket("/air-runtime/realtime/{channel_name}")
+async def realtime_socket(websocket: WebSocket, channel_name: str):
+    channel = AIR["spec"].get("realtime", {}).get(channel_name)
+    if channel is None or "websocket" not in channel["transports"]:
+        await websocket.close(code=4404)
+        return
+    if channel.get("principal"):
+        token = websocket.query_params.get("token")
+        secret = os.getenv("AIR_AUTH_SECRET")
+        if not token or not secret:
+            await websocket.close(code=4401)
+            return
+        try:
+            jwt.decode(token, secret, algorithms=["HS256"], options={"require": ["exp"]})
+        except jwt.PyJWTError:
+            await websocket.close(code=4401)
+            return
+    await websocket.accept()
+    cursor = int(websocket.query_params.get("cursor", "0"))
+    try:
+        while True:
+            with connect() as connection:
+                frames = connection.execute("SELECT cursor,envelope FROM air_realtime_journal WHERE channel=%s AND cursor>%s ORDER BY cursor LIMIT %s", (channel_name, cursor, channel["buffer"]["maxMessages"])).fetchall()
+            for frame in frames:
+                await websocket.send_json({"cursor": frame["cursor"], "envelope": frame["envelope"]})
+                cursor = frame["cursor"]
+            try:
+                request = await asyncio.wait_for(websocket.receive_json(), timeout=.1)
+                mapping = next((item for item in channel.get("commands", []) if item["type"] == request.get("type")), None)
+                if mapping:
+                    await websocket.send_json({"type": "reply", "requestId": request.get("id"), "accepted": True})
+            except asyncio.TimeoutError:
+                pass
+    except WebSocketDisconnect:
+        pass
+
+
+@app.get("/air-runtime/events/{channel_name}")
+async def realtime_sse(channel_name: str, cursor: int = 0):
+    channel = AIR["spec"].get("realtime", {}).get(channel_name)
+    if channel is None or "sse" not in channel["transports"]:
+        return JSONResponse(status_code=404, content={"error": {"code": "CHANNEL_NOT_FOUND"}})
+    async def stream():
+        current = cursor
+        while True:
+            with connect() as connection:
+                frames = connection.execute("SELECT cursor,envelope FROM air_realtime_journal WHERE channel=%s AND cursor>%s ORDER BY cursor LIMIT %s", (channel_name, current, channel["buffer"]["maxMessages"])).fetchall()
+            for frame in frames:
+                current = frame["cursor"]
+                yield f"id: {current}\\ndata: {json.dumps(frame['envelope'], default=str)}\\n\\n"
+            await asyncio.sleep(.25)
+    return StreamingResponse(stream(), media_type="text/event-stream")
 `;
 }
 
@@ -560,13 +731,14 @@ export function renderPythonFiles(air: AirDocument, options: ResolvedPythonTarge
   const files: PlannedPythonFile[] = [
     {
       path: "pyproject.toml", kind: "configuration", airNodes: ["/metadata"],
-      content: `[project]\nname = ${JSON.stringify(snakeCase(air.metadata.name).replaceAll("_", "-"))}\nversion = "0.1.0"\nrequires-python = ">=${options.pythonVersion}"\ndependencies = [\n  "fastapi==0.115.12",\n  "psycopg[binary]==3.2.9",\n  "psycopg-pool==3.2.6",\n  "PyJWT==2.10.1",\n  "uvicorn[standard]==0.34.3",\n]\n\n[dependency-groups]\ndev = ["pyright==1.1.408", "ruff==0.14.2"]\n\n[tool.pyright]\npythonVersion = "${options.pythonVersion.split(".").slice(0, 2).join(".")}"\ntypeCheckingMode = "basic"\nvenvPath = "."\nvenv = ".venv"\n\n[tool.ruff]\nline-length = 120\ntarget-version = "py${options.pythonVersion.split(".").slice(0, 2).join("")}"\n\n[tool.uvicorn]\nfactory = false\n`,
+      content: `[project]\nname = ${JSON.stringify(snakeCase(air.metadata.name).replaceAll("_", "-"))}\nversion = "0.1.0"\nrequires-python = ">=${options.pythonVersion}"\ndependencies = [\n  "fastapi==0.115.12",\n  "psycopg[binary]==3.2.9",\n  "psycopg-pool==3.2.6",\n  "PyJWT==2.10.1",\n  "opentelemetry-api==1.38.0",\n  "uvicorn[standard]==0.34.3",\n]\n\n[dependency-groups]\ndev = ["pyright==1.1.408", "ruff==0.14.2"]\n\n[tool.pyright]\npythonVersion = "${options.pythonVersion.split(".").slice(0, 2).join(".")}"\ntypeCheckingMode = "basic"\nvenvPath = "."\nvenv = ".venv"\n\n[tool.ruff]\nline-length = 120\ntarget-version = "py${options.pythonVersion.split(".").slice(0, 2).join("")}"\n\n[tool.uvicorn]\nfactory = false\n`,
     },
-    { path: "requirements.txt", kind: "configuration", airNodes: ["/metadata"], content: "fastapi==0.115.12\npsycopg[binary]==3.2.9\npsycopg-pool==3.2.6\nPyJWT==2.10.1\nuvicorn[standard]==0.34.3\n" },
+    { path: "requirements.txt", kind: "configuration", airNodes: ["/metadata"], content: "fastapi==0.115.12\npsycopg[binary]==3.2.9\npsycopg-pool==3.2.6\nPyJWT==2.10.1\nopentelemetry-api==1.38.0\nuvicorn[standard]==0.34.3\n" },
     { path: "requirements-dev.txt", kind: "configuration", airNodes: ["/metadata"], content: "-r requirements.txt\npyright==1.1.408\nruff==0.14.2\n" },
     { path: ".env.example", kind: "configuration", airNodes: ["/"], content: "DATABASE_URL=postgresql://postgres:postgres@localhost:5432/app\nAIR_AUTH_SECRET=replace-with-at-least-32-random-characters\nAIR_PORT=3000\n" },
     { path: "migrations/0001_air.sql", kind: "source", airNodes: ["/spec/entities"], content: renderMigration(air) },
     { path: "app.py", kind: "source", airNodes: ["/spec"], content: renderApplication(air) },
+    { path: "air_runtime.py", kind: "source", airNodes: ["/spec/events", "/spec/tasks", "/spec/consumers", "/spec/schedules", "/spec/cachedReads", "/spec/realtime"], content: renderAsyncRuntime(air) },
     {
       path: "Dockerfile", kind: "configuration", airNodes: ["/metadata"],
       content: `FROM python:${options.pythonVersion}-slim\nWORKDIR /app\nCOPY requirements.txt .\nRUN pip install --no-cache-dir -r requirements.txt\nCOPY . .\nEXPOSE 3000\nHEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 CMD ["python", "-c", "import os,urllib.request; urllib.request.urlopen('http://127.0.0.1:'+os.getenv('AIR_PORT','3000')+'/air-runtime/health')"]\nCMD ["sh", "-c", "uvicorn app:app --host 0.0.0.0 --port \${AIR_PORT:-3000}"]\n`,

@@ -1,0 +1,20 @@
+{
+  "name": "@air/composer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --clean",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@air/parser": "workspace:*",
+    "@air/providers": "workspace:*",
+    "@air/schema": "workspace:*",
+    "@halilturkoglucs/air-plugin-sdk": "workspace:*"
+  },
+  "devDependencies": { "tsup": "^8.5.0" }
+}

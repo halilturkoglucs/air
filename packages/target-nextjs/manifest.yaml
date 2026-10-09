@@ -3,7 +3,7 @@
   "target": {
     "id": "nextjs",
     "displayName": "Next.js",
-    "version": "0.9.0"
+    "version": "0.10.0"
   },
   "capabilities": {
     "http.crud": {
@@ -13,7 +13,7 @@
         {
           "kind": "air-version",
           "minimum": "air.dev/v0.1",
-          "maximum": "air.dev/v0.8"
+          "maximum": "air.dev/v0.9"
         }
       ]
     },
@@ -29,7 +29,7 @@
         {
           "kind": "air-version",
           "minimum": "air.dev/v0.3",
-          "maximum": "air.dev/v0.8"
+          "maximum": "air.dev/v0.9"
         },
         {
           "kind": "primary-effect-in",
@@ -93,13 +93,53 @@
         }
       ]
     },
+    "messaging.publish": {
+      "support": "supported",
+      "notes": "Transactional PostgreSQL outbox with provider-neutral envelopes."
+    },
+    "messaging.consume": {
+      "support": "supported",
+      "notes": "Durable inbox deduplication, bounded retry, and dead letters."
+    },
+    "messaging.tasks": {
+      "support": "supported",
+      "notes": "Point-to-point task delivery is distinct from event fan-out."
+    },
+    "messaging.ordering": {
+      "support": "supported",
+      "notes": "Ordering keys are propagated to provider partitions or queues."
+    },
+    "background.workers": {
+      "support": "supported"
+    },
+    "background.schedules": {
+      "support": "supported"
+    },
+    "orchestration.sagas": {
+      "support": "supported",
+      "notes": "Saga state and timers persist in PostgreSQL."
+    },
+    "cache.derived": {
+      "support": "supported",
+      "notes": "Derived cache reads fall back to their canonical source."
+    },
+    "realtime.websocket": {
+      "support": "supported",
+      "notes": "Authenticated request/reply, subscriptions, cursors, and bounded backpressure."
+    },
+    "realtime.sse": {
+      "support": "supported"
+    },
+    "observability.opentelemetry": {
+      "support": "supported"
+    },
     "ui.web": {
       "support": "supported",
       "notes": "A basic generated CRUD console is emitted; custom AIR UI remains future work."
     },
     "background.long-running": {
-      "support": "unsupported",
-      "notes": "A long-running worker requires a separate deployment target."
+      "support": "supported",
+      "notes": "Generated worker and orchestrator entrypoints run as separate components."
     },
     "deployment.vercel": {
       "support": "supported",

@@ -21,8 +21,8 @@ import { renderNextjsFiles } from "./render.js";
 import type { PlannedNextjsFile, ResolvedNextjsOptions } from "./types.js";
 
 const TARGET_ID = "nextjs";
-const TARGET_VERSION = "0.9.0";
-const COMPILER_VERSION = "0.9.0";
+const TARGET_VERSION = "0.10.0";
+const COMPILER_VERSION = "0.10.0";
 const MANIFEST_PATH = ".air/manifest.json";
 const LOCK_PATH = ".air/lock.json";
 const ADOPTION_PATH = ".air/adoption.json";

@@ -16,7 +16,11 @@
     "./air-0.4.schema.json": "./schema/air-0.4.schema.json",
     "./air-0.5.schema.json": "./schema/air-0.5.schema.json",
     "./air-0.6.schema.json": "./schema/air-0.6.schema.json",
-    "./air-0.7.schema.json": "./schema/air-0.7.schema.json"
+    "./air-0.7.schema.json": "./schema/air-0.7.schema.json",
+    "./air-0.8.schema.json": "./schema/air-0.8.schema.json",
+    "./air-0.9.schema.json": "./schema/air-0.9.schema.json",
+    "./system-0.1.schema.json": "./schema/system-0.1.schema.json",
+    "./deployment-0.1.schema.json": "./schema/deployment-0.1.schema.json"
   },
   "files": [
     "dist",

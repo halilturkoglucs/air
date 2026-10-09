@@ -12,9 +12,8 @@ import {
 describe("Next.js target boundary", () => {
   it("declares platform capabilities without adding them to AIR", () => {
     expect(nextjsCapabilityManifest.capabilities["http.crud"].support).toBe("supported");
-    expect(nextjsCapabilityManifest.capabilities["background.long-running"].support).toBe(
-      "unsupported",
-    );
+    expect(nextjsCapabilityManifest.capabilities["background.long-running"].support).toBe("supported");
+    expect(nextjsCapabilityManifest.capabilities["messaging.consume"].support).toBe("supported");
     expect(nextjsCapabilityManifest.capabilities["deployment.vercel"].support).toBe("supported");
     expect(nextjsCapabilityManifest.capabilities["authorization.ownership"].support).toBe(
       "conditional",
@@ -40,6 +39,7 @@ describe("Next.js target boundary", () => {
       expect.objectContaining({ path: "src/app/todos/[id]/route.ts", kind: "source" }),
     );
     const dynamicRoute = first.find((file) => file.path === "src/app/todos/[id]/route.ts");
+    expect(JSON.parse(first.find((file) => file.path === "package.json")?.content ?? "{}").type).toBe("module");
     expect(dynamicRoute?.content).toContain("params: Promise<{ readonly id: string }>");
     expect(dynamicRoute?.content).toContain("const { id } = await params");
     expect(first.find((file) => file.path === "src/app/air-runtime/health/route.ts")?.content).toContain(
@@ -47,6 +47,15 @@ describe("Next.js target boundary", () => {
     );
     expect(first.find((file) => file.path === "src/app/air-runtime/ready/route.ts")?.content).toContain(
       "checkDatabaseReady",
+    );
+    expect(first.find((file) => file.path === "src/air/runtime.ts")?.content).toContain(
+      "AIR_ASYNC.realtime as Record<string",
+    );
+    expect(first.find((file) => file.path === "src/air/runtime.ts")?.content).toContain(
+      "import.meta.url === pathToFileURL(process.argv[1]).href",
+    );
+    expect(first.find((file) => file.path === "src/air/migrate.ts")?.content).toContain(
+      "0000_air_async_runtime.sql",
     );
   });
 
@@ -77,7 +86,7 @@ describe("Next.js target boundary", () => {
     expect(result.artifacts).toContainEqual(
       expect.objectContaining({
         path: ".air/manifest.json",
-        provenance: expect.objectContaining({ targetId: "nextjs", targetVersion: "0.9.0" }),
+        provenance: expect.objectContaining({ targetId: "nextjs", targetVersion: "0.10.0" }),
       }),
     );
     expect(result.artifacts).toContainEqual(

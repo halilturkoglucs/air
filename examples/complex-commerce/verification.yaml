@@ -1,0 +1,28 @@
+apiVersion: air.dev/verification/v0.2
+kind: SystemVerificationSuite
+scenarios:
+  - id: ordered-at-least-once-flow
+    steps:
+      - connect: { client: dashboard, application: orders, channel: orders, cursor: 0 }
+      - publish:
+          application: orders
+          event: OrderPlaced
+          correlationId: 00000000-0000-4000-8000-000000000100
+          orderingKey: 00000000-0000-4000-8000-000000000001
+          payload:
+            orderId: 00000000-0000-4000-8000-000000000001
+            customerId: 00000000-0000-4000-8000-000000000002
+      - assert:
+          emitted: [orders.OrderPlaced, inventory.InventoryReserved, billing.PaymentCaptured]
+          deadLetters: 0
+          frames: { dashboard: 1 }
+          saga: { name: fulfillOrder, status: running }
+  - id: cache-fallback-and-reconnect
+    steps:
+      - readCache: { application: orders, cache: orderById, key: order-1 }
+      - assert: { cache: { orders.orderById: miss } }
+      - readCache: { application: orders, cache: orderById, key: order-1 }
+      - assert: { cache: { orders.orderById: hit } }
+      - fail: { dependency: cache }
+      - readCache: { application: orders, cache: orderById, key: order-1 }
+      - assert: { cache: { orders.orderById: fallback } }

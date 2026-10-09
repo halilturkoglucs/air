@@ -90,7 +90,7 @@ describe("AIR CLI", () => {
 
     expect(exitCode).toBe(0);
     expect(output.stdout()).toContain("to Rust Axum");
-    expect(await readFile(resolve(directory, "Cargo.toml"), "utf8")).toContain('axum = "0.8"');
+    expect(await readFile(resolve(directory, "Cargo.toml"), "utf8")).toContain('axum = { version = "0.8", features = ["ws"] }');
   });
 
   it("compiles AIR to a Python FastAPI project", async () => {
@@ -281,9 +281,9 @@ describe("AIR CLI", () => {
 
     expect(exitCode).toBe(0);
     expect(await readFile(destination, "utf8")).toContain("apiVersion: air.dev/v0.2");
-    const latestDestination = resolve(directory, "air.v0.8.yaml");
+    const latestDestination = resolve(directory, "air.v0.9.yaml");
     expect(await runCli(["migrate", source, "--output", latestDestination], output.io)).toBe(0);
-    expect(await readFile(latestDestination, "utf8")).toContain("apiVersion: air.dev/v0.8");
+    expect(await readFile(latestDestination, "utf8")).toContain("apiVersion: air.dev/v0.9");
     expect(await runCli(["migrate", source, "--output", latestDestination], output.io)).toBe(1);
   });
 

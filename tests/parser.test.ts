@@ -10,6 +10,8 @@ import {
   migrateAirDocument,
   planAirEvolution,
   parseAir,
+  parseDeployment,
+  parseSystem,
 } from "@air/parser";
 
 const todoPath = resolve("examples/todo/air.yaml");
@@ -218,8 +220,138 @@ spec:
     const v0_2 = await loadAirFile(todoPath);
     const migrated = migrateAirDocument(v0_2);
 
-    expect(migrated.apiVersion).toBe("air.dev/v0.8");
+    expect(migrated.apiVersion).toBe("air.dev/v0.9");
     expect(migrated.spec.commands).toBeUndefined();
+  });
+
+  it("loads v0.9 events, tasks, consumers, schedules, caches, and realtime channels", () => {
+    const document = parseAir(`
+apiVersion: air.dev/v0.9
+kind: Application
+metadata: { name: complex-orders }
+spec:
+  entities:
+    Order:
+      fields:
+        id: { type: uuid, primaryKey: true }
+        status: { type: string, nullable: false }
+  contracts:
+    CreateOrderInput:
+      fields:
+        orderId: { type: uuid, required: true }
+    OrderMessage:
+      fields:
+        orderId: { type: uuid, required: true }
+  principals:
+    UserPrincipal:
+      fields:
+        userId: { type: uuid, required: true }
+  events:
+    OrderCreated: { kind: integration, version: 1.0.0, payload: OrderMessage }
+  tasks:
+    NotifyOrder: { payload: OrderMessage }
+    FailedOrderDelivery: { payload: OrderMessage }
+  commands:
+    createOrder:
+      input: CreateOrderInput
+      output: { entity: Order, fields: [id, status] }
+      effect:
+        kind: create
+        entity: Order
+        values:
+          id: { input: orderId }
+          status: { literal: pending }
+      emits:
+        - event: OrderCreated
+          key: { input: orderId }
+          payload: { orderId: { input: orderId } }
+      enqueues:
+        - task: NotifyOrder
+          payload: { orderId: { input: orderId } }
+  consumers:
+    projectOrder:
+      source: { event: OrderCreated }
+      command: createOrder
+      input: { orderId: { payload: orderId } }
+      retry: { maxAttempts: 5, backoffMs: 100 }
+      deadLetter: FailedOrderDelivery
+  schedules:
+    sweepOrders:
+      cron: "0 * * * *"
+      timezone: UTC
+      command: createOrder
+      input: { orderId: 00000000-0000-0000-0000-000000000000 }
+      concurrency: forbid
+      missedRun: run-once
+  http:
+    operations:
+      - { id: getOrder, method: GET, path: "/orders/{id}", entity: Order, action: read }
+  cachedReads:
+    orderById:
+      operation: getOrder
+      ttlSeconds: 30
+      maxStaleSeconds: 120
+      invalidatedBy: [OrderCreated]
+      fallback: canonical-source
+  realtime:
+    orders:
+      principal: UserPrincipal
+      subscriptions:
+        - event: OrderCreated
+          filters: [{ payloadField: orderId, principalField: userId }]
+      commands: [{ type: createOrder, command: createOrder }]
+      transports: [websocket, sse]
+      resume: cursor
+      buffer: { maxMessages: 100, overflow: disconnect }
+`);
+
+    expect(document.spec.events?.OrderCreated).toMatchObject({ kind: "integration", version: "1.0.0" });
+    expect(document.spec.commands?.createOrder.emits?.[0]?.event).toBe("OrderCreated");
+    expect(document.spec.realtime?.orders.transports).toEqual(["websocket", "sse"]);
+  });
+
+  it("validates system topology, saga structure, and deployment bindings", () => {
+    const system = parseSystem(`
+apiVersion: air.dev/system/v0.1
+kind: System
+metadata: { name: commerce }
+spec:
+  applications:
+    orders: { source: orders.air.yaml }
+    inventory: { source: inventory.air.yaml }
+  components:
+    ordersApi: { application: orders, role: api, target: nextjs }
+    inventoryWorker: { application: inventory, role: worker, target: rust-axum, dependsOn: [ordersApi] }
+    sagaRunner: { application: orders, role: orchestrator, target: python-fastapi, dependsOn: [inventoryWorker] }
+  channels:
+    ordersCreated: { kind: event, source: orders.OrderCreated, consumers: [inventoryWorker], ordered: true }
+  sagas:
+    fulfillOrder:
+      trigger: { application: orders, event: OrderCreated }
+      correlation: orderId
+      retry: { maxAttempts: 3, backoffMs: 100 }
+      steps:
+        - { id: reserve, kind: invoke, application: inventory, command: reserveInventory, compensate: releaseInventory }
+        - { id: waitForReservation, kind: wait, application: inventory, event: InventoryReserved, timeoutSeconds: 30 }
+`);
+    const deployment = parseDeployment(`
+apiVersion: air.dev/deployment/v0.1
+kind: Deployment
+metadata: { name: commerce-local }
+spec:
+  system: commerce.system.yaml
+  profile: compose
+  resources:
+    events: { kind: broker, provider: kafka, environment: { URL: KAFKA_URL } }
+    cache: { kind: cache, provider: redis, environment: { URL: REDIS_URL } }
+    database: { kind: database, provider: postgres, environment: { URL: DATABASE_URL } }
+  bindings: { ordersCreated: events, orderById: cache, primary: database }
+  observability: { openTelemetry: true, endpointEnvironment: OTEL_EXPORTER_OTLP_ENDPOINT }
+  components: { inventoryWorker: { replicas: 2 } }
+`);
+
+    expect(system.spec.components.inventoryWorker?.role).toBe("worker");
+    expect(deployment.spec.resources.events).toMatchObject({ kind: "broker", provider: "kafka" });
   });
 
   it("classifies semantic changes and produces a deterministic evolution plan", () => {
@@ -255,6 +387,31 @@ spec:
     ]));
     expect(plan.executable).toBe(false);
     expect(plan.steps.map((step) => step.action)).toContain("alter-field-type");
+  });
+
+  it("requires an event major-version bump when its payload contract changes", () => {
+    const source = (payload: string, version: string) => parseAir(`
+apiVersion: air.dev/v0.9
+kind: Application
+metadata: { name: event-evolution }
+spec:
+  entities:
+    Marker:
+      fields: { id: { type: uuid, primaryKey: true } }
+  contracts:
+    EventV1:
+      fields: { id: { type: uuid, required: true } }
+    EventV2:
+      fields: { id: { type: uuid, required: true }, note: { type: string } }
+  events:
+    Changed: { kind: integration, version: ${version}, payload: ${payload} }
+`);
+    const before = source("EventV1", "1.0.0");
+    const incompatible = diffAirDocuments(before, source("EventV2", "1.1.0"));
+    const versioned = diffAirDocuments(before, source("EventV2", "2.0.0"));
+
+    expect(incompatible.changes).toContainEqual(expect.objectContaining({ path: "/spec/events/Changed/payload", impact: "breaking" }));
+    expect(versioned.changes).toContainEqual(expect.objectContaining({ path: "/spec/events/Changed/payload", impact: "review" }));
   });
 
   it("refuses to guess v0.1 relationship ownership during migration", () => {

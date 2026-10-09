@@ -20,13 +20,13 @@ export const nextjsCapabilityManifest = {
   target: {
     id: "nextjs",
     displayName: "Next.js",
-    version: "0.9.0",
+    version: "0.10.0",
   },
   capabilities: {
     "http.crud": {
       support: "supported",
       notes: "Mapped to App Router route handlers using Node.js runtime.",
-      constraints: [{ kind: "air-version", minimum: "air.dev/v0.1", maximum: "air.dev/v0.8" }],
+      constraints: [{ kind: "air-version", minimum: "air.dev/v0.1", maximum: "air.dev/v0.9" }],
     },
     "http.collections": { support: "supported" },
     "domain.commands": {
@@ -35,7 +35,7 @@ export const nextjsCapabilityManifest = {
         "AIR v0.7 create/update effects, named atomic updates, guards, ownership authorization, invariant expressions, state preconditions, idempotency replay, and declared transaction isolation are supported.",
       ],
       constraints: [
-        { kind: "air-version", minimum: "air.dev/v0.3", maximum: "air.dev/v0.8" },
+        { kind: "air-version", minimum: "air.dev/v0.3", maximum: "air.dev/v0.9" },
         { kind: "primary-effect-in", values: ["create", "update", "delete"] },
       ],
       notes: "Commands lower to explicit App Router handlers and transactional domain functions with conflict errors.",
@@ -77,14 +77,22 @@ export const nextjsCapabilityManifest = {
       conditions: ["PostgreSQL is the only persistence provider in the current target."],
       constraints: [{ kind: "option-in", option: "database", values: ["postgres"] }],
     },
+    "messaging.publish": { support: "supported", notes: "Transactional PostgreSQL outbox with provider-neutral envelopes." },
+    "messaging.consume": { support: "supported", notes: "Durable inbox deduplication, bounded retry, and dead letters." },
+    "messaging.tasks": { support: "supported", notes: "Point-to-point task delivery is distinct from event fan-out." },
+    "messaging.ordering": { support: "supported", notes: "Ordering keys are propagated to provider partitions or queues." },
+    "background.workers": { support: "supported" },
+    "background.schedules": { support: "supported" },
+    "orchestration.sagas": { support: "supported", notes: "Saga state and timers persist in PostgreSQL." },
+    "cache.derived": { support: "supported", notes: "Derived cache reads fall back to their canonical source." },
+    "realtime.websocket": { support: "supported", notes: "Authenticated request/reply, subscriptions, cursors, and bounded backpressure." },
+    "realtime.sse": { support: "supported" },
+    "observability.opentelemetry": { support: "supported" },
     "ui.web": {
       support: "supported",
       notes: "A basic generated CRUD console is emitted; custom AIR UI remains future work.",
     },
-    "background.long-running": {
-      support: "unsupported",
-      notes: "A long-running worker requires a separate deployment target.",
-    },
+    "background.long-running": { support: "supported", notes: "Generated worker and orchestrator entrypoints run as separate components." },
     "deployment.vercel": {
       support: "supported",
       notes: "Generated applications use the default Node.js runtime and external PostgreSQL.",
@@ -95,7 +103,7 @@ export const nextjsCapabilityManifest = {
 export class NextjsTargetAdapter implements TargetAdapter<NextjsTargetOptions> {
   readonly id = "nextjs";
   readonly displayName = "Next.js";
-  readonly version = "0.9.0";
+  readonly version = "0.10.0";
   readonly manifest = nextjsCapabilityManifest;
 
   async analyze(

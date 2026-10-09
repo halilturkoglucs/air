@@ -39,6 +39,14 @@ export function inferRequiredCapabilities(air: AirDocument): readonly string[] {
   if (commands.some((command) => Object.keys(command.effects ?? {}).length > 0)) required.add("domain.multi_effect");
   if (commands.some((command) => command.idempotency !== undefined)) required.add("domain.idempotency");
   if (commands.some((command) => command.effect.kind === "delete")) required.add("domain.delete");
+  if (commands.some((command) => (command.emits?.length ?? 0) > 0)) required.add("messaging.publish");
+  if (commands.some((command) => (command.enqueues?.length ?? 0) > 0)) required.add("messaging.tasks");
+  if (Object.keys(air.spec.consumers ?? {}).length > 0) required.add("messaging.consume");
+  if (Object.keys(air.spec.schedules ?? {}).length > 0) required.add("background.schedules");
+  if (Object.keys(air.spec.cachedReads ?? {}).length > 0) required.add("cache.derived");
+  const realtime = Object.values(air.spec.realtime ?? {});
+  if (realtime.some((channel) => channel.transports.includes("websocket"))) required.add("realtime.websocket");
+  if (realtime.some((channel) => channel.transports.includes("sse"))) required.add("realtime.sse");
   const authorizations = [
     ...commands.flatMap((command) => command.authorization?.rules ?? []),
     ...operations.flatMap((operation) => "entity" in operation ? operation.authorization?.rules ?? [] : []),

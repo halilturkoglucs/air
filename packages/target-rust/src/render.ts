@@ -95,6 +95,14 @@ function renderMigration(air: AirDocument): string {
       );
     }
   }
+  lines.push(`CREATE TABLE IF NOT EXISTS air_outbox (id UUID PRIMARY KEY, message_type TEXT NOT NULL, schema_version TEXT NOT NULL, occurred_at TIMESTAMPTZ NOT NULL, producer TEXT NOT NULL, correlation_id UUID NOT NULL, causation_id UUID, ordering_key TEXT, payload JSONB NOT NULL, destination TEXT NOT NULL, message_kind TEXT NOT NULL CHECK (message_kind IN ('event','task')), attempts INTEGER NOT NULL DEFAULT 0, available_at TIMESTAMPTZ NOT NULL DEFAULT now(), published_at TIMESTAMPTZ);`,
+    `CREATE INDEX IF NOT EXISTS air_outbox_pending ON air_outbox (available_at) WHERE published_at IS NULL;`,
+    `CREATE TABLE IF NOT EXISTS air_inbox (consumer TEXT NOT NULL, message_id UUID NOT NULL, received_at TIMESTAMPTZ NOT NULL DEFAULT now(), PRIMARY KEY (consumer, message_id));`,
+    `CREATE TABLE IF NOT EXISTS air_dead_letters (id UUID PRIMARY KEY, consumer TEXT NOT NULL, envelope JSONB NOT NULL, attempts INTEGER NOT NULL, reason TEXT NOT NULL, failed_at TIMESTAMPTZ NOT NULL DEFAULT now());`,
+    `CREATE TABLE IF NOT EXISTS air_saga_instances (id UUID PRIMARY KEY, saga_type TEXT NOT NULL, correlation_id TEXT NOT NULL, state JSONB NOT NULL, status TEXT NOT NULL, current_step TEXT, version BIGINT NOT NULL DEFAULT 0, created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now(), UNIQUE (saga_type, correlation_id));`,
+    `CREATE TABLE IF NOT EXISTS air_saga_timers (id UUID PRIMARY KEY, saga_id UUID NOT NULL REFERENCES air_saga_instances(id) ON DELETE CASCADE, step_id TEXT NOT NULL, due_at TIMESTAMPTZ NOT NULL, claimed_at TIMESTAMPTZ, completed_at TIMESTAMPTZ);`,
+    `CREATE TABLE IF NOT EXISTS air_realtime_journal (cursor BIGSERIAL PRIMARY KEY, channel TEXT NOT NULL, envelope JSONB NOT NULL, ordering_key TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT now());`,
+    `CREATE INDEX IF NOT EXISTS air_realtime_channel_cursor ON air_realtime_journal (channel, cursor);`);
   return `${lines.join("\n").trimEnd()}\n`;
 }
 
@@ -284,6 +292,38 @@ function renderEffectMutation(effectName: string, effect: CommandUpdateEffect): 
   return `    sqlx::query("UPDATE ${tableName(effect.entity)} SET ${assignments.map((item) => item.sql).join(", ")} WHERE ${snakeCase(effect.identify.field)} = $${identifyPosition}")\n${binds.join("\n")}\n        .execute(&mut *tx).await?; // named effect: ${effectName}`;
 }
 
+function messageValue(reference: import("@air/schema").MessageValueReference): string {
+  if ("input" in reference) return `input.${rustIdentifier(reference.input)}`;
+  if ("literal" in reference) return rustLiteral(reference.literal);
+  if ("principal" in reference) return `principal.${rustIdentifier(reference.principal)}`;
+  return typeof reference.record === "string"
+    ? `output.${rustIdentifier(reference.record)}`
+    : `record_${rustIdentifier(reference.record.effect)}.${rustIdentifier(reference.record.field)}`;
+}
+
+function renderOutbox(command: CommandDefinition, air: AirDocument): string {
+  const messages = [
+    ...(command.emits ?? []).map((message) => ({ kind: "event" as const, name: message.event, version: air.spec.events?.[message.event]?.version ?? "1", payload: message.payload, key: message.key })),
+    ...(command.enqueues ?? []).map((message) => ({ kind: "task" as const, name: message.task, version: "1", payload: message.payload, key: message.key })),
+  ];
+  return messages.map((message, index) => {
+    const payload = Object.entries(message.payload).map(([name, reference]) => `${JSON.stringify(name)}: ${messageValue(reference)}`).join(", ");
+    const key = message.key ? `Some(${messageValue(message.key)}.to_string())` : "None::<String>";
+    const journal = message.kind === "event"
+      ? Object.entries(air.spec.realtime ?? {}).filter(([, channel]) => channel.subscriptions.some((subscription) => subscription.event === message.name)).map(([channelName]) => `    sqlx::query("INSERT INTO air_realtime_journal (channel,envelope,ordering_key) VALUES ($1,$2,$3)").bind(${JSON.stringify(channelName)}).bind(&envelope_${index}).bind(&ordering_key_${index}).execute(&mut *tx).await?;`).join("\n")
+      : "";
+    return `    let message_id_${index} = Uuid::new_v4();
+    let correlation_id_${index} = Uuid::new_v4();
+    let ordering_key_${index} = ${key};
+    let payload_${index} = json!({ ${payload} });
+    let envelope_${index} = json!({ "id": message_id_${index}, "type": ${JSON.stringify(message.name)}, "schemaVersion": ${JSON.stringify(message.version)}, "occurredAt": Utc::now(), "producer": ${JSON.stringify(air.metadata.name)}, "correlationId": correlation_id_${index}, "orderingKey": ordering_key_${index}, "payload": payload_${index} });
+    let _ = &envelope_${index};
+    sqlx::query("INSERT INTO air_outbox (id,message_type,schema_version,occurred_at,producer,correlation_id,ordering_key,payload,destination,message_kind) VALUES ($1,$2,$3,now(),$4,$5,$6,$7,$8,$9)")
+        .bind(message_id_${index}).bind(${JSON.stringify(message.name)}).bind(${JSON.stringify(message.version)}).bind(${JSON.stringify(air.metadata.name)}).bind(correlation_id_${index}).bind(&ordering_key_${index}).bind(&payload_${index}).bind(${JSON.stringify(message.name)}).bind(${JSON.stringify(message.kind)}).execute(&mut *tx).await?;
+${journal}`;
+  }).join("\n");
+}
+
 function renderCommand(name: string, command: CommandDefinition, air: AirDocument): string {
   const inputName = pascalCase(command.input);
   const principalName = command.authorization ? pascalCase(command.authorization.principal) : undefined;
@@ -338,7 +378,7 @@ function renderCommand(name: string, command: CommandDefinition, air: AirDocumen
   if (command.effect.kind === "update" || command.effect.kind === "delete") {
     const effect = command.effect;
     const entity = air.spec.entities[effect.entity]!;
-    body.push(`    let record = sqlx::query_as::<_, ${pascalCase(effect.entity)}>("SELECT ${columnList(entity)} FROM ${tableName(effect.entity)} WHERE ${snakeCase(effect.identify.field)} = $1 FOR UPDATE")\n        .bind(${bindExpression(effect.identify.value)}).fetch_optional(&mut *tx).await?\n        .ok_or_else(|| ${errorExpression(command, effect.identify.error)})?;`);
+    body.push(`    let record = sqlx::query_as::<_, ${pascalCase(effect.entity)}>("SELECT ${columnList(entity)} FROM ${tableName(effect.entity)} WHERE ${snakeCase(effect.identify.field)} = $1 FOR UPDATE")\n        .bind(${bindExpression(effect.identify.value)}).fetch_optional(&mut *tx).await?\n        .ok_or_else(|| ${errorExpression(command, effect.identify.error)})?;\n    let _ = &record;`);
   }
   for (const rule of command.authorization?.rules ?? []) {
     if (rule.kind === "record-field-equals-principal") {
@@ -376,6 +416,8 @@ function renderCommand(name: string, command: CommandDefinition, air: AirDocumen
     body.push(`    let output = sqlx::query_as::<_, ${outputName}>("DELETE FROM ${tableName(effect.entity)} WHERE ${snakeCase(effect.identify.field)} = $1 RETURNING ${command.output.fields.map(snakeCase).join(", ")}")
         .bind(${bindExpression(effect.identify.value)}).fetch_one(&mut *tx).await?;`);
   }
+  const outbox = renderOutbox(command, air);
+  if (outbox) body.push(outbox);
   body.push("    tx.commit().await?;", "    Ok(output)", "}");
   lines.push(body.filter(Boolean).join("\n"));
   return lines.join("\n\n");
@@ -434,9 +476,10 @@ function renderGenerated(air: AirDocument): string {
     operations.some((operation) => "entity" in operation && operation.authorization !== undefined);
   const hasPath = operations.some((operation) => "entity" in operation && ["read", "update", "delete"].includes(operation.action));
   const hasQuery = operations.some((operation) => "entity" in operation && operation.action === "list" && operation.collection !== undefined);
+  const hasMessages = Object.values(air.spec.commands ?? {}).some((command) => (command.emits?.length ?? 0) > 0 || (command.enqueues?.length ?? 0) > 0);
   const routingFunctions = [...new Set(["get", ...operations.map((operation) => operation.method === "GET" ? "get" : operation.method === "POST" ? "post" : operation.method === "DELETE" ? "delete" : "patch")])].sort();
   const chronoTypes = [
-    ...(allFields.some((field) => field.type === "datetime") ? ["DateTime", "Utc"] : []),
+    ...(allFields.some((field) => field.type === "datetime") ? ["DateTime", "Utc"] : hasMessages ? ["Utc"] : []),
     ...(allFields.some((field) => field.type === "date") ? ["NaiveDate"] : []),
   ];
   const authSupport = hasAuthentication ? `
@@ -462,7 +505,7 @@ fn authenticate<T: DeserializeOwned, F: Fn() -> AppError>(headers: &HeaderMap, u
     `use serde::{${hasAuthentication ? "de::DeserializeOwned, " : ""}Deserialize, Serialize};`,
     "use serde_json::json;",
     "use sqlx::{FromRow, PgPool};",
-    allFields.some((field) => field.type === "uuid") ? "use uuid::Uuid;" : "",
+    allFields.some((field) => field.type === "uuid") || hasMessages ? "use uuid::Uuid;" : "",
   ].filter(Boolean).join("\n");
   return `#![allow(clippy::needless_borrows_for_generic_args)]
 #![allow(dead_code)]
@@ -521,6 +564,8 @@ function renderMain(): string {
 
 use generated::{router, AppState};
 use sqlx::postgres::PgPoolOptions;
+use sqlx::{PgPool, Row};
+use std::time::Duration;
 
 fn port() -> Result<u16, Box<dyn std::error::Error>> {
     Ok(std::env::var("AIR_PORT").unwrap_or_else(|_| "3000".to_string()).parse()?)
@@ -538,6 +583,34 @@ async fn shutdown_signal() {
     tracing::info!(event = "air.shutdown.started");
 }
 
+async fn run_worker(pool: &PgPool) -> Result<(), Box<dyn std::error::Error>> {
+    loop {
+        let rows = sqlx::query("SELECT id, destination, jsonb_build_object('id',id,'type',message_type,'schemaVersion',schema_version,'occurredAt',occurred_at,'producer',producer,'correlationId',correlation_id,'causationId',causation_id,'orderingKey',ordering_key,'payload',payload) AS envelope FROM air_outbox WHERE published_at IS NULL AND available_at <= now() ORDER BY occurred_at FOR UPDATE SKIP LOCKED LIMIT 100").fetch_all(pool).await?;
+        for row in &rows {
+            let id: uuid::Uuid = row.try_get("id")?;
+            let destination: String = row.try_get("destination")?;
+            let envelope: serde_json::Value = row.try_get("envelope")?;
+            let published = sqlx::query("SELECT pg_notify($1,$2)").bind(&destination).bind(envelope.to_string()).execute(pool).await;
+            match published {
+                Ok(_) => { sqlx::query("UPDATE air_outbox SET published_at=now() WHERE id=$1").bind(id).execute(pool).await?; tracing::info!(event="air.outbox.published", %destination, %id); }
+                Err(error) => { sqlx::query("UPDATE air_outbox SET attempts=attempts+1, available_at=now()+make_interval(secs => least(300, power(2, attempts)::int)) WHERE id=$1").bind(id).execute(pool).await?; tracing::warn!(event="air.outbox.retry", %destination, %id, error=%error); }
+            }
+        }
+        tokio::time::sleep(Duration::from_millis(if rows.is_empty() { 250 } else { 10 })).await;
+    }
+}
+
+async fn run_scheduler() -> Result<(), Box<dyn std::error::Error>> {
+    loop { tracing::info!(event="air.scheduler.tick"); tokio::time::sleep(Duration::from_secs(1)).await; }
+}
+
+async fn run_orchestrator(pool: &PgPool) -> Result<(), Box<dyn std::error::Error>> {
+    loop {
+        sqlx::query("UPDATE air_saga_timers SET claimed_at=now() WHERE id IN (SELECT id FROM air_saga_timers WHERE completed_at IS NULL AND claimed_at IS NULL AND due_at <= now() FOR UPDATE SKIP LOCKED LIMIT 100)").execute(pool).await?;
+        tokio::time::sleep(Duration::from_millis(250)).await;
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt().json().with_target(false).init();
@@ -547,6 +620,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let database_url = std::env::var("DATABASE_URL")?;
     let pool = PgPoolOptions::new().max_connections(20).connect(&database_url).await?;
     sqlx::migrate!().run(&pool).await?;
+    let role = std::env::var("AIR_COMPONENT_ROLE").unwrap_or_else(|_| "api".to_string());
+    if role == "worker" { return run_worker(&pool).await; }
+    if role == "scheduler" { return run_scheduler().await; }
+    if role == "orchestrator" { return run_orchestrator(&pool).await; }
     let app = router(AppState { pool });
     let port = port()?;
     let listener = tokio::net::TcpListener::bind(("0.0.0.0", port)).await?;
@@ -574,7 +651,7 @@ export function renderRustFiles(air: AirDocument, options: ResolvedRustTargetOpt
   const files: PlannedRustFile[] = [
     {
       path: "Cargo.toml", kind: "configuration", airNodes: ["/metadata"],
-      content: `[package]\nname = ${JSON.stringify(packageName)}\nversion = "0.1.0"\nedition = ${JSON.stringify(options.rustEdition)}\nrust-version = ${JSON.stringify(options.rustVersion)}\n\n[dependencies]\naxum = "0.8"\nchrono = { version = "0.4", features = ["serde"] }\njsonwebtoken = "9"\nserde = { version = "1", features = ["derive"] }\nserde_json = "1"\nsqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres", "uuid", "chrono", "json", "migrate"] }\ntokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal"] }\ntracing = "0.1"\ntracing-subscriber = { version = "0.3", features = ["fmt", "json"] }\nuuid = { version = "1", features = ["serde", "v4"] }\n`,
+        content: `[package]\nname = ${JSON.stringify(packageName)}\nversion = "0.1.0"\nedition = ${JSON.stringify(options.rustEdition)}\nrust-version = ${JSON.stringify(options.rustVersion)}\n\n[dependencies]\naxum = { version = "0.8", features = ["ws"] }\nchrono = { version = "0.4", features = ["serde"] }\njsonwebtoken = "9"\nopentelemetry = "0.27"\nserde = { version = "1", features = ["derive"] }\nserde_json = "1"\nsqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres", "uuid", "chrono", "json", "migrate"] }\ntokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal", "time"] }\ntracing = "0.1"\ntracing-subscriber = { version = "0.3", features = ["fmt", "json"] }\nuuid = { version = "1", features = ["serde", "v4"] }\n`,
     },
     {
       path: "rust-toolchain.toml", kind: "configuration", airNodes: ["/metadata"],

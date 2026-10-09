@@ -28,11 +28,15 @@ describe("Python target boundary", () => {
 
   it("lowers commands to locks, atomic arithmetic, replay, and bounded retry", async () => {
     const air = await loadAirFile(resolve("examples/ledger/air.yaml"));
-    const generated = planPython(air).find((file) => file.path === "app.py")?.content ?? "";
+    const plan = planPython(air);
+    const generated = plan.find((file) => file.path === "app.py")?.content ?? "";
+    const runtime = plan.find((file) => file.path === "air_runtime.py")?.content ?? "";
     expect(generated).toContain("FOR UPDATE");
     expect(generated).toContain("SET TRANSACTION ISOLATION LEVEL");
     expect(generated).toContain("SerializationFailure");
     expect(generated).toContain("command.get(\"idempotency\")");
+    expect(generated).not.toMatch(/(?:if|try|except) [^\n]+: (?:return|await|pass)/);
+    expect(runtime).not.toMatch(/(?:if|elif|else) [^\n]*: (?:await|raise)/);
   });
 
   it("writes managed provenance and a reproducibility lock", async () => {

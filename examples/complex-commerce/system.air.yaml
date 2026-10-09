@@ -1,0 +1,27 @@
+apiVersion: air.dev/system/v0.1
+kind: System
+metadata: { name: complex-commerce, displayName: Complex Commerce, version: 0.10.0 }
+spec:
+  applications:
+    orders: { source: orders.air.yaml }
+    inventory: { source: inventory.air.yaml }
+    billing: { source: billing.air.yaml }
+  components:
+    ordersApi: { application: orders, role: api, target: nextjs }
+    ordersRealtime: { application: orders, role: realtime, target: nextjs, dependsOn: [ordersApi] }
+    inventoryWorker: { application: inventory, role: worker, target: rust-axum }
+    billingService: { application: billing, role: api, target: python-fastapi }
+    billingWorker: { application: billing, role: worker, target: python-fastapi, dependsOn: [billingService] }
+    billingScheduler: { application: billing, role: scheduler, target: python-fastapi, dependsOn: [billingService] }
+    orderOrchestrator: { application: orders, role: orchestrator, target: rust-axum }
+  channels:
+    orderEvents: { kind: event, source: orders.OrderPlaced, consumers: [inventoryWorker], ordered: true }
+    inventoryEvents: { kind: event, source: inventory.InventoryReserved, consumers: [billingWorker], ordered: true }
+    billingEvents: { kind: event, source: billing.PaymentCaptured, consumers: [orderOrchestrator], ordered: true }
+  sagas:
+    fulfillOrder:
+      trigger: { application: orders, event: OrderPlaced }
+      correlation: orderId
+      retry: { maxAttempts: 3, backoffMs: 100 }
+      steps:
+        - { id: awaitPayment, kind: wait, application: billing, event: PaymentCaptured, timeoutSeconds: 30 }

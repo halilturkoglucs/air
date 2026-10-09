@@ -1,0 +1,56 @@
+apiVersion: air.dev/v0.9
+kind: Application
+metadata: { name: orders, displayName: Orders API, version: 0.10.0 }
+spec:
+  entities:
+    Order:
+      fields:
+        id: { type: uuid, primaryKey: true, generated: uuid }
+        customerId: { type: uuid, required: true }
+        status: { type: string, default: pending, validation: { enum: [pending, confirmed, cancelled] } }
+  contracts:
+    PlaceOrderInput:
+      fields:
+        customerId: { type: uuid, required: true }
+    OrderPlacedPayload:
+      fields:
+        orderId: { type: uuid, required: true }
+        customerId: { type: uuid, required: true }
+  commands:
+    placeOrder:
+      input: PlaceOrderInput
+      output: { entity: Order, fields: [id, customerId, status] }
+      emits:
+        - event: OrderPlaced
+          key: { record: id }
+          payload:
+            orderId: { record: id }
+            customerId: { input: customerId }
+      effect:
+        kind: create
+        entity: Order
+        values:
+          customerId: { input: customerId }
+  events:
+    OrderPlaced: { kind: integration, version: 1.0.0, payload: OrderPlacedPayload }
+  cachedReads:
+    orderById:
+      operation: readOrder
+      ttlSeconds: 30
+      maxStaleSeconds: 120
+      invalidatedBy: [OrderPlaced]
+      fallback: canonical-source
+  realtime:
+    orders:
+      subscriptions:
+        - event: OrderPlaced
+      commands:
+        - { type: placeOrder, command: placeOrder }
+      transports: [websocket, sse]
+      resume: cursor
+      buffer: { maxMessages: 100, overflow: disconnect }
+  http:
+    operations:
+      - { id: listOrders, method: GET, path: /orders, entity: Order, action: list }
+      - { id: readOrder, method: GET, path: "/orders/{id}", entity: Order, action: read }
+      - { id: placeOrder, method: POST, path: /orders/place, command: placeOrder }

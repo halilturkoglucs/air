@@ -66,13 +66,17 @@ function wordAt(source: string, position: LspPosition): string {
 }
 
 export const AIR_COMPLETION_ITEMS = [
-  ["apiVersion", "AIR schema version, normally air.dev/v0.8"], ["kind", "AIR document kind: Application"],
+  ["apiVersion", "AIR schema version, normally air.dev/v0.9"], ["kind", "AIR document kind: Application"],
   ["metadata", "Application identity and release metadata"], ["spec", "Application semantics"],
   ["entities", "Persistent domain entities"], ["contracts", "Closed command input contracts"],
   ["principals", "Authenticated principal claim shapes"], ["commands", "Transactional domain commands"],
   ["http", "HTTP operation declarations"], ["authorization", "Principal authorization policy"],
   ["invariants", "Typed business invariants"], ["effects", "Named atomic effects"],
   ["collection", "Pagination, filtering, and ordering contract"],
+  ["events", "Versioned domain and integration events"], ["tasks", "Point-to-point asynchronous tasks"],
+  ["consumers", "Durable event and task consumers"], ["schedules", "UTC command schedules"],
+  ["cachedReads", "Derived reads with freshness and canonical fallback"],
+  ["realtime", "Authenticated WebSocket and SSE channels"],
 ].map(([label, documentation]) => ({ label: label!, kind: 10, documentation: documentation! }));
 
 const HOVER_DOCUMENTATION: Readonly<Record<string, string>> = Object.fromEntries(AIR_COMPLETION_ITEMS.map((item) => [item.label, item.documentation]));
