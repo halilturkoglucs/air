@@ -61,7 +61,7 @@ jobs:
         with:
           toolchain: 1.99.0
           components: rustfmt, clippy
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Install workspace
