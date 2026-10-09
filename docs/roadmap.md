@@ -115,7 +115,7 @@ Next: quick fixes, workspace references, and schema-aware rename.
 - add topology alternatives and autonomous non-semantic preferences
 - stabilize a third-party target SDK after an external adapter passes conformance
 
-## 7. Complex services — AIR CLI v0.10 complete
+## 7. Complex services — AIR v0.10 complete and distributed
 
 - closed Application v0.9, System v0.1, Deployment v0.1, and verification v0.2 schemas
 - standard envelopes, at-least-once delivery, transactional outbox, inbox deduplication, retries, and dead letters
@@ -126,15 +126,17 @@ Next: quick fixes, workspace references, and schema-aware rename.
 - process, Docker/Compose, Kubernetes/Helm, and Terraform Helm-release rendering
 - conservative Spring messaging, scheduling, and Integration Flow discovery
 - live provider checks and mixed-language complex-commerce gates in CI
+- coordinated v0.10.0 distribution through npm, GitHub Releases, and the project Homebrew tap
 
-Next: run external provider/deployer plugins through conformance and execute real-world complex-service pilots.
+External provider/deployer conformance and real-world complex-service pilots are deliberately deferred until the next roadmap review.
 
-## 8. Release and pilots — release-candidate automation complete
+## 8. Release and pilots — v0.10 distribution complete; pilots deferred
 
 - checksummed source artifacts gated by build, typecheck, and tests
 - tag/manual GitHub Actions packaging, dependency update automation, security and versioning policy
 - structured pilot protocol and issue template for greenfield, import, and partial-adoption trials
-- next: execute three independent pilots and decide the public package/repository distribution model
+- coordinated CLI and plugin-SDK npm publishing, checksummed GitHub Release assets, and Homebrew distribution
+- next, after a future roadmap review: execute three independent pilots and evaluate adoption evidence
 
 ## 9. AI-native authoring
 
