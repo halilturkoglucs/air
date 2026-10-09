@@ -2,6 +2,18 @@
 
 All notable changes are recorded here. AIR follows the pre-1.0 policy in `docs/versioning.md`.
 
+## 0.10.0 - 2026-10-09
+
+- Added AIR application documents at `air.dev/v0.9` with versioned events, durable tasks, consumers, UTC schedules, derived caches, and authenticated WebSocket/SSE channels.
+- Added provider-neutral message envelopes, transactional outbox production, durable inbox deduplication, at-least-once delivery semantics, dead letters, and reconnect journals.
+- Added `System` and `Deployment` documents for multi-application topology, explicit provider bindings, polyglot components, and PostgreSQL-backed durable sagas.
+- Added the public `@halilturkoglucs/air-plugin-sdk` plus first-party Kafka/Redpanda, RabbitMQ, PostgreSQL, and Redis bindings.
+- Added API, worker, scheduler, orchestrator, and realtime generation for Next.js, Rust/Axum, and Python/FastAPI.
+- Added native-process, Docker, Compose, Kubernetes/Helm, and Terraform deployment rendering.
+- Added `compose`, `dev`, `verify-system`, `provider-check`, and `import-spring` CLI workflows.
+- Added deterministic verification v0.2, mixed-language live conformance, failure injection, differential observations, and expanded evidence packs.
+- Preserved AIR v0.1-v0.8 compatibility and added behavior-preserving v0.8-to-v0.9 migration.
+
 ## 0.9.2 - 2026-10-07
 
 - Derived CLI help and `--version` output from the published package metadata.
