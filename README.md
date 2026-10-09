@@ -135,6 +135,18 @@ pnpm air verify-system examples/complex-commerce/system.air.yaml \
 pnpm air provider-check examples/complex-commerce/deployment.compose.yaml --live
 ```
 
+## Plugin SDK
+
+Provider and deployment integrations use the public, versioned SDK:
+
+```bash
+npm install @halilturkoglucs/air-plugin-sdk@0.10.0
+```
+
+Implement `AirProviderPlugin` for brokers, caches, or databases, or `AirDeployerPlugin` for deployment profiles. Export the implementation through an `AirPluginModule`, set `apiVersion` to `AIR_PLUGIN_API_VERSION`, and declare an immutable plugin `id` and `version`. Deployment documents must name the plugin explicitly and lock that version; AIR does not discover or execute arbitrary installed packages.
+
+Provider entry points include capability declaration, plan analysis, artifact rendering, optional local lifecycle and health checks, and an optional live-conformance adapter. Deployer entry points analyze and render a `DeploymentPlan` and may provide a local lifecycle. Use `assertPluginCompatibility` and `assertLockedPlugin` at the loading boundary. See [the target and plugin adapter guide](docs/target-adapters.md) and the [`@halilturkoglucs/air-plugin-sdk` package](packages/plugin-sdk/README.md).
+
 Import an existing PostgreSQL schema:
 
 ```bash
