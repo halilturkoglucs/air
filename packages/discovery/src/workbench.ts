@@ -43,7 +43,7 @@ export async function startWorkbench(directory: string, options: { readonly host
         response.writeHead(204); response.end(); return;
       }
       response.writeHead(404, { "content-type": "text/plain" }); response.end("Not found");
-    } catch (error) { response.writeHead(400, { "content-type": "text/plain" }); response.end(error instanceof Error ? error.message : String(error)); }
+    } catch { response.writeHead(400, { "content-type": "text/plain" }); response.end("The workbench request could not be processed."); }
   });
   await new Promise<void>((resolve, reject) => { server.once("error", reject); server.listen(options.port ?? 4319, host, () => resolve()); });
   const address = server.address();
