@@ -4,6 +4,7 @@ import { parse } from "yaml";
 import {
   AIR_SCHEMA_V0_4,
   SYSTEM_SCHEMA_V0_1,
+  SYSTEM_SCHEMA_V0_2,
   DEPLOYMENT_SCHEMA_V0_1,
   type AirSystemDocument,
   type AirDeploymentDocument,
@@ -22,6 +23,7 @@ export type DeploymentValidationResult =
 const ajv = new Ajv2020({ allErrors: true, strict: true });
 ajv.addSchema(AIR_SCHEMA_V0_4);
 const validateSystemSchema = ajv.compile<AirSystemDocument>(SYSTEM_SCHEMA_V0_1);
+const validateSystemSchemaV0_2 = ajv.compile<AirSystemDocument>(SYSTEM_SCHEMA_V0_2);
 const validateDeploymentSchema = ajv.compile<AirDeploymentDocument>(DEPLOYMENT_SCHEMA_V0_1);
 
 function schemaIssue(error: ErrorObject): ValidationIssue {
@@ -41,13 +43,15 @@ function semanticIssue(path: string, code: string, message: string): ValidationI
 }
 
 export function validateSystem(value: unknown): SystemValidationResult {
-  if (!validateSystemSchema(value)) return { valid: false, issues: (validateSystemSchema.errors ?? []).map(schemaIssue) };
+  const version = value && typeof value === "object" && "apiVersion" in value ? (value as { readonly apiVersion?: unknown }).apiVersion : undefined;
+  const validator = version === "air.dev/system/v0.2" ? validateSystemSchemaV0_2 : validateSystemSchema;
+  if (!validator(value)) return { valid: false, issues: (validator.errors ?? []).map(schemaIssue) };
   const issues: ValidationIssue[] = [];
   const applicationNames = new Set(Object.keys(value.spec.applications));
   const componentNames = new Set(Object.keys(value.spec.components));
   for (const [name, component] of Object.entries(value.spec.components)) {
     const path = `/spec/components/${name}`;
-    if (!applicationNames.has(component.application)) issues.push(semanticIssue(`${path}/application`, "system.unknown_application", `Application ${component.application} is not declared.`));
+    if (!("kind" in component && component.kind === "foreign") && !applicationNames.has(component.application)) issues.push(semanticIssue(`${path}/application`, "system.unknown_application", `Application ${component.application} is not declared.`));
     for (const [index, dependency] of (component.dependsOn ?? []).entries()) {
       if (!componentNames.has(dependency)) issues.push(semanticIssue(`${path}/dependsOn/${index}`, "system.unknown_component_dependency", `Component ${dependency} is not declared.`));
       if (dependency === name) issues.push(semanticIssue(`${path}/dependsOn/${index}`, "system.self_dependency", "A component cannot depend on itself."));
@@ -135,7 +139,7 @@ export async function loadAirSourceFile(filePath: string): Promise<AirSourceDocu
   const apiVersion = value !== null && typeof value === "object" && "apiVersion" in value
     ? (value as { readonly apiVersion?: unknown }).apiVersion
     : undefined;
-  if (apiVersion === "air.dev/system/v0.1") return parseSystem(source, filePath);
+  if (apiVersion === "air.dev/system/v0.1" || apiVersion === "air.dev/system/v0.2") return parseSystem(source, filePath);
   if (apiVersion === "air.dev/deployment/v0.1") return parseDeployment(source, filePath);
   return parseAir(source, filePath);
 }

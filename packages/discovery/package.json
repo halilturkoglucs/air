@@ -1,0 +1,23 @@
+{
+  "name": "@air/discovery",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --platform node --external node:sqlite --dts --clean",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@air/schema": "workspace:*",
+    "ajv": "^8.17.1",
+    "yaml": "^2.8.1"
+  }
+}

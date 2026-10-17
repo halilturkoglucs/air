@@ -6,7 +6,7 @@ Application semantics should outlive the framework, language, and deployment pla
 
 The durable artifacts are requirements, schemas, contracts, invariants, tests, performance goals, and architecture constraints. Generated TypeScript, Rust, Java, SQL, or machine code can be replaced when constraints change.
 
-## Intended pipeline
+## Greenfield pipeline
 
 ```text
 requirements or existing source
@@ -40,6 +40,29 @@ requirements or existing source
 
 LLMs may propose requirements, plans, mappings, implementations, or optimizations. Deterministic schemas, capability rules, builds, tests, and policies decide what the system accepts.
 
+## Modernization pipeline
+
+```text
+source + builds + tests + non-production traces
+                     |
+                     v
+        discovery graph (not authoritative)
+                     |
+                     v
+       human review + capability slicing
+                     |
+                     v
+          reviewed AIR + foreign ports
+                     |
+                     v
+       legacy/candidate differential evidence
+                     |
+                     v
+            evidence-bound adoption
+```
+
+AIR's enterprise promise is not whole-repository conversion. It is lower-risk archaeology and verified replacement at the business-capability boundary. A service can remain partly legacy for years: AIR-managed components and typed foreign components are peers in System v0.2.
+
 ## Design principles
 
 1. AIR describes meaning, never framework syntax.
@@ -50,6 +73,8 @@ LLMs may propose requirements, plans, mappings, implementations, or optimization
 6. Correctness and behavioral equivalence gate optimization.
 7. Optimization follows measured bottlenecks rather than language ideology.
 8. Mature dependencies remain preferred until replacement has measured value.
+9. Discovery evidence and authoritative semantics are separate representations.
+10. No unsupported or unexplained side effect is silently promoted into AIR.
 
 ## What AIR is not
 
@@ -63,6 +88,8 @@ AIR is not a new web framework, a prompt that emits a repository, an AST for Nex
 - cross-target contract equivalence
 - regeneration stability after small AIR changes
 - application semantics preserved when changing targets
+- archaeology time saved and unexplained observable behavior reduced
+- reviewed capability equivalence across HTTP, state, messages, and outbound calls
 - latency, throughput, memory, startup, binary-size, and cost measurements
 
 Lines of generated code are not a success measure.

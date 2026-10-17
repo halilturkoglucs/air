@@ -108,6 +108,31 @@ export function validateNextjsTarget(
   const operationRoutes = new Map<string, { owner: string; methods: Set<string> }>();
   const tableOwners = new Map<string, string>();
 
+  if (Object.keys(air.spec.ports ?? {}).length > 0) {
+    diagnostics.push(diagnostic(
+      "NEXTJS_OUTBOUND_PORTS_UNSUPPORTED",
+      "The Next.js target cannot lower AIR outbound ports yet.",
+      "/spec/ports",
+      "Keep the port behind a foreign component or select a target with outbound-port support.",
+    ));
+  }
+  if (Object.keys(air.spec.transformations ?? {}).length > 0) {
+    diagnostics.push(diagnostic(
+      "NEXTJS_TRANSFORMATIONS_UNSUPPORTED",
+      "The Next.js target cannot lower AIR transformations yet.",
+      "/spec/transformations",
+    ));
+  }
+  for (const [commandName, command] of Object.entries(air.spec.commands ?? {})) {
+    if ((command.invocations?.length ?? 0) > 0) {
+      diagnostics.push(diagnostic(
+        "NEXTJS_PORT_INVOCATIONS_UNSUPPORTED",
+        `Command ${commandName} invokes an outbound port, which the Next.js target cannot lower yet.`,
+        `/spec/commands/${commandName}/invocations`,
+      ));
+    }
+  }
+
   for (const [entityName, entity] of Object.entries(air.spec.entities)) {
     const entityPath = `/spec/entities/${entityName}`;
     const table = entityNames(entityName).table;

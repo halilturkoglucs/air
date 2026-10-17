@@ -17,6 +17,9 @@ importers:
       '@air/composer':
         specifier: workspace:*
         version: link:packages/composer
+      '@air/discovery':
+        specifier: workspace:*
+        version: link:packages/discovery
       '@air/import-nextjs':
         specifier: workspace:*
         version: link:packages/import-nextjs
@@ -110,6 +113,9 @@ importers:
       '@air/composer':
         specifier: workspace:*
         version: link:../composer
+      '@air/discovery':
+        specifier: workspace:*
+        version: link:../discovery
       '@air/import-nextjs':
         specifier: workspace:*
         version: link:../import-nextjs
@@ -177,6 +183,18 @@ importers:
       tsup:
         specifier: ^8.5.0
         version: 8.5.1(postcss@8.5.28)(typescript@5.9.3)(yaml@2.9.1)
+
+  packages/discovery:
+    dependencies:
+      '@air/schema':
+        specifier: workspace:*
+        version: link:../air-schema
+      ajv:
+        specifier: ^8.17.1
+        version: 8.20.0
+      yaml:
+        specifier: ^2.8.1
+        version: 2.9.1
 
   packages/import-nextjs:
     dependencies:

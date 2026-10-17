@@ -1,24 +1,24 @@
 # AIR schemas
 
-The public application schemas are [`air-0.1.schema.json`](../packages/air-schema/schema/air-0.1.schema.json) through [`air-0.9.schema.json`](../packages/air-schema/schema/air-0.9.schema.json). System and Deployment documents have separate v0.1 schemas. AIR YAML is a human-friendly serialization of these JSON data models.
+The public application schemas are [`air-0.1.schema.json`](../packages/air-schema/schema/air-0.1.schema.json) through [`air-0.10.schema.json`](../packages/air-schema/schema/air-0.10.schema.json). System documents support v0.1 and v0.2; Deployment remains v0.1. AIR YAML is a human-friendly serialization of these JSON data models.
 
 ## Versioning
 
 Every document declares:
 
 ```yaml
-apiVersion: air.dev/v0.9
+apiVersion: air.dev/v0.10
 kind: Application
 ```
 
 Breaking semantic or structural changes require a new `apiVersion`. Parsers must reject unknown versions rather than guessing. Package versions and AIR schema versions are related but independent.
 
-The parser accepts v0.1 through v0.9. New documents should use v0.9. `air migrate` upgrades older applications without inventing asynchronous behavior; the v0.9 sections remain absent until explicitly authored.
+The parser accepts v0.1 through v0.10. New documents should use v0.10. `air migrate` upgrades older applications without inventing asynchronous, outbound, or transformation behavior; new sections remain absent until explicitly authored.
 
 ## Top-level model
 
 ```yaml
-apiVersion: air.dev/v0.9
+apiVersion: air.dev/v0.10
 kind: Application
 metadata:
   name: example
@@ -38,9 +38,17 @@ Every transported message uses the same envelope: `id`, `type`, `schemaVersion`,
 
 Cached reads are derived from a declared canonical HTTP read. They specify TTL, maximum staleness, invalidating events, and `canonical-source` fallback. Cache data is never authoritative. Realtime channels declare subscriptions, client-command mappings, WebSocket/SSE transports, cursor resume, and bounded overflow behavior.
 
+## Outbound ports and transformations in v0.10
+
+Outbound ports describe durable application expectations, not a vendor URL or SDK. Each operation names input/output contracts, typed failures, timeout/retry defaults, and its idempotency contract. Commands may order invocations and map operation failures to declared command errors.
+
+Transformations are intentionally bounded to projection, rename, literals, scalar conversion, enum mapping, defaults, and conditionals. Semantic validation resolves input/output contracts and invocation compatibility. Database lookups, network calls, reflection, arbitrary expressions, and scripts are not transformations; discovery retains them as opaque or foreign operations until explicitly modeled.
+
 ## System and Deployment documents
 
 `air.dev/system/v0.1` joins multiple applications into named API, worker, scheduler, realtime, and orchestrator components. Logical channels connect event/task sources to consumers. Durable saga definitions support invoke, publish, wait, and delay steps with timeouts, retries, compensation, correlation, and terminal outcomes.
+
+`air.dev/system/v0.2` additionally permits typed foreign components beside managed components. A foreign component declares its coarse type and interfaces, but AIR does not claim ownership of its implementation.
 
 `air.dev/deployment/v0.1` binds those logical resources to explicit providers and a deployment profile. Provider configuration stays out of application semantics. Plugins are named and version-locked; AIR never scans arbitrary installed packages. Supported first-party bindings are Kafka-compatible brokers (including Redpanda), RabbitMQ, PostgreSQL outbox/inbox queues, PostgreSQL persistence, and Redis derived caches.
 

@@ -5,7 +5,9 @@
 
 AIR is an experimental, language-neutral Application Intermediate Representation. Application semantics are the source of truth; Next.js, Rust, databases, and deployment platforms are replaceable compilation targets.
 
-AIR CLI v0.10 accepts application documents from v0.1 through v0.9 and adds provider-neutral system and deployment documents:
+For existing enterprise systems, AIR does **not** promise one-click repository-to-YAML conversion. It builds an evidence-backed architecture map, then helps teams review, verify, and replace one business capability at a time. Architecture inventory is the entry point; verified modernization is the outcome.
+
+AIR CLI v0.10 accepts application documents from v0.1 through v0.9. The current v0.11 development line additionally accepts Application v0.10 and System v0.2 for reviewed modernization boundaries:
 
 - entities, relationships, CRUD HTTP operations, contracts, principals, and declared errors
 - transactional create/update/delete commands, guards, preconditions, ownership, role/scope policies, and invariant expressions
@@ -24,6 +26,9 @@ AIR CLI v0.10 accepts application documents from v0.1 through v0.9 and adds prov
 - multi-application topology, durable saga definitions, and deterministic system verification with virtual brokers, caches, clocks, schedulers, and realtime sessions
 - explicit, version-locked Kafka/Redpanda, RabbitMQ, PostgreSQL outbox, and Redis plugins through the public plugin SDK
 - process, Docker Compose, Kubernetes/Helm, and Terraform-to-existing-Kubernetes deployment rendering
+- local/self-hosted discovery v0.1 bundles with stable IDs, source hashes, confidence, reviewer decisions, coverage, and a rebuildable SQLite workbench index
+- pinned OpenRewrite Java/Spring analysis, redacted runtime evidence ingestion, capability slicing, legacy/candidate verification v0.3, and evidence-bound adoption
+- typed outbound ports, operation failures, bounded transformations, and foreign components that may remain outside AIR ownership
 
 ## Quick start
 
@@ -133,6 +138,20 @@ pnpm air verify-system examples/complex-commerce/system.air.yaml \
   --scenarios examples/complex-commerce/verification.yaml \
   --output complex-system-evidence.json
 pnpm air provider-check examples/complex-commerce/deployment.compose.yaml --live
+
+# Discover first; nothing found here becomes authoritative AIR automatically:
+# Deep Spring discovery requires Java 17+; v0.11 packages will include the pinned analyzer JAR.
+pnpm air discover spring ../legacy-orders \
+  --output .air/discovery \
+  --analyzer auto
+pnpm air evidence ingest ./staging-otlp.json --discovery .air/discovery
+pnpm air workbench .air/discovery
+pnpm air extract .air/discovery \
+  --capability endpoint:reviewed-id \
+  --output capabilities/place-order
+pnpm air verify-import capabilities/place-order \
+  --legacy http://127.0.0.1:8080 \
+  --candidate http://127.0.0.1:3000
 ```
 
 ## Plugin SDK
@@ -154,19 +173,22 @@ pnpm air import-postgres \
   --url postgres://postgres:postgres@127.0.0.1:5432/app \
   --schema public \
   --name imported-app \
-  --output imported.air.yaml
+  --output imported.air.yaml \
+  --discovery .air/discovery
 
 pnpm air validate imported.air.yaml
 
 pnpm air import-openapi \
   --input openapi.yaml \
   --name imported-api \
-  --output imported-api.air.yaml
+  --output imported-api.air.yaml \
+  --discovery .air/discovery
 
 pnpm air import-nextjs \
   --input existing-next-app \
   --output imported-next.air.yaml \
-  --report imported-next.report.json
+  --report imported-next.report.json \
+  --discovery .air/discovery
 
 pnpm air import-spring \
   --input existing-spring-service \
@@ -180,7 +202,7 @@ pnpm air plan-migration before.air.yaml after.air.yaml --output migration-plan.j
 pnpm air lsp
 ```
 
-The PostgreSQL importer reads catalog metadata only. Reverse importers preserve provenance and confidence; unsupported types, defaults, nested schemas, and command-like routes produce diagnostics that must be reviewed rather than invented semantics.
+The PostgreSQL importer reads catalog metadata only. Legacy `import-*` commands remain compatible and produce review candidates. Enterprise imports should use the discovery workflow: findings remain separate from AIR, preserve provenance and confidence, and cannot be adopted while important side effects are unresolved. See [enterprise discovery and modernization](docs/enterprise-modernization.md).
 
 ## Workspace
 
@@ -190,6 +212,7 @@ The PostgreSQL importer reads catalog metadata only. Reverse importers preserve 
 - `packages/verifier` — canonical execution plus normalized live-target response/state comparison
 - `packages/plugin-sdk` — public, versioned provider and deployer plugin interfaces
 - `packages/providers` — first-party Kafka/Redpanda, RabbitMQ, PostgreSQL outbox, and Redis bindings
+- `packages/discovery` — discovery v0.1 graph, Spring analysis, evidence ingestion, workbench, extraction, differential verification, and adoption
 - `packages/composer` — System/Deployment planning and process, Compose, Kubernetes/Helm, and Terraform rendering
 - `packages/target-nextjs` — Next.js App Router, Drizzle, PostgreSQL, JWT boundary, and web console
 - `packages/target-rust` — experimental Axum, SQLx, PostgreSQL, JWT boundary, and container output
@@ -227,7 +250,7 @@ Managed regeneration may replace owned files and refuses to overwrite unowned fi
 - CI automation: [the conformance workflow](.github/workflows/conformance.yml) builds all targets, runs three-way differential verification plus replay/conflict benchmarks, verifies mixed-language generation and live providers, then uploads checksum-verified evidence packs
 - release operations: gated, checksummed release-candidate archives, dependency automation, version/security policy, and a structured three-path pilot protocol
 
-See [the architecture](docs/architecture.md), [AIR schema guide](docs/air-schema.md), [verification model](docs/verification.md), [editor integration](docs/editor.md), [benchmarking methodology](docs/benchmarking.md), [pilot protocol](docs/pilots.md), [versioning policy](docs/versioning.md), and [product roadmap](docs/roadmap.md).
+See [the architecture](docs/architecture.md), [enterprise discovery and modernization](docs/enterprise-modernization.md), [AIR schema guide](docs/air-schema.md), [verification model](docs/verification.md), [editor integration](docs/editor.md), [benchmarking methodology](docs/benchmarking.md), [pilot protocol](docs/pilots.md), [versioning policy](docs/versioning.md), and [product roadmap](docs/roadmap.md).
 
 ## License and commercial use
 

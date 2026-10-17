@@ -28,6 +28,7 @@
   },
   "files": [
     "dist",
+    "analyzers",
     "README.md",
     "LICENSE",
     "NOTICE"
@@ -67,6 +68,7 @@
     "@air/language-server": "workspace:*",
     "@air/parser": "workspace:*",
     "@air/providers": "workspace:*",
+    "@air/discovery": "workspace:*",
     "@air/schema": "workspace:*",
     "@air/target-nextjs": "workspace:*",
     "@air/target-rust": "workspace:*",

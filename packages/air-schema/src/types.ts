@@ -7,9 +7,11 @@ export const AIR_API_VERSION_V0_6 = "air.dev/v0.6" as const;
 export const AIR_API_VERSION_V0_7 = "air.dev/v0.7" as const;
 export const AIR_API_VERSION_V0_8 = "air.dev/v0.8" as const;
 export const AIR_API_VERSION_V0_9 = "air.dev/v0.9" as const;
-export const AIR_API_VERSION = AIR_API_VERSION_V0_9;
+export const AIR_API_VERSION_V0_10 = "air.dev/v0.10" as const;
+export const AIR_API_VERSION = AIR_API_VERSION_V0_10;
 export const AIR_KIND = "Application" as const;
 export const SYSTEM_API_VERSION = "air.dev/system/v0.1" as const;
+export const SYSTEM_API_VERSION_V0_2 = "air.dev/system/v0.2" as const;
 export const SYSTEM_KIND = "System" as const;
 export const DEPLOYMENT_API_VERSION = "air.dev/deployment/v0.1" as const;
 export const DEPLOYMENT_KIND = "Deployment" as const;
@@ -23,7 +25,8 @@ export type AirApiVersion =
   | typeof AIR_API_VERSION_V0_6
   | typeof AIR_API_VERSION_V0_7
   | typeof AIR_API_VERSION_V0_8
-  | typeof AIR_API_VERSION_V0_9;
+  | typeof AIR_API_VERSION_V0_9
+  | typeof AIR_API_VERSION_V0_10;
 export type AirKind = typeof AIR_KIND;
 
 export type PrimitiveType =
@@ -379,7 +382,39 @@ export interface CommandDefinition {
   readonly idempotency?: CommandIdempotencyDefinition;
   readonly emits?: readonly MessageEmissionDefinition[];
   readonly enqueues?: readonly TaskEnqueueDefinition[];
+  readonly invocations?: readonly PortInvocationDefinition[];
   readonly effect: CommandEffect;
+}
+
+export interface PortFailureDefinition { readonly retryable: boolean; readonly description?: string }
+export interface PortOperationDefinition {
+  readonly input: string;
+  readonly output: string;
+  readonly failures: Readonly<Record<string, PortFailureDefinition>>;
+  readonly timeoutMs?: number;
+  readonly retry?: { readonly maxAttempts: number; readonly backoff?: "fixed" | "exponential"; readonly backoffMs?: number };
+  readonly idempotency?: "none" | "caller-key" | "operation-key";
+}
+export interface OutboundPortDefinition { readonly description?: string; readonly operations: Readonly<Record<string, PortOperationDefinition>> }
+export type TransformationStep =
+  | { readonly kind: "project"; readonly fields: readonly string[] }
+  | { readonly kind: "rename"; readonly from: string; readonly to: string }
+  | { readonly kind: "literal"; readonly field: string; readonly value: ConstraintValue }
+  | { readonly kind: "convert"; readonly field: string; readonly to: PrimitiveType }
+  | { readonly kind: "enum"; readonly field: string; readonly values: Readonly<Record<string, ConstraintValue>> }
+  | { readonly kind: "default"; readonly field: string; readonly value: ConstraintValue }
+  | { readonly kind: "conditional"; readonly field: string; readonly equals: ConstraintValue; readonly then: ConstraintValue; readonly otherwise: ConstraintValue };
+export interface TransformationDefinition { readonly input: string; readonly output: string; readonly steps: readonly TransformationStep[] }
+export interface PortInvocationDefinition {
+  readonly id: string;
+  readonly port: string;
+  readonly operation: string;
+  readonly order: number;
+  readonly input: { readonly from: "input" | "record" | "principal"; readonly transformation?: string };
+  readonly timeoutMs?: number;
+  readonly retry?: { readonly maxAttempts: number; readonly backoff?: "fixed" | "exponential"; readonly backoffMs?: number };
+  readonly idempotencyKey?: string;
+  readonly errorMapping: Readonly<Record<string, string>>;
 }
 
 export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
@@ -458,6 +493,8 @@ export interface ApplicationSpec {
   readonly schedules?: Readonly<Record<string, ScheduleDefinition>>;
   readonly cachedReads?: Readonly<Record<string, CachedReadDefinition>>;
   readonly realtime?: Readonly<Record<string, RealtimeChannelDefinition>>;
+  readonly ports?: Readonly<Record<string, OutboundPortDefinition>>;
+  readonly transformations?: Readonly<Record<string, TransformationDefinition>>;
 }
 
 export interface AirDocument {
@@ -476,6 +513,7 @@ export type AirDocumentV0_6 = AirDocument & { readonly apiVersion: typeof AIR_AP
 export type AirDocumentV0_7 = AirDocument & { readonly apiVersion: typeof AIR_API_VERSION_V0_7 };
 export type AirDocumentV0_8 = AirDocument & { readonly apiVersion: typeof AIR_API_VERSION_V0_8 };
 export type AirDocumentV0_9 = AirDocument & { readonly apiVersion: typeof AIR_API_VERSION_V0_9 };
+export type AirDocumentV0_10 = AirDocument & { readonly apiVersion: typeof AIR_API_VERSION_V0_10 };
 
 export interface MessageEnvelope<TPayload = Readonly<Record<string, unknown>>> {
   readonly id: string;
@@ -499,6 +537,15 @@ export interface SystemComponentDefinition {
   readonly target: ComponentTarget;
   readonly dependsOn?: readonly string[];
 }
+export interface ManagedSystemComponentDefinition extends SystemComponentDefinition { readonly kind: "managed" }
+export interface ForeignSystemComponentDefinition {
+  readonly kind: "foreign";
+  readonly componentType: "service" | "library" | "database" | "broker" | "vendor";
+  readonly interfaces: readonly string[];
+  readonly description?: string;
+  readonly dependsOn?: readonly string[];
+}
+export type SystemComponentV0_2Definition = ManagedSystemComponentDefinition | ForeignSystemComponentDefinition;
 export interface SystemChannelDefinition {
   readonly kind: "event" | "task";
   readonly source: string;
@@ -517,12 +564,12 @@ export interface SagaDefinition {
   readonly steps: readonly SagaStepDefinition[];
 }
 export interface AirSystemDocument {
-  readonly apiVersion: typeof SYSTEM_API_VERSION;
+  readonly apiVersion: typeof SYSTEM_API_VERSION | typeof SYSTEM_API_VERSION_V0_2;
   readonly kind: typeof SYSTEM_KIND;
   readonly metadata: ApplicationMetadata;
   readonly spec: {
     readonly applications: Readonly<Record<string, SystemApplicationReference>>;
-    readonly components: Readonly<Record<string, SystemComponentDefinition>>;
+    readonly components: Readonly<Record<string, SystemComponentDefinition | SystemComponentV0_2Definition>>;
     readonly channels?: Readonly<Record<string, SystemChannelDefinition>>;
     readonly sagas?: Readonly<Record<string, SagaDefinition>>;
   };

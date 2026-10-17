@@ -145,7 +145,10 @@ class VirtualSystem {
   private consumersFor(envelope: MessageEnvelope): { application: string; name: string }[] {
     const [sourceApplication, sourceName] = envelope.type.split(".");
     const matches: { application: string; name: string }[] = [];
-    const routedApplications = new Set(Object.values(this.system.spec.channels ?? {}).filter((channel) => channel.source === envelope.type).flatMap((channel) => channel.consumers.map((component) => this.system.spec.components[component]?.application).filter((name): name is string => Boolean(name))));
+    const routedApplications = new Set(Object.values(this.system.spec.channels ?? {}).filter((channel) => channel.source === envelope.type).flatMap((channel) => channel.consumers.flatMap((component) => {
+      const definition = this.system.spec.components[component];
+      return definition && !("kind" in definition && definition.kind === "foreign") ? [definition.application] : [];
+    })));
     for (const [application, air] of Object.entries(this.applications)) for (const [name, consumer] of Object.entries(air.spec.consumers ?? {})) {
       if (("event" in consumer.source && consumer.source.event === `${sourceApplication}.${sourceName}`) || ("event" in consumer.source && (sourceApplication === application || routedApplications.has(application)) && consumer.source.event === sourceName) || ("task" in consumer.source && consumer.source.task === `${sourceApplication}.${sourceName}`) || ("task" in consumer.source && (sourceApplication === application || routedApplications.has(application)) && consumer.source.task === sourceName)) matches.push({ application, name });
     }

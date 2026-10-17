@@ -2,6 +2,14 @@
 
 All notable changes are recorded here. AIR follows the pre-1.0 policy in `docs/versioning.md`.
 
+## Unreleased — enterprise discovery
+
+- Added discovery v0.1 bundles with stable provenance, confidence, coverage, incremental review decisions, and a rebuildable local SQLite index.
+- Added a pinned OpenRewrite Java/Spring analyzer, conservative source fallback, runtime evidence ingestion with default redaction, and a local architecture workbench.
+- Added Application v0.10 outbound ports/failures/transformations and System v0.2 foreign components.
+- Added `discover`, `evidence ingest`, `workbench`, `extract`, `verify-import`, and capability adoption workflows.
+- Added privacy-safe verification v0.3 legacy/candidate observations, evidence-bound adoption gates, and extraction blockers for unexplained observable side effects.
+
 ## 0.10.0 - 2026-10-09
 
 - Added AIR application documents at `air.dev/v0.9` with versioned events, durable tasks, consumers, UTC schedules, derived caches, and authenticated WebSocket/SSE channels.

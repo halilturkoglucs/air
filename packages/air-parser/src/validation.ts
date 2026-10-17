@@ -9,6 +9,7 @@ import {
   AIR_SCHEMA_V0_7,
   AIR_SCHEMA_V0_8,
   AIR_SCHEMA_V0_9,
+  AIR_SCHEMA_V0_10,
   AIR_API_VERSION_V0_1,
   AIR_API_VERSION_V0_2,
   AIR_API_VERSION_V0_3,
@@ -18,6 +19,7 @@ import {
   AIR_API_VERSION_V0_7,
   AIR_API_VERSION_V0_8,
   AIR_API_VERSION_V0_9,
+  AIR_API_VERSION_V0_10,
   type AirDocument,
   type ConstraintValue,
   type ContractFieldDefinition,
@@ -52,6 +54,7 @@ const validateSchemaV0_6 = ajv.compile<AirDocument>(AIR_SCHEMA_V0_6);
 const validateSchemaV0_7 = ajv.compile<AirDocument>(AIR_SCHEMA_V0_7);
 const validateSchemaV0_8 = ajv.compile<AirDocument>(AIR_SCHEMA_V0_8);
 const validateSchemaV0_9 = ajv.compile<AirDocument>(AIR_SCHEMA_V0_9);
+const validateSchemaV0_10 = ajv.compile<AirDocument>(AIR_SCHEMA_V0_10);
 
 function schemaIssue(error: ErrorObject): ValidationIssue {
   const property =
@@ -174,7 +177,8 @@ function validateSemantics(document: AirDocument): ValidationIssue[] {
     document.apiVersion === AIR_API_VERSION_V0_6 ||
     document.apiVersion === AIR_API_VERSION_V0_7 ||
     document.apiVersion === AIR_API_VERSION_V0_8 ||
-    document.apiVersion === AIR_API_VERSION_V0_9;
+    document.apiVersion === AIR_API_VERSION_V0_9 ||
+    document.apiVersion === AIR_API_VERSION_V0_10;
 
   for (const [entityName, entity] of Object.entries(document.spec.entities)) {
     if (explicitDataSemantics) {
@@ -383,7 +387,8 @@ function validateSemantics(document: AirDocument): ValidationIssue[] {
     document.apiVersion === AIR_API_VERSION_V0_6 ||
     document.apiVersion === AIR_API_VERSION_V0_7 ||
     document.apiVersion === AIR_API_VERSION_V0_8 ||
-    document.apiVersion === AIR_API_VERSION_V0_9
+    document.apiVersion === AIR_API_VERSION_V0_9 ||
+    document.apiVersion === AIR_API_VERSION_V0_10
   ) {
     const contracts = document.spec.contracts ?? {};
     const principals = document.spec.principals ?? {};
@@ -1470,7 +1475,7 @@ function validateSemantics(document: AirDocument): ValidationIssue[] {
     }
   }
 
-  if (document.apiVersion === AIR_API_VERSION_V0_9) {
+  if (document.apiVersion === AIR_API_VERSION_V0_9 || document.apiVersion === AIR_API_VERSION_V0_10) {
     const contracts = document.spec.contracts ?? {};
     const principals = document.spec.principals ?? {};
     const commands = document.spec.commands ?? {};
@@ -1657,6 +1662,115 @@ function validateSemantics(document: AirDocument): ValidationIssue[] {
     }
   }
 
+  if (document.apiVersion === AIR_API_VERSION_V0_10) {
+    const contracts = document.spec.contracts ?? {};
+    const principals = document.spec.principals ?? {};
+    const ports = document.spec.ports ?? {};
+    const transformations = document.spec.transformations ?? {};
+    const commands = document.spec.commands ?? {};
+    const resolveShape = (name: string, path: string): { readonly fields: Readonly<Record<string, FieldDefinition | ContractFieldDefinition>> } | undefined => {
+      const matches = [contracts[name], principals[name], document.spec.entities[name]].filter((value): value is NonNullable<typeof value> => value !== undefined);
+      if (matches.length === 0) issues.push(semanticIssue(path, "transformation.unknown_type", `Type ${name} is not declared as a contract, principal, or entity.`));
+      if (matches.length > 1) issues.push(semanticIssue(path, "transformation.ambiguous_type", `Type ${name} is ambiguous across contracts, principals, and entities.`));
+      return matches.length === 1 ? matches[0] : undefined;
+    };
+    for (const [portName, port] of Object.entries(ports)) {
+      for (const [operationName, operation] of Object.entries(port.operations)) {
+        const path = `/spec/ports/${portName}/operations/${operationName}`;
+        if (!contracts[operation.input]) issues.push(semanticIssue(`${path}/input`, "port.unknown_input_contract", `Contract ${operation.input} is not declared.`));
+        if (!contracts[operation.output]) issues.push(semanticIssue(`${path}/output`, "port.unknown_output_contract", `Contract ${operation.output} is not declared.`));
+      }
+    }
+    for (const [name, transformation] of Object.entries(transformations)) {
+      const path = `/spec/transformations/${name}`;
+      const input = resolveShape(transformation.input, `${path}/input`);
+      const output = resolveShape(transformation.output, `${path}/output`);
+      const current = new Map(Object.entries(input?.fields ?? {}).map(([field, definition]) => [field, definition.type]));
+      for (const [index, step] of transformation.steps.entries()) {
+        const stepPath = `${path}/steps/${index}`;
+        if (step.kind === "project") {
+          for (const field of step.fields) if (!current.has(field)) issues.push(semanticIssue(`${stepPath}/fields`, "transformation.unknown_current_field", `Field ${field} is not available at this transformation step.`));
+          const selected = new Map([...current].filter(([field]) => step.fields.includes(field)));
+          current.clear();
+          for (const [field, type] of selected) current.set(field, type);
+        }
+        if (step.kind === "rename") {
+          const type = current.get(step.from);
+          if (!type) issues.push(semanticIssue(`${stepPath}/from`, "transformation.unknown_current_field", `Field ${step.from} is not available at this transformation step.`));
+          if (current.has(step.to) && step.to !== step.from) issues.push(semanticIssue(`${stepPath}/to`, "transformation.rename_collision", `Field ${step.to} already exists.`));
+          if (type) { current.delete(step.from); current.set(step.to, type); }
+        }
+        if (step.kind === "literal" || step.kind === "default") {
+          const field = output?.fields[step.field];
+          if (!field) issues.push(semanticIssue(`${stepPath}/field`, "transformation.unknown_output_field", `${transformation.output}.${step.field} is not declared.`));
+          else if (!scalarValueMatchesField(field, step.value)) issues.push(semanticIssue(`${stepPath}/value`, "transformation.value_type", `Value must match output field type ${field.type}.`));
+          if (field) current.set(step.field, field.type);
+        }
+        if (step.kind === "convert") {
+          const sourceType = current.get(step.field);
+          const field = output?.fields[step.field];
+          if (!sourceType) issues.push(semanticIssue(`${stepPath}/field`, "transformation.unknown_current_field", `Field ${step.field} is not available at this transformation step.`));
+          if (sourceType === "json") issues.push(semanticIssue(`${stepPath}/field`, "transformation.json_conversion", "JSON values cannot be converted by the bounded scalar conversion step."));
+          if (!field) issues.push(semanticIssue(`${stepPath}/field`, "transformation.unknown_output_field", `${transformation.output}.${step.field} is not declared.`));
+          else if (field.type !== step.to) issues.push(semanticIssue(`${stepPath}/to`, "transformation.convert_output_type", `Conversion target ${step.to} does not match output field type ${field.type}.`));
+          current.set(step.field, step.to);
+        }
+        if (step.kind === "enum") {
+          const sourceType = current.get(step.field);
+          const field = output?.fields[step.field];
+          if (!sourceType) issues.push(semanticIssue(`${stepPath}/field`, "transformation.unknown_current_field", `Field ${step.field} is not available at this transformation step.`));
+          if (sourceType === "json") issues.push(semanticIssue(`${stepPath}/field`, "transformation.json_enum", "JSON values cannot be mapped by the bounded enum step."));
+          if (!field) issues.push(semanticIssue(`${stepPath}/field`, "transformation.unknown_output_field", `${transformation.output}.${step.field} is not declared.`));
+          else if (Object.values(step.values).some((value) => !scalarValueMatchesField(field, value))) issues.push(semanticIssue(`${stepPath}/values`, "transformation.enum_value_type", `Every mapped value must match output field type ${field.type}.`));
+          if (field) current.set(step.field, field.type);
+        }
+        if (step.kind === "conditional") {
+          const sourceField = input?.fields[step.field];
+          const field = output?.fields[step.field];
+          if (!current.has(step.field) || !sourceField) issues.push(semanticIssue(`${stepPath}/field`, "transformation.unknown_current_field", `Field ${step.field} is not available at this transformation step.`));
+          else if (!scalarValueMatchesField(sourceField, step.equals)) issues.push(semanticIssue(`${stepPath}/equals`, "transformation.condition_type", `Condition value must match input field type ${sourceField.type}.`));
+          if (!field) issues.push(semanticIssue(`${stepPath}/field`, "transformation.unknown_output_field", `${transformation.output}.${step.field} is not declared.`));
+          else if (!scalarValueMatchesField(field, step.then) || !scalarValueMatchesField(field, step.otherwise)) issues.push(semanticIssue(stepPath, "transformation.branch_type", `Both conditional branches must match output field type ${field.type}.`));
+          if (field) current.set(step.field, field.type);
+        }
+      }
+      if (output) {
+        for (const [fieldName, field] of Object.entries(output.fields)) {
+          const actual = current.get(fieldName);
+          if (!actual && field.required) issues.push(semanticIssue(`${path}/steps`, "transformation.missing_output_field", `Transformation does not produce required output field ${transformation.output}.${fieldName}.`));
+          else if (actual && actual !== field.type) issues.push(semanticIssue(`${path}/steps`, "transformation.output_type_mismatch", `Produced field ${fieldName} has type ${actual}, but ${transformation.output}.${fieldName} requires ${field.type}.`));
+        }
+        for (const fieldName of current.keys()) if (!output.fields[fieldName]) issues.push(semanticIssue(`${path}/steps`, "transformation.extra_output_field", `Transformation retains undeclared output field ${fieldName}; project it out explicitly.`));
+      }
+    }
+    for (const [commandName, command] of Object.entries(commands)) {
+      const orders = new Set<number>();
+      for (const [index, invocation] of (command.invocations ?? []).entries()) {
+        const path = `/spec/commands/${commandName}/invocations/${index}`;
+        const operation = ports[invocation.port]?.operations[invocation.operation];
+        if (!ports[invocation.port]) issues.push(semanticIssue(`${path}/port`, "invocation.unknown_port", `Port ${invocation.port} is not declared.`));
+        else if (!operation) issues.push(semanticIssue(`${path}/operation`, "invocation.unknown_operation", `Operation ${invocation.port}.${invocation.operation} is not declared.`));
+        if (orders.has(invocation.order)) issues.push(semanticIssue(`${path}/order`, "invocation.duplicate_order", `Invocation order ${invocation.order} is duplicated.`));
+        orders.add(invocation.order);
+        if (invocation.input.transformation && !transformations[invocation.input.transformation]) issues.push(semanticIssue(`${path}/input/transformation`, "invocation.unknown_transformation", `Transformation ${invocation.input.transformation} is not declared.`));
+        const transformation = invocation.input.transformation ? transformations[invocation.input.transformation] : undefined;
+        const sourceType = invocation.input.from === "input" ? command.input : invocation.input.from === "record" ? command.effect.entity : command.authorization?.principal;
+        if (!sourceType) issues.push(semanticIssue(`${path}/input/from`, "invocation.principal_requires_authorization", "Principal input requires command authorization with a declared principal."));
+        if (transformation && operation && transformation.output !== operation.input) issues.push(semanticIssue(`${path}/input/transformation`, "invocation.transformation_output_mismatch", `Transformation ${invocation.input.transformation} outputs ${transformation.output}, but ${invocation.port}.${invocation.operation} requires ${operation.input}.`));
+        if (transformation && sourceType && transformation.input !== sourceType) issues.push(semanticIssue(`${path}/input/transformation`, "invocation.transformation_input_mismatch", `Transformation ${invocation.input.transformation} expects ${transformation.input}, but ${invocation.input.from} provides ${sourceType}.`));
+        if (!transformation && operation && sourceType && sourceType !== operation.input) issues.push(semanticIssue(`${path}/input`, "invocation.input_type_mismatch", `${invocation.input.from} provides ${sourceType}, but ${invocation.port}.${invocation.operation} requires ${operation.input}; declare a transformation.`));
+        for (const [failure, error] of Object.entries(invocation.errorMapping)) {
+          if (operation && !operation.failures[failure]) issues.push(semanticIssue(`${path}/errorMapping/${failure}`, "invocation.unknown_failure", `Failure ${failure} is not declared by ${invocation.port}.${invocation.operation}.`));
+          if (!command.errors?.[error]) issues.push(semanticIssue(`${path}/errorMapping/${failure}`, "invocation.unknown_command_error", `Command error ${error} is not declared.`));
+        }
+        if (operation) for (const failure of Object.keys(operation.failures)) if (!invocation.errorMapping[failure]) issues.push(semanticIssue(`${path}/errorMapping`, "invocation.unmapped_failure", `Failure ${failure} must map to a command error.`));
+        if (invocation.timeoutMs === undefined && operation?.timeoutMs === undefined) issues.push(semanticIssue(`${path}/timeoutMs`, "invocation.timeout_required", "A port invocation must declare a timeout or inherit one from its operation."));
+        if (invocation.retry === undefined && operation?.retry === undefined) issues.push(semanticIssue(`${path}/retry`, "invocation.retry_required", "A port invocation must declare retry policy or inherit one from its operation."));
+        if (invocation.idempotencyKey === undefined && (operation?.idempotency === undefined || operation.idempotency === "none")) issues.push(semanticIssue(`${path}/idempotencyKey`, "invocation.idempotency_required", "A port invocation must declare an idempotency key or inherit a keyed operation policy."));
+      }
+    }
+  }
+
   return issues;
 }
 
@@ -1684,6 +1798,8 @@ export function validateAir(value: unknown): ValidationResult {
                     ? validateSchemaV0_8
                     : apiVersion === AIR_API_VERSION_V0_9
                       ? validateSchemaV0_9
+                      : apiVersion === AIR_API_VERSION_V0_10
+                        ? validateSchemaV0_10
                 : undefined;
 
   if (!validateSchema) {
@@ -1695,7 +1811,7 @@ export function validateAir(value: unknown): ValidationResult {
           instancePath: "/apiVersion",
           schemaPath: "#/properties/apiVersion",
           params: {},
-          message: "must be a supported AIR version (air.dev/v0.1 through air.dev/v0.9)",
+          message: "must be a supported AIR version (air.dev/v0.1 through air.dev/v0.10)",
         }),
       ],
     };

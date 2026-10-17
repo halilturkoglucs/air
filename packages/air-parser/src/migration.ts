@@ -9,6 +9,7 @@ import {
   AIR_API_VERSION_V0_7,
   AIR_API_VERSION_V0_8,
   AIR_API_VERSION_V0_9,
+  AIR_API_VERSION_V0_10,
   type AirDocument,
   type AirDocumentV0_2,
   type AirDocumentV0_3,
@@ -18,6 +19,7 @@ import {
   type AirDocumentV0_7,
   type AirDocumentV0_8,
   type AirDocumentV0_9,
+  type AirDocumentV0_10,
   type EntityDefinition,
 } from "@air/schema";
 import { validateAir } from "./validation.js";
@@ -69,7 +71,8 @@ export function migrateAirDocument(
     | typeof AIR_API_VERSION_V0_6
     | typeof AIR_API_VERSION_V0_7
     | typeof AIR_API_VERSION_V0_8
-    | typeof AIR_API_VERSION_V0_9 = AIR_API_VERSION_V0_9,
+    | typeof AIR_API_VERSION_V0_9
+    | typeof AIR_API_VERSION_V0_10 = AIR_API_VERSION_V0_10,
 ):
   | AirDocumentV0_2
   | AirDocumentV0_3
@@ -78,7 +81,8 @@ export function migrateAirDocument(
   | AirDocumentV0_6
   | AirDocumentV0_7
   | AirDocumentV0_8
-  | AirDocumentV0_9 {
+  | AirDocumentV0_9
+  | AirDocumentV0_10 {
   const versions = [
     AIR_API_VERSION_V0_1,
     AIR_API_VERSION_V0_2,
@@ -89,6 +93,7 @@ export function migrateAirDocument(
     AIR_API_VERSION_V0_7,
     AIR_API_VERSION_V0_8,
     AIR_API_VERSION_V0_9,
+    AIR_API_VERSION_V0_10,
   ] as const;
   const sourceIndex = versions.indexOf(document.apiVersion);
   const targetIndex = versions.indexOf(targetVersion);
@@ -109,7 +114,8 @@ export function migrateAirDocument(
       | AirDocumentV0_6
       | AirDocumentV0_7
       | AirDocumentV0_8
-      | AirDocumentV0_9;
+      | AirDocumentV0_9
+      | AirDocumentV0_10;
   }
 
   let entities = document.spec.entities;
@@ -140,7 +146,8 @@ export function migrateAirDocument(
     | AirDocumentV0_6
     | AirDocumentV0_7
     | AirDocumentV0_8
-    | AirDocumentV0_9;
+    | AirDocumentV0_9
+    | AirDocumentV0_10;
   const validation = validateAir(migrated);
   if (!validation.valid) {
     throw new AirMigrationError(

@@ -160,6 +160,8 @@ export function diffAirDocuments(before: AirDocument, after: AirDocument): AirSe
   compareNamedObjects("/spec/schedules", "schedule", before.spec.schedules ?? {}, after.spec.schedules ?? {}, changes);
   compareNamedObjects("/spec/cachedReads", "cached read", before.spec.cachedReads ?? {}, after.spec.cachedReads ?? {}, changes);
   compareNamedObjects("/spec/realtime", "realtime channel", before.spec.realtime ?? {}, after.spec.realtime ?? {}, changes);
+  compareNamedObjects("/spec/ports", "outbound port", before.spec.ports ?? {}, after.spec.ports ?? {}, changes);
+  compareNamedObjects("/spec/transformations", "transformation", before.spec.transformations ?? {}, after.spec.transformations ?? {}, changes);
   const beforeOperations = Object.fromEntries((before.spec.http?.operations ?? []).map((operation) => [operation.id, operation]));
   const afterOperations = Object.fromEntries((after.spec.http?.operations ?? []).map((operation) => [operation.id, operation]));
   compareNamedObjects("/spec/http/operations", "HTTP operation", beforeOperations, afterOperations, changes);
