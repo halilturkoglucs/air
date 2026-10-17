@@ -52,6 +52,12 @@ function diagnostic(code: string, message: string, airPath?: string, help?: stri
 
 export function validateRustTarget(context: CompilationContext<RustTargetOptions>): readonly CompilationDiagnostic[] {
   const diagnostics: CompilationDiagnostic[] = [];
+  if (Object.keys(context.air.spec.ports ?? {}).length > 0) {
+    diagnostics.push(diagnostic("RUST_OUTBOUND_PORTS_UNSUPPORTED", "The Rust target cannot lower AIR outbound ports yet.", "/spec/ports", "Keep the port behind a foreign component or select a target with outbound-port support."));
+  }
+  if (Object.keys(context.air.spec.transformations ?? {}).length > 0) {
+    diagnostics.push(diagnostic("RUST_TRANSFORMATIONS_UNSUPPORTED", "The Rust target cannot lower AIR transformations yet.", "/spec/transformations"));
+  }
   if (context.options.rustVersion && !/^\d+\.\d+(?:\.\d+)?$/.test(context.options.rustVersion)) {
     diagnostics.push(diagnostic("RUST_VERSION_INVALID", `Rust version ${context.options.rustVersion} must be an exact numeric toolchain version.`));
   }
@@ -73,6 +79,9 @@ export function validateRustTarget(context: CompilationContext<RustTargetOptions
     }
   }
   for (const [commandName, command] of Object.entries(context.air.spec.commands ?? {})) {
+    if ((command.invocations?.length ?? 0) > 0) {
+      diagnostics.push(diagnostic("RUST_PORT_INVOCATIONS_UNSUPPORTED", `Command ${commandName} invokes an outbound port, which the Rust target cannot lower yet.`, `/spec/commands/${commandName}/invocations`));
+    }
     if (Object.keys(command.effects ?? {}).length > 0 && command.effect.kind !== "create") {
       diagnostics.push(diagnostic("RUST_MULTI_EFFECT_PRIMARY_CREATE_REQUIRED", `Command ${commandName} must use a primary create effect after named updates.`, `/spec/commands/${commandName}/effect`));
     }

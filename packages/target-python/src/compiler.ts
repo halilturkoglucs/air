@@ -47,6 +47,12 @@ function diagnostic(code: string, message: string, airPath?: string, help?: stri
 
 export function validatePythonTarget(context: CompilationContext<PythonTargetOptions>): readonly CompilationDiagnostic[] {
   const diagnostics: CompilationDiagnostic[] = [];
+  if (Object.keys(context.air.spec.ports ?? {}).length > 0) {
+    diagnostics.push(diagnostic("PYTHON_OUTBOUND_PORTS_UNSUPPORTED", "The Python target cannot lower AIR outbound ports yet.", "/spec/ports", "Keep the port behind a foreign component or select a target with outbound-port support."));
+  }
+  if (Object.keys(context.air.spec.transformations ?? {}).length > 0) {
+    diagnostics.push(diagnostic("PYTHON_TRANSFORMATIONS_UNSUPPORTED", "The Python target cannot lower AIR transformations yet.", "/spec/transformations"));
+  }
   if (context.options.pythonVersion && !/^3\.\d+(?:\.\d+)?$/.test(context.options.pythonVersion)) {
     diagnostics.push(diagnostic("PYTHON_VERSION_INVALID", `Python version ${context.options.pythonVersion} must be an exact Python 3 version.`));
   }
@@ -64,6 +70,9 @@ export function validatePythonTarget(context: CompilationContext<PythonTargetOpt
     }
   }
   for (const [commandName, command] of Object.entries(context.air.spec.commands ?? {})) {
+    if ((command.invocations?.length ?? 0) > 0) {
+      diagnostics.push(diagnostic("PYTHON_PORT_INVOCATIONS_UNSUPPORTED", `Command ${commandName} invokes an outbound port, which the Python target cannot lower yet.`, `/spec/commands/${commandName}/invocations`));
+    }
     if (Object.keys(command.effects ?? {}).length > 0 && command.effect.kind !== "create") {
       diagnostics.push(diagnostic("PYTHON_MULTI_EFFECT_PRIMARY_CREATE_REQUIRED", `Command ${commandName} must use a primary create effect after named updates.`, `/spec/commands/${commandName}/effect`));
     }

@@ -42,6 +42,7 @@ function compositionDiagnostics(bundle: CompositionBundle): PluginDiagnostic[] {
     if (!exists) diagnostics.push({ severity: "error", code: "SYSTEM_UNKNOWN_MESSAGE", message: `${channel.kind} source ${channel.source} is not declared by its application.`, path: `/spec/channels/${channelName}/source` });
     for (const consumerName of channel.consumers) {
       const consumer = system.spec.components[consumerName];
+      if (consumer && "kind" in consumer && consumer.kind === "foreign") continue;
       if (consumer && consumer.role !== "worker" && consumer.role !== "orchestrator" && consumer.role !== "realtime") diagnostics.push({ severity: "error", code: "SYSTEM_CHANNEL_CONSUMER_ROLE", message: `Component ${consumerName} cannot consume ${channelName} with role ${consumer.role}.`, path: `/spec/channels/${channelName}/consumers` });
     }
     const resourceName = deployment.spec.bindings[channelName];
@@ -242,10 +243,10 @@ export function planComposition(bundle: CompositionBundle): CompositionPlan {
   const deploymentPlan: DeploymentPlan = {
     name: bundle.system.metadata.name,
     profile: bundle.deployment.spec.profile,
-    components: Object.entries(bundle.system.spec.components).map(([name, component]) => ({
+    components: Object.entries(bundle.system.spec.components).filter(([, component]) => !("kind" in component && component.kind === "foreign")).map(([name, component]) => ({
       name,
-      role: component.role,
-      target: component.target,
+      role: "role" in component ? component.role : "api",
+      target: "target" in component ? component.target : "nextjs",
       replicas: bundle.deployment.spec.components?.[name]?.replicas ?? 1,
     })).sort((left, right) => left.name.localeCompare(right.name)),
     resources: providers,

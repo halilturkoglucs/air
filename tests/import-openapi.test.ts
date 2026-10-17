@@ -57,7 +57,7 @@ describe("OpenAPI importer", () => {
     const result = importOpenApiSource(source, { applicationName: "pets" });
 
     expect(validateAir(result.air).valid).toBe(true);
-    expect(result.air.apiVersion).toBe("air.dev/v0.9");
+    expect(result.air.apiVersion).toBe("air.dev/v0.10");
     expect(result.air.spec.entities.Pet?.fields).toMatchObject({
       id: { type: "uuid", primaryKey: true },
       name: { type: "string", validation: { minLength: 1, maxLength: 100 } },
@@ -75,15 +75,17 @@ describe("OpenAPI importer", () => {
     const directory = await mkdtemp(resolve(tmpdir(), "air-openapi-"));
     const input = resolve(directory, "openapi.yaml");
     const output = resolve(directory, "air.yaml");
+    const discovery = resolve(directory, "discovery");
     await writeFile(input, source, "utf8");
     let stdout = "";
     let stderr = "";
     const io: CliIo = { stdout: (message) => { stdout += message; }, stderr: (message) => { stderr += message; } };
 
-    expect(await runCli(["import-openapi", "--input", input, "--output", output, "--name", "pets"], io)).toBe(0);
+    expect(await runCli(["import-openapi", "--input", input, "--output", output, "--name", "pets", "--discovery", discovery], io)).toBe(0);
     expect(stdout).toContain("Imported OpenAPI");
     expect(stderr).toContain("OPENAPI_SECURITY_REQUIRES_POLICY_REVIEW");
     expect((await loadAirFile(output)).metadata.name).toBe("pets");
-    expect(await readFile(output, "utf8")).toContain("apiVersion: air.dev/v0.9");
+    expect(await readFile(output, "utf8")).toContain("apiVersion: air.dev/v0.10");
+    expect(JSON.parse(await readFile(resolve(discovery, "manifest.json"), "utf8")).apiVersion).toBe("air.dev/discovery/v0.1");
   });
 });

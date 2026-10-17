@@ -220,7 +220,7 @@ spec:
     const v0_2 = await loadAirFile(todoPath);
     const migrated = migrateAirDocument(v0_2);
 
-    expect(migrated.apiVersion).toBe("air.dev/v0.9");
+    expect(migrated.apiVersion).toBe("air.dev/v0.10");
     expect(migrated.spec.commands).toBeUndefined();
   });
 

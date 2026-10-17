@@ -31,6 +31,7 @@
     "@air/language-server": "workspace:*",
     "@air/parser": "workspace:*",
     "@air/providers": "workspace:*",
+    "@air/discovery": "workspace:*",
     "@air/target-nextjs": "workspace:*",
     "@air/target-rust": "workspace:*",
     "@air/target-python": "workspace:*",

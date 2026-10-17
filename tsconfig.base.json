@@ -19,6 +19,7 @@
       "@air/language-server": ["packages/language-server/src/index.ts"],
       "@air/verifier": ["packages/verifier/src/index.ts"],
       "@air/providers": ["packages/providers/src/index.ts"],
+      "@air/discovery": ["packages/discovery/src/index.ts"],
       "@halilturkoglucs/air-plugin-sdk": ["packages/plugin-sdk/src/index.ts"],
       "@halilturkoglucs/air": ["packages/cli/src/index.ts"]
     },

@@ -4,6 +4,8 @@
 
 AIR v0.9 supports application metadata, entities, primitive fields, explicit identity and nullability, owned foreign-key relationships, validation, authorized CRUD and collection HTTP operations, contracts, principals, role/scope authorization, executable commands, events, tasks, consumers, schedules, derived caches, and realtime channels.
 
+Application v0.10 adds typed outbound ports, operation failure contracts, ordered invocations, and a deliberately bounded transformation language: projection, rename, literals, scalar conversion, enum mapping, defaults, and conditionals. Provider endpoints, credentials, SDK configuration, reflection, and arbitrary code do not enter semantic AIR. System v0.2 can retain foreign services, libraries, databases, brokers, and vendors beside AIR-managed components.
+
 A command can declare guards, output projection, domain errors, transaction isolation, state/version preconditions, composable invariants, one primary create/update/delete effect, named record update effects, input-derived increment/decrement, scoped idempotent replay, and bounded retries. The ledger reference uses these constructs to debit and credit two accounts atomically and create one transfer without embedding SQL, TypeScript, Rust, Python, or framework concepts in AIR.
 
 ## Package graph
@@ -19,7 +21,7 @@ A command can declare guards, output projection, domain errors, transaction isol
              ^             ^
              +------ public CLI ------+
                          ^
-                 import-* packages
+               @air/discovery + import-*
 ```
 
 - `@air/schema` owns public, framework-neutral contracts.
@@ -28,6 +30,7 @@ A command can declare guards, output projection, domain errors, transaction isol
 - `@air/compiler-core` owns target contracts, diagnostics, artifacts, and provenance.
 - `@halilturkoglucs/air-plugin-sdk` defines explicit provider/deployer contracts, lifecycle hooks, health, and conformance adapters.
 - `@air/composer` resolves System and Deployment documents into generated components and deployment artifacts.
+- `@air/discovery` owns non-authoritative source/runtime graphs, incremental evidence, review decisions, capability extraction, the local workbench, and import verification.
 - targets analyze capability compatibility and generate deterministic projects.
 - `@air/import-postgres` reverse-compiles catalog metadata and reports uncertainty.
 - `@halilturkoglucs/air` is the public process boundary; private workspace packages are bundled into its distribution.
@@ -67,6 +70,12 @@ Authentication transport remains target-specific. AIR defines typed principals a
 ## Import boundary
 
 The PostgreSQL importer reads `information_schema` only. Portable scalar types, primary/unique keys, nullability, generated UUID/identity/timestamp values, literal defaults, foreign keys, and delete behavior are deterministic. Unportable types, expressions, missing primary keys, and naming collisions become diagnostics. Imported AIR is a review candidate, not automatically authoritative.
+
+Enterprise import adds a boundary before AIR. `air.dev/discovery/v0.1` stores stable source-linked nodes and edges, source spans and hashes, build coordinates, redacted runtime evidence, confidence states, coverage dimensions, and reviewer decisions. JSONL/YAML files are authoritative; SQLite is a rebuildable workbench index. A rescan invalidates decisions when their evidence hash changes.
+
+The Java/Spring analyzer is pinned to OpenRewrite 8.90.4. Its source fallback is conservative and explicitly review-required. Kotlin is inventory-only in v0.1. Dynamic routing, effectful mappers, scripts, reflection, and unknown Redis use remain opaque. Extraction is blocked while an important write, message, cache, or outbound call is unexplained.
+
+Verification v0.3 compares legacy and candidate observations. Adoption is an explicit evidence-bound transition, not a consequence of successful parsing. See [enterprise discovery and modernization](enterprise-modernization.md).
 
 ## Deliberate omissions
 

@@ -1,0 +1,5 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://air.dev/schema/adoption-0.2.schema.json", "title": "AIR Capability Adoption v0.2",
+  "type": "object", "additionalProperties": false, "required": ["apiVersion", "kind", "capabilityId", "evidenceHash", "adoptedAt", "ownership"],
+  "properties": { "apiVersion": { "const": "air.dev/adoption/v0.2" }, "kind": { "const": "CapabilityAdoption" }, "capabilityId": { "type": "string", "minLength": 1 }, "evidenceHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }, "adoptedAt": { "type": "string", "minLength": 1 }, "ownership": { "const": "air-managed" } }
+}

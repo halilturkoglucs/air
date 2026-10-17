@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://air.dev/schema/verification-result-0.3.schema.json", "title": "AIR Import Verification Result v0.3",
+  "type": "object", "additionalProperties": false, "required": ["apiVersion", "kind", "generatedAt", "capabilityId", "evidenceHash", "legacy", "candidate", "passed", "observations"],
+  "properties": {
+    "apiVersion": { "const": "air.dev/verification-result/v0.3" }, "kind": { "const": "ImportVerificationResult" }, "generatedAt": { "type": "string", "minLength": 1 }, "capabilityId": { "type": "string", "minLength": 1 }, "evidenceHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }, "legacy": { "type": "string", "minLength": 1 }, "candidate": { "type": "string", "minLength": 1 }, "passed": { "type": "boolean" },
+    "observations": { "type": "object", "additionalProperties": false, "required": ["http", "database", "messages", "outbound"], "properties": { "http": { "type": "array", "items": { "$ref": "#/$defs/result" } }, "database": { "type": "array" }, "messages": { "type": "array" }, "outbound": { "type": "array" } } }
+  },
+  "$defs": {
+    "http": { "type": "object", "additionalProperties": false, "required": ["status", "headers", "body"], "properties": { "status": { "type": "integer", "minimum": 100, "maximum": 599 }, "headers": { "type": "object", "additionalProperties": { "type": "string" } }, "body": true } },
+    "side": { "type": "object", "additionalProperties": false, "required": ["http", "database", "messages", "outbound"], "properties": { "http": { "$ref": "#/$defs/http" }, "database": { "type": "object" }, "messages": { "type": "object" }, "outbound": { "type": "object" } } },
+    "result": { "type": "object", "additionalProperties": false, "required": ["id", "passed", "mismatches", "legacy", "candidate"], "properties": { "id": { "type": "string" }, "passed": { "type": "boolean" }, "mismatches": { "type": "array", "items": { "type": "string" } }, "legacy": { "$ref": "#/$defs/side" }, "candidate": { "$ref": "#/$defs/side" } } }
+  }
+}

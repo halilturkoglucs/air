@@ -281,9 +281,9 @@ describe("AIR CLI", () => {
 
     expect(exitCode).toBe(0);
     expect(await readFile(destination, "utf8")).toContain("apiVersion: air.dev/v0.2");
-    const latestDestination = resolve(directory, "air.v0.9.yaml");
+    const latestDestination = resolve(directory, "air.v0.10.yaml");
     expect(await runCli(["migrate", source, "--output", latestDestination], output.io)).toBe(0);
-    expect(await readFile(latestDestination, "utf8")).toContain("apiVersion: air.dev/v0.9");
+    expect(await readFile(latestDestination, "utf8")).toContain("apiVersion: air.dev/v0.10");
     expect(await runCli(["migrate", source, "--output", latestDestination], output.io)).toBe(1);
   });
 

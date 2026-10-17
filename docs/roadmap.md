@@ -83,7 +83,7 @@ Exit gate: a reproducible evidence pack identifies whether portability, generate
 
 Operational foundation completed: all generated targets expose liveness and PostgreSQL-backed readiness, generated containers include health checks, failures are structured, native targets support configurable ports and graceful shutdown, and CI assembles then independently verifies evidence-pack checksums.
 
-## 5. Adoption and import — core workflows complete
+## 5. Adoption and import — original reverse-import workflows complete
 
 Completed:
 
@@ -105,6 +105,8 @@ Completed follow-up:
 - editor completion, hover, document symbols, and pull diagnostics
 
 Next: quick fixes, workspace references, and schema-aware rename.
+
+The original importers are now classified as discovery prototypes. They remain compatible, but enterprise modernization does not promote their output automatically.
 
 ## 6. Capability solver and target ecosystem — first solver complete
 
@@ -145,7 +147,45 @@ External provider/deployer conformance and real-world complex-service pilots are
 - preserve proposal and acceptance provenance
 - require human review for security, destructive migration, and data-loss-sensitive changes
 
-## 10. Advanced research
+## 11. Enterprise discovery — v0.11 implementation line
+
+Implemented on the current development line:
+
+- `air.dev/discovery/v0.1` JSONL/YAML bundle with stable IDs, source hashes, confidence, multidimensional coverage, reviewer decisions, and rebuildable SQLite index
+- incremental rescans that retain decisions only while evidence is unchanged
+- pinned OpenRewrite 8.90.4 Java analyzer plus a conservative, review-required source fallback
+- Java Spring inventory for modules, HTTP, DTOs, JPA, repositories/queries/transactions, security, Kafka, RabbitMQ, Spring events, schedules, caches/Redis, outbound HTTP, configuration, and dynamic routing
+- inventory-only Kotlin findings and explicit opaque diagnostics
+- loopback-only local architecture workbench with provenance and approve/reject/rename/merge/mark-opaque decisions
+- compatibility warning on the original `import-spring` command
+
+Before a v0.11 release: run the conventional-service architecture pilot and calibrate recall/false positives on an independent codebase.
+
+## 12. Evidence and capability extraction — v0.12 foundation implemented
+
+Implemented foundation:
+
+- redacted OTLP/JSONL/test evidence ingestion with explicit field allowlisting
+- Application v0.10 outbound ports, operation failures, ordered invocation metadata, and bounded transformations
+- System v0.2 foreign components
+- capability slicing from endpoint/listener/schedule entry points
+- extraction blockers for unreviewed inferred, opaque, or conflicting observable behavior
+- generated Application/System/verification/capability artifacts bound to repository and evidence hashes
+
+Remaining release gate: deeper database/message/outbound observation adapters and two real capability pilots (vendor HTTP and transactional Kafka).
+
+## 13. Verified replacement — v0.13 foundation implemented
+
+Implemented foundation:
+
+- `air verify-import` legacy/candidate HTTP comparison with normalized JSON, status, and selected headers
+- verification result v0.3 evidence structure for HTTP, database, message, and outbound observations, persisted as privacy-safe hashes rather than raw values
+- typed foreign-component retention and evidence-bound `air adopt <capability>`
+- extraction ownership promotion only when blockers are empty and a matching evidence-bound differential result passes
+
+Remaining release gate: production-grade self-hosted observation adapters, shadow/replay routing, and a successful strangler replacement pilot. A release claim requires equivalent responses, errors, state, messages, and outbound calls for every required scenario.
+
+## 14. Advanced research
 
 - profiler-guided transformations accepted only when verification passes and measurements improve
 - UI IR and evidence-backed service decomposition recommendations

@@ -22,6 +22,10 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
       - name: Install
         run: pnpm install --frozen-lockfile
       - name: Verify release versions
@@ -36,6 +40,8 @@ jobs:
           test "$root_version" = "$tag_version"
       - name: Release gate
         run: pnpm release:check
+      - name: Build pinned OpenRewrite analyzer
+        run: mvn -q -DskipTests package -f packages/discovery/spring-analyzer/pom.xml
       - name: Verify npm package contents
         run: |
           npm pack --dry-run --cache "${RUNNER_TEMP}/npm-cache" --workspace=false ./packages/plugin-sdk

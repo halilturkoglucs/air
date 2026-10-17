@@ -22,6 +22,7 @@ import { importPostgres } from "@air/import-postgres";
 import { importOpenApiSource } from "@air/import-openapi";
 import { importNextjs } from "@air/import-nextjs";
 import { importSpring } from "@air/import-spring";
+import { adoptExtractedCapability, discoverSpring, discoveryFromAirCandidate, extractCapability, ingestEvidence, mergeDiscoveryBundles, readDiscoveryBundle, startWorkbench, verifyImportedCapability, writeDiscoveryBundle, type DiscoveryBundle } from "@air/discovery";
 import { startLanguageServer } from "@air/language-server";
 import { NextjsTargetAdapter, type NextjsTargetOptions } from "@air/target-nextjs";
 import { RustTargetAdapter, type RustTargetOptions } from "@air/target-rust";
@@ -65,6 +66,11 @@ Usage:
   air import-postgres [options]               Import a PostgreSQL schema into AIR
   air import-openapi [options]                Import OpenAPI 3.x into reviewable AIR
   air import-nextjs [options]                 Import Next.js App Router + Drizzle into AIR
+  air discover spring <repository> [options] Build an evidence-backed discovery bundle
+  air evidence ingest <trace> [options]      Ingest redacted runtime/test evidence
+  air workbench <discovery> [options]        Start the local architecture workbench
+  air extract <discovery> [options]          Extract one reviewed business capability
+  air verify-import <capability> [options]   Compare legacy and candidate behavior
   air verify <file> --scenarios <file> [--output <file>]
                                               Execute canonical verification scenarios
   air verify-live <file> [options]             Verify a running target over HTTP + PostgreSQL
@@ -100,19 +106,21 @@ Compile options:
   --detach                   Omit managed-mode ownership metadata
 
 Migrate options:
-  --to <version>             Target version (default: air.dev/v0.9)
-  --output <file>            Output file (default: <file>.v0.9.yaml)
+  --to <version>             Target version (default: air.dev/v0.10)
+  --output <file>            Output file (default: <file>.v0.10.yaml)
 
 PostgreSQL import options:
   --url <postgres-url>       PostgreSQL connection URL (required)
   --output <file>            AIR output file (required)
   --name <name>              AIR application name (default: imported-app)
   --schema <schema>          PostgreSQL schema (default: public)
+  --discovery <directory>   Merge review-required findings into discovery v0.1
 
 OpenAPI import options:
   --input <file>             OpenAPI 3.x YAML or JSON document (required)
   --output <file>            AIR output file (required)
   --name <name>              AIR application name (default: imported-api)
+  --discovery <directory>    Merge review-required findings into discovery v0.1
 
 Next.js import options:
   --input <directory>        Next.js project directory (required)
@@ -120,6 +128,7 @@ Next.js import options:
   --output <file>            AIR output file (required)
   --report <file>            JSON provenance/diagnostic report (optional)
   --name <name>              AIR application name (default: project directory)
+  --discovery <directory>    Merge review-required findings into discovery v0.1
 
 Live verification options:
   --scenarios <file>         Canonical verification suite (required)
@@ -225,6 +234,16 @@ function formatError(error: unknown): string {
     return `AIR file not found.\n`;
   }
   return `${error instanceof Error ? error.message : String(error)}\n`;
+}
+
+async function mergeIntoDiscovery(directory: string, candidate: DiscoveryBundle): Promise<void> {
+  try {
+    const existing = await readDiscoveryBundle(directory);
+    await writeDiscoveryBundle(directory, mergeDiscoveryBundles(existing, [candidate]));
+  } catch (error) {
+    if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) throw error;
+    await writeDiscoveryBundle(directory, candidate);
+  }
 }
 
 function inspect(document: AirDocument): string {
@@ -497,7 +516,7 @@ function parseCompositionArguments(args: readonly string[], defaultOutput = "dis
 
 async function compileSystemComponent(
   componentName: string,
-  component: AirSystemDocument["spec"]["components"][string],
+  component: Exclude<AirSystemDocument["spec"]["components"][string], { readonly kind: "foreign" }>,
   application: AirDocument,
   outputDirectory: string,
 ): Promise<{ readonly ok: boolean; readonly diagnostics: readonly string[] }> {
@@ -535,6 +554,7 @@ async function composeSystem(args: readonly string[], io: CliIo): Promise<number
     }
     let generated = 0;
     for (const [name, component] of Object.entries(bundle.system.spec.components)) {
+      if ("kind" in component && component.kind === "foreign") continue;
       const result = await compileSystemComponent(name, component, bundle.applications[component.application]!, parsed.output);
       for (const diagnostic of result.diagnostics) io.stderr(`${name}: ${diagnostic}\n`);
       if (!result.ok) return 1;
@@ -690,11 +710,11 @@ async function verifySystem(args: readonly string[], io: CliIo): Promise<number>
 async function migrate(args: readonly string[], io: CliIo): Promise<number> {
   const [file, ...options] = args;
   if (!file || file.startsWith("--")) {
-    io.stderr("Usage: air migrate <file> [--to air.dev/v0.9] [--output <file>]\n");
+    io.stderr("Usage: air migrate <file> [--to air.dev/v0.10] [--output <file>]\n");
     return 2;
   }
-  let target = "air.dev/v0.9";
-  let output = `${file}.v0.9.yaml`;
+  let target = "air.dev/v0.10";
+  let output = `${file}.v0.10.yaml`;
   for (let index = 0; index < options.length; index += 1) {
     const option = options[index];
     const value = options[index + 1];
@@ -714,7 +734,8 @@ async function migrate(args: readonly string[], io: CliIo): Promise<number> {
     target !== "air.dev/v0.6" &&
     target !== "air.dev/v0.7" &&
     target !== "air.dev/v0.8" &&
-    target !== "air.dev/v0.9"
+    target !== "air.dev/v0.9" &&
+    target !== "air.dev/v0.10"
   ) {
     io.stderr(`Unsupported migration target: ${target}.\n`);
     return 2;
@@ -742,11 +763,12 @@ async function importPostgresCommand(args: readonly string[], io: CliIo): Promis
   let outputFile: string | undefined;
   let applicationName = "imported-app";
   let schema = "public";
-  const usage = "Usage: air import-postgres --url <postgres-url> --output <file> [--name <name>] [--schema <schema>]\n";
+  let discoveryDirectory: string | undefined;
+  const usage = "Usage: air import-postgres --url <postgres-url> --output <file> [--name <name>] [--schema <schema>] [--discovery <directory>]\n";
   for (let index = 0; index < args.length; index += 1) {
     const option = args[index];
     const value = args[index + 1];
-    if (!["--url", "--output", "--name", "--schema"].includes(option ?? "") || !value || value.startsWith("--")) {
+    if (!["--url", "--output", "--name", "--schema", "--discovery"].includes(option ?? "") || !value || value.startsWith("--")) {
       io.stderr(usage);
       return 2;
     }
@@ -755,6 +777,7 @@ async function importPostgresCommand(args: readonly string[], io: CliIo): Promis
     else if (option === "--output") outputFile = value;
     else if (option === "--name") applicationName = value;
     else if (option === "--schema") schema = value;
+    else discoveryDirectory = value;
   }
   if (!databaseUrl || !outputFile) {
     io.stderr(usage);
@@ -767,7 +790,9 @@ async function importPostgresCommand(args: readonly string[], io: CliIo): Promis
     }
     if (result.diagnostics.some((diagnostic) => diagnostic.severity === "error")) return 1;
     const outputPath = resolve(outputFile);
-    await writeFile(outputPath, serializeAir(result.air), { encoding: "utf8", flag: "wx" });
+    const importedSource = serializeAir(result.air);
+    await writeFile(outputPath, importedSource, { encoding: "utf8", flag: "wx" });
+    if (discoveryDirectory) await mergeIntoDiscovery(resolve(discoveryDirectory), discoveryFromAirCandidate(result.air, { source: `postgres:${schema}`, analyzer: "postgres", sourceContent: importedSource }));
     io.stdout(`Imported PostgreSQL schema ${schema} into ${outputPath}\n`);
     io.stdout(`  ${Object.keys(result.air.spec.entities).length} entity/entities, ${result.diagnostics.length} diagnostic(s)\n`);
     return 0;
@@ -785,31 +810,35 @@ async function importOpenApiCommand(args: readonly string[], io: CliIo): Promise
   let inputFile: string | undefined;
   let outputFile: string | undefined;
   let applicationName = "imported-api";
-  const usage = "Usage: air import-openapi --input <file> --output <file> [--name <name>]\n";
+  let discoveryDirectory: string | undefined;
+  const usage = "Usage: air import-openapi --input <file> --output <file> [--name <name>] [--discovery <directory>]\n";
   for (let index = 0; index < args.length; index += 1) {
     const option = args[index];
     const value = args[index + 1];
-    if (!option || !["--input", "--output", "--name"].includes(option) || !value || value.startsWith("--")) {
+    if (!option || !["--input", "--output", "--name", "--discovery"].includes(option) || !value || value.startsWith("--")) {
       io.stderr(usage);
       return 2;
     }
     index += 1;
     if (option === "--input") inputFile = value;
     else if (option === "--output") outputFile = value;
-    else applicationName = value;
+    else if (option === "--name") applicationName = value;
+    else discoveryDirectory = value;
   }
   if (!inputFile || !outputFile) {
     io.stderr(usage);
     return 2;
   }
   try {
-    const result = importOpenApiSource(await readFile(resolve(inputFile), "utf8"), { applicationName });
+    const inputSource = await readFile(resolve(inputFile), "utf8");
+    const result = importOpenApiSource(inputSource, { applicationName });
     for (const diagnostic of result.diagnostics) {
       io.stderr(`${diagnostic.severity.toUpperCase()} ${diagnostic.code} ${diagnostic.sourcePath}: ${diagnostic.message}\n`);
     }
     if (result.diagnostics.some((diagnostic) => diagnostic.severity === "error")) return 1;
     const outputPath = resolve(outputFile);
     await writeFile(outputPath, serializeAir(result.air), { encoding: "utf8", flag: "wx" });
+    if (discoveryDirectory) await mergeIntoDiscovery(resolve(discoveryDirectory), discoveryFromAirCandidate(result.air, { source: resolve(inputFile), analyzer: "openapi", sourceContent: inputSource }));
     io.stdout(`Imported OpenAPI into ${outputPath}\n`);
     io.stdout(`  ${Object.keys(result.air.spec.entities).length} entity/entities, ${result.diagnostics.length} diagnostic(s)\n`);
     return 0;
@@ -829,11 +858,12 @@ async function importNextjsCommand(args: readonly string[], io: CliIo): Promise<
   let reportFile: string | undefined;
   let applicationName: string | undefined;
   let schemaPath: string | undefined;
-  const usage = "Usage: air import-nextjs --input <directory> --output <file> [--schema <path>] [--report <file>] [--name <name>]\n";
+  let discoveryDirectory: string | undefined;
+  const usage = "Usage: air import-nextjs --input <directory> --output <file> [--schema <path>] [--report <file>] [--name <name>] [--discovery <directory>]\n";
   for (let index = 0; index < args.length; index += 1) {
     const option = args[index];
     const value = args[index + 1];
-    if (!option || !["--input", "--output", "--schema", "--report", "--name"].includes(option) || !value || value.startsWith("--")) {
+    if (!option || !["--input", "--output", "--schema", "--report", "--name", "--discovery"].includes(option) || !value || value.startsWith("--")) {
       io.stderr(usage);
       return 2;
     }
@@ -842,7 +872,8 @@ async function importNextjsCommand(args: readonly string[], io: CliIo): Promise<
     else if (option === "--output") outputFile = value;
     else if (option === "--schema") schemaPath = value;
     else if (option === "--report") reportFile = value;
-    else applicationName = value;
+    else if (option === "--name") applicationName = value;
+    else discoveryDirectory = value;
   }
   if (!inputDirectory || !outputFile) {
     io.stderr(usage);
@@ -858,6 +889,7 @@ async function importNextjsCommand(args: readonly string[], io: CliIo): Promise<
     parseAir(source, outputFile);
     const outputPath = resolve(outputFile);
     await writeFile(outputPath, source, { encoding: "utf8", flag: "wx" });
+    if (discoveryDirectory) await mergeIntoDiscovery(resolve(discoveryDirectory), discoveryFromAirCandidate(result.document, { source: resolve(inputDirectory), analyzer: "nextjs", sourceContent: source }));
     if (reportFile) {
       await writeFile(resolve(reportFile), `${JSON.stringify({ format: "air.dev/nextjs-import-report/v0.1", input: resolve(inputDirectory), diagnostics: result.diagnostics, sources: result.sources }, null, 2)}\n`, { encoding: "utf8", flag: "wx" });
     }
@@ -891,6 +923,7 @@ async function importSpringCommand(args: readonly string[], io: CliIo): Promise<
   }
   if (!inputDirectory || !outputFile) { io.stderr(usage); return 2; }
   try {
+    io.stderr("WARNING AIR_IMPORT_REVIEW_REQUIRED: import-spring is a compatibility discovery prototype. Use `air discover spring` for enterprise discovery; no finding is authoritative AIR without review.\n");
     const result = await importSpring(resolve(inputDirectory), applicationName ? { applicationName } : {});
     const source = serializeAir(result.document);
     parseAir(source, outputFile);
@@ -904,6 +937,131 @@ async function importSpringCommand(args: readonly string[], io: CliIo): Promise<
     else io.stderr(formatError(error));
     return 1;
   }
+}
+
+async function discoverCommand(args: readonly string[], io: CliIo): Promise<number> {
+  const [framework, repository, ...options] = args;
+  const usage = "Usage: air discover spring <repository> --output <directory> [--name <name>] [--analyzer auto|source|openrewrite]\n";
+  if (framework !== "spring" || !repository || repository.startsWith("--")) { io.stderr(usage); return 2; }
+  let output: string | undefined; let name: string | undefined; let analyzer: "auto" | "source" | "openrewrite" = "auto";
+  for (let index = 0; index < options.length; index += 1) {
+    const option = options[index]; const value = options[index + 1];
+    if (!option || !["--output", "--name", "--analyzer"].includes(option) || !value || value.startsWith("--")) { io.stderr(usage); return 2; }
+    index += 1;
+    if (option === "--output") output = value;
+    else if (option === "--name") name = value;
+    else if (["auto", "source", "openrewrite"].includes(value)) analyzer = value as typeof analyzer;
+    else { io.stderr(usage); return 2; }
+  }
+  if (!output) { io.stderr(usage); return 2; }
+  try {
+    const result = await discoverSpring(resolve(repository), { ...(name ? { name } : {}), analyzer });
+    for (const diagnostic of result.diagnostics) io.stderr(`${diagnostic.severity.toUpperCase()} ${diagnostic.code}${diagnostic.source ? ` ${diagnostic.source.path}:${diagnostic.source.startLine ?? 1}` : ""}: ${diagnostic.message}\n`);
+    if (result.diagnostics.some((diagnostic) => diagnostic.severity === "error")) return 1;
+    let discoveryBundle = result.bundle;
+    try {
+      const existing = await readDiscoveryBundle(resolve(output));
+      const externalNodeIds = new Set(existing.nodes.filter((node) => typeof node.attributes.importer === "string").map((node) => node.id));
+      const retainedNodeIds = new Set([...result.bundle.nodes.map((node) => node.id), ...externalNodeIds]);
+      const retainedEvidence = existing.evidence.flatMap((item) => {
+        const nodeIds = item.nodeIds.filter((nodeId) => retainedNodeIds.has(nodeId));
+        return item.nodeIds.length === 0 || nodeIds.length > 0 ? [{ ...item, nodeIds }] : [];
+      });
+      const retainedEvidenceIds = new Set(retainedEvidence.map((item) => item.id));
+      const previousNodes = new Map(existing.nodes.map((node) => [node.id, node]));
+      const rescanned: DiscoveryBundle = { ...result.bundle, nodes: result.bundle.nodes.map((node) => {
+        const previous = previousNodes.get(node.id);
+        const evidenceIds = previous?.evidenceIds?.filter((id) => retainedEvidenceIds.has(id));
+        return evidenceIds?.length ? { ...node, confidence: node.confidence === "inferred" ? "observed" as const : node.confidence, evidenceIds } : node;
+      }), evidence: retainedEvidence };
+      const external: DiscoveryBundle = { ...existing, manifest: { ...existing.manifest, metadata: { ...existing.manifest.metadata, repositoryHash: createHash("sha256").update([...externalNodeIds].sort().join(":")).digest("hex") } }, nodes: existing.nodes.filter((node) => externalNodeIds.has(node.id)), edges: existing.edges.filter((edge) => externalNodeIds.has(edge.from) && externalNodeIds.has(edge.to)), decisions: [], evidence: [] };
+      discoveryBundle = mergeDiscoveryBundles(rescanned, [external]);
+    } catch (error) {
+      if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) throw error;
+    }
+    const written = await writeDiscoveryBundle(resolve(output), discoveryBundle);
+    io.stdout(`Discovery bundle: ${resolve(output)}\n  ${written.nodes.length} node(s), ${written.edges.length} edge(s), ${Object.values(written.coverage).filter((item) => item.opaque > 0 || item.conflicting > 0).length} unresolved dimension(s)\n`);
+    return 0;
+  } catch (error) { io.stderr(formatError(error)); return 1; }
+}
+
+async function evidenceCommand(args: readonly string[], io: CliIo): Promise<number> {
+  const [action, input, ...options] = args;
+  const usage = "Usage: air evidence ingest <bundle-or-trace> --discovery <directory> [--allow-field <attribute> ...]\n";
+  if (action !== "ingest" || !input || input.startsWith("--")) { io.stderr(usage); return 2; }
+  let discovery: string | undefined; const allowFields: string[] = [];
+  for (let index = 0; index < options.length; index += 1) {
+    const option = options[index]; const value = options[index + 1];
+    if (!option || !["--discovery", "--allow-field"].includes(option) || !value || value.startsWith("--")) { io.stderr(usage); return 2; }
+    index += 1;
+    if (option === "--discovery") discovery = value; else allowFields.push(value);
+  }
+  if (!discovery) { io.stderr(usage); return 2; }
+  try {
+    const result = await ingestEvidence(resolve(input), resolve(discovery), { allowFields });
+    io.stdout(`Evidence ingested into ${resolve(discovery)}\n  ${result.ingested} record(s), ${result.unmatched} unmatched; sensitive values redacted unless explicitly allowlisted\n`);
+    return 0;
+  } catch (error) { io.stderr(formatError(error)); return 1; }
+}
+
+async function workbenchCommand(args: readonly string[], io: CliIo): Promise<number> {
+  const [directory, ...options] = args;
+  const usage = "Usage: air workbench <discovery> [--host 127.0.0.1] [--port 4319]\n";
+  if (!directory || directory.startsWith("--")) { io.stderr(usage); return 2; }
+  let host = "127.0.0.1"; let port = 4319;
+  for (let index = 0; index < options.length; index += 1) {
+    const option = options[index]; const value = options[index + 1];
+    if (!option || !["--host", "--port"].includes(option) || !value || value.startsWith("--")) { io.stderr(usage); return 2; }
+    index += 1;
+    if (option === "--host") host = value; else port = Number(value);
+  }
+  if (!Number.isInteger(port) || port < 0 || port > 65535) { io.stderr(usage); return 2; }
+  try {
+    const workbench = await startWorkbench(resolve(directory), { host, port });
+    io.stdout(`AIR discovery workbench: ${workbench.url}\nPress Ctrl-C to stop.\n`);
+    await new Promise<void>((resolvePromise) => {
+      const stop = (): void => { workbench.server.close(() => resolvePromise()); };
+      process.once("SIGINT", stop); process.once("SIGTERM", stop);
+    });
+    return 0;
+  } catch (error) { io.stderr(formatError(error)); return 1; }
+}
+
+async function extractCommand(args: readonly string[], io: CliIo): Promise<number> {
+  const [directory, ...options] = args;
+  const usage = "Usage: air extract <discovery> --capability <id> --output <directory>\n";
+  if (!directory || directory.startsWith("--")) { io.stderr(usage); return 2; }
+  let capability: string | undefined; let output: string | undefined;
+  for (let index = 0; index < options.length; index += 1) {
+    const option = options[index]; const value = options[index + 1];
+    if (!option || !["--capability", "--output"].includes(option) || !value || value.startsWith("--")) { io.stderr(usage); return 2; }
+    index += 1; if (option === "--capability") capability = value; else output = value;
+  }
+  if (!capability || !output) { io.stderr(usage); return 2; }
+  try {
+    const result = await extractCapability(resolve(directory), capability, resolve(output));
+    if (result.blockers.length > 0) { io.stderr(`Extraction blocked; observable behavior remains unresolved:\n${result.blockers.map((blocker) => `  - ${blocker}`).join("\n")}\n`); return 1; }
+    io.stdout(`Extracted capability ${capability} into ${result.output}\n  ${result.nodes.length} evidence-linked node(s)\n`);
+    return 0;
+  } catch (error) { io.stderr(formatError(error)); return 1; }
+}
+
+async function verifyImportCommand(args: readonly string[], io: CliIo): Promise<number> {
+  const [directory, ...options] = args;
+  const usage = "Usage: air verify-import <capability> --legacy <url> --candidate <url> [--output <file>]\n";
+  if (!directory || directory.startsWith("--")) { io.stderr(usage); return 2; }
+  let legacy: string | undefined; let candidate: string | undefined; let output: string | undefined;
+  for (let index = 0; index < options.length; index += 1) {
+    const option = options[index]; const value = options[index + 1];
+    if (!option || !["--legacy", "--candidate", "--output"].includes(option) || !value || value.startsWith("--")) { io.stderr(usage); return 2; }
+    index += 1; if (option === "--legacy") legacy = value; else if (option === "--candidate") candidate = value; else output = value;
+  }
+  if (!legacy || !candidate) { io.stderr(usage); return 2; }
+  try {
+    const result = await verifyImportedCapability(resolve(directory), legacy, candidate, output ? resolve(output) : undefined);
+    io.stdout(`${result.passed ? "PASS" : "FAIL"} imported capability equivalence\nEvidence: ${result.output}\n`);
+    return result.passed ? 0 : 1;
+  } catch (error) { io.stderr(formatError(error)); return 1; }
 }
 
 async function verify(args: readonly string[], io: CliIo): Promise<number> {
@@ -1566,6 +1724,13 @@ async function adoptCommand(args: readonly string[], io: CliIo): Promise<number>
   const [directoryArgument, ...options] = args;
   const usage = "Usage: air adopt <directory> --user-owned <path> [--user-owned <path> ...]\n";
   if (!directoryArgument || directoryArgument.startsWith("--")) { io.stderr(usage); return 2; }
+  if (options.length === 0) {
+    try {
+      const adoptionPath = await adoptExtractedCapability(resolve(directoryArgument));
+      io.stdout(`Capability adopted with evidence record: ${adoptionPath}\n`);
+      return 0;
+    } catch (error) { io.stderr(formatError(error)); return 1; }
+  }
   const requested: string[] = [];
   for (let index = 0; index < options.length; index += 1) {
     const option = options[index];
@@ -1666,6 +1831,11 @@ export async function runCli(args: readonly string[], io: CliIo = defaultIo): Pr
   if (command === "import-openapi") return importOpenApiCommand(args.slice(1), io);
   if (command === "import-nextjs") return importNextjsCommand(args.slice(1), io);
   if (command === "import-spring") return importSpringCommand(args.slice(1), io);
+  if (command === "discover") return discoverCommand(args.slice(1), io);
+  if (command === "evidence") return evidenceCommand(args.slice(1), io);
+  if (command === "workbench") return workbenchCommand(args.slice(1), io);
+  if (command === "extract") return extractCommand(args.slice(1), io);
+  if (command === "verify-import") return verifyImportCommand(args.slice(1), io);
   if (command === "migrate") return migrate(args.slice(1), io);
   if (command === "verify") return verify(args.slice(1), io);
   if (command === "verify-live") return verifyLive(args.slice(1), io);

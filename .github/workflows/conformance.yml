@@ -57,6 +57,10 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: 1.99.0
@@ -66,6 +70,13 @@ jobs:
           python-version: "3.12"
       - name: Install workspace
         run: pnpm install --frozen-lockfile
+      - name: Verify pinned OpenRewrite Spring analyzer
+        run: |
+          mvn -q -DskipTests package -f packages/discovery/spring-analyzer/pom.xml
+          java -jar packages/discovery/spring-analyzer/target/air-spring-analyzer.jar \
+            packages/discovery/spring-analyzer/src/test/resources/fixture > openrewrite-findings.jsonl
+          grep '"line":5,"kind":"endpoint"' openrewrite-findings.jsonl
+          grep '"line":11,"kind":"listener"' openrewrite-findings.jsonl
       - name: Verify compiler workspace
         run: |
           pnpm typecheck

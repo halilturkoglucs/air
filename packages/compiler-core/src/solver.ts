@@ -41,6 +41,9 @@ export function inferRequiredCapabilities(air: AirDocument): readonly string[] {
   if (commands.some((command) => command.effect.kind === "delete")) required.add("domain.delete");
   if (commands.some((command) => (command.emits?.length ?? 0) > 0)) required.add("messaging.publish");
   if (commands.some((command) => (command.enqueues?.length ?? 0) > 0)) required.add("messaging.tasks");
+  if (commands.some((command) => (command.invocations?.length ?? 0) > 0)) required.add("integration.port_invocations");
+  if (Object.keys(air.spec.ports ?? {}).length > 0) required.add("integration.outbound_ports");
+  if (Object.keys(air.spec.transformations ?? {}).length > 0) required.add("domain.transformations");
   if (Object.keys(air.spec.consumers ?? {}).length > 0) required.add("messaging.consume");
   if (Object.keys(air.spec.schedules ?? {}).length > 0) required.add("background.schedules");
   if (Object.keys(air.spec.cachedReads ?? {}).length > 0) required.add("cache.derived");

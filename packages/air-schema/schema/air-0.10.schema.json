@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://air.dev/schema/air-0.10.schema.json",
+  "title": "AIR Application v0.10",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "metadata", "spec"],
+  "properties": {
+    "apiVersion": { "const": "air.dev/v0.10" },
+    "kind": { "const": "Application" },
+    "metadata": { "$ref": "https://air.dev/schema/air-0.4.schema.json#/$defs/metadata" },
+    "spec": { "$ref": "#/$defs/spec" }
+  },
+  "$defs": {
+    "identifier": { "$ref": "https://air.dev/schema/air-0.9.schema.json#/$defs/identifier" },
+    "scalar": { "anyOf": [{ "type": "string" }, { "type": "number" }, { "type": "boolean" }, { "type": "null" }] },
+    "spec": {
+      "type": "object", "additionalProperties": false, "required": ["entities"],
+      "properties": {
+        "entities": { "type": "object", "propertyNames": { "$ref": "#/$defs/identifier" }, "additionalProperties": { "$ref": "https://air.dev/schema/air-0.4.schema.json#/$defs/entity" } },
+        "contracts": { "type": "object", "minProperties": 1, "propertyNames": { "$ref": "#/$defs/identifier" }, "additionalProperties": { "$ref": "https://air.dev/schema/air-0.4.schema.json#/$defs/contract" } },
+        "principals": { "type": "object", "minProperties": 1, "propertyNames": { "$ref": "#/$defs/identifier" }, "additionalProperties": { "$ref": "https://air.dev/schema/air-0.4.schema.json#/$defs/contract" } },
+        "commands": { "type": "object", "minProperties": 1, "propertyNames": { "$ref": "#/$defs/identifier" }, "additionalProperties": { "$ref": "#/$defs/command" } },
+        "http": { "$ref": "https://air.dev/schema/air-0.8.schema.json#/$defs/http" },
+        "events": { "type": "object", "minProperties": 1, "propertyNames": { "$ref": "#/$defs/identifier" }, "additionalProperties": { "$ref": "https://air.dev/schema/air-0.9.schema.json#/$defs/event" } },
+        "tasks": { "type": "object", "minProperties": 1, "propertyNames": { "$ref": "#/$defs/identifier" }, "additionalProperties": { "$ref": "https://air.dev/schema/air-0.9.schema.json#/$defs/task" } },
+        "consumers": { "type": "object", "minProperties": 1, "propertyNames": { "$ref": "#/$defs/identifier" }, "additionalProperties": { "$ref": "https://air.dev/schema/air-0.9.schema.json#/$defs/consumer" } },
+        "schedules": { "type": "object", "minProperties": 1, "propertyNames": { "$ref": "#/$defs/identifier" }, "additionalProperties": { "$ref": "https://air.dev/schema/air-0.9.schema.json#/$defs/schedule" } },
+        "cachedReads": { "type": "object", "minProperties": 1, "propertyNames": { "$ref": "#/$defs/identifier" }, "additionalProperties": { "$ref": "https://air.dev/schema/air-0.9.schema.json#/$defs/cachedRead" } },
+        "realtime": { "type": "object", "minProperties": 1, "propertyNames": { "$ref": "#/$defs/identifier" }, "additionalProperties": { "$ref": "https://air.dev/schema/air-0.9.schema.json#/$defs/realtimeChannel" } },
+        "ports": { "type": "object", "minProperties": 1, "propertyNames": { "$ref": "#/$defs/identifier" }, "additionalProperties": { "$ref": "#/$defs/port" } },
+        "transformations": { "type": "object", "minProperties": 1, "propertyNames": { "$ref": "#/$defs/identifier" }, "additionalProperties": { "$ref": "#/$defs/transformation" } }
+      }
+    },
+    "command": {
+      "type": "object", "additionalProperties": false, "required": ["input", "output", "effect"],
+      "properties": {
+        "description": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "input": { "$ref": "#/$defs/identifier" },
+        "output": { "$ref": "https://air.dev/schema/air-0.4.schema.json#/$defs/commandOutput" },
+        "errors": { "type": "object", "minProperties": 1, "additionalProperties": { "$ref": "https://air.dev/schema/air-0.4.schema.json#/$defs/commandError" } },
+        "guards": { "type": "array", "minItems": 1, "items": { "$ref": "https://air.dev/schema/air-0.4.schema.json#/$defs/existsGuard" } },
+        "transaction": { "$ref": "https://air.dev/schema/air-0.7.schema.json#/$defs/transaction" },
+        "authorization": { "$ref": "https://air.dev/schema/air-0.8.schema.json#/$defs/commandAuthorization" },
+        "invariants": { "type": "array", "minItems": 1, "items": { "$ref": "https://air.dev/schema/air-0.7.schema.json#/$defs/invariant" } },
+        "effects": { "type": "object", "minProperties": 1, "additionalProperties": { "$ref": "https://air.dev/schema/air-0.7.schema.json#/$defs/updateEffect" } },
+        "idempotency": { "$ref": "https://air.dev/schema/air-0.7.schema.json#/$defs/idempotency" },
+        "emits": { "type": "array", "minItems": 1, "items": { "$ref": "https://air.dev/schema/air-0.9.schema.json#/$defs/emission" } },
+        "enqueues": { "type": "array", "minItems": 1, "items": { "$ref": "https://air.dev/schema/air-0.9.schema.json#/$defs/enqueue" } },
+        "invocations": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/invocation" } },
+        "effect": { "oneOf": [{ "$ref": "https://air.dev/schema/air-0.4.schema.json#/$defs/createEffect" }, { "$ref": "https://air.dev/schema/air-0.7.schema.json#/$defs/updateEffect" }, { "$ref": "https://air.dev/schema/air-0.8.schema.json#/$defs/deleteEffect" }] }
+      }
+    },
+    "port": {
+      "type": "object", "additionalProperties": false, "required": ["operations"],
+      "properties": { "description": { "type": "string", "minLength": 1 }, "operations": { "type": "object", "minProperties": 1, "propertyNames": { "$ref": "#/$defs/identifier" }, "additionalProperties": { "$ref": "#/$defs/portOperation" } } }
+    },
+    "portOperation": {
+      "type": "object", "additionalProperties": false, "required": ["input", "output", "failures"],
+      "properties": {
+        "input": { "$ref": "#/$defs/identifier" }, "output": { "$ref": "#/$defs/identifier" },
+        "failures": { "type": "object", "minProperties": 1, "propertyNames": { "$ref": "#/$defs/identifier" }, "additionalProperties": { "type": "object", "additionalProperties": false, "required": ["retryable"], "properties": { "retryable": { "type": "boolean" }, "description": { "type": "string" } } } },
+        "timeoutMs": { "type": "integer", "minimum": 1, "maximum": 3600000 },
+        "retry": { "$ref": "#/$defs/retry" },
+        "idempotency": { "enum": ["none", "caller-key", "operation-key"] }
+      }
+    },
+    "retry": { "type": "object", "additionalProperties": false, "required": ["maxAttempts"], "properties": { "maxAttempts": { "type": "integer", "minimum": 1, "maximum": 100 }, "backoff": { "enum": ["fixed", "exponential"] }, "backoffMs": { "type": "integer", "minimum": 0, "maximum": 86400000 } } },
+    "invocation": {
+      "type": "object", "additionalProperties": false, "required": ["id", "port", "operation", "order", "input", "errorMapping"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" }, "port": { "$ref": "#/$defs/identifier" }, "operation": { "$ref": "#/$defs/identifier" }, "order": { "type": "integer", "minimum": 1 },
+        "input": { "type": "object", "additionalProperties": false, "required": ["from"], "properties": { "from": { "enum": ["input", "record", "principal"] }, "transformation": { "$ref": "#/$defs/identifier" } } },
+        "timeoutMs": { "type": "integer", "minimum": 1, "maximum": 3600000 }, "retry": { "$ref": "#/$defs/retry" }, "idempotencyKey": { "type": "string", "minLength": 1 },
+        "errorMapping": { "type": "object", "minProperties": 1, "propertyNames": { "$ref": "#/$defs/identifier" }, "additionalProperties": { "$ref": "#/$defs/identifier" } }
+      }
+    },
+    "transformation": {
+      "type": "object", "additionalProperties": false, "required": ["input", "output", "steps"],
+      "properties": { "input": { "$ref": "#/$defs/identifier" }, "output": { "$ref": "#/$defs/identifier" }, "steps": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/transformationStep" } } }
+    },
+    "transformationStep": {
+      "oneOf": [
+        { "type": "object", "additionalProperties": false, "required": ["kind", "fields"], "properties": { "kind": { "const": "project" }, "fields": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } } } },
+        { "type": "object", "additionalProperties": false, "required": ["kind", "from", "to"], "properties": { "kind": { "const": "rename" }, "from": { "type": "string" }, "to": { "type": "string" } } },
+        { "type": "object", "additionalProperties": false, "required": ["kind", "field", "value"], "properties": { "kind": { "const": "literal" }, "field": { "type": "string" }, "value": { "$ref": "#/$defs/scalar" } } },
+        { "type": "object", "additionalProperties": false, "required": ["kind", "field", "to"], "properties": { "kind": { "const": "convert" }, "field": { "type": "string" }, "to": { "enum": ["string", "integer", "number", "boolean", "date", "datetime", "uuid"] } } },
+        { "type": "object", "additionalProperties": false, "required": ["kind", "field", "values"], "properties": { "kind": { "const": "enum" }, "field": { "type": "string" }, "values": { "type": "object", "minProperties": 1, "additionalProperties": { "$ref": "#/$defs/scalar" } } } },
+        { "type": "object", "additionalProperties": false, "required": ["kind", "field", "value"], "properties": { "kind": { "const": "default" }, "field": { "type": "string" }, "value": { "$ref": "#/$defs/scalar" } } },
+        { "type": "object", "additionalProperties": false, "required": ["kind", "field", "equals", "then", "otherwise"], "properties": { "kind": { "const": "conditional" }, "field": { "type": "string" }, "equals": { "$ref": "#/$defs/scalar" }, "then": { "$ref": "#/$defs/scalar" }, "otherwise": { "$ref": "#/$defs/scalar" } } }
+      ]
+    }
+  }
+}

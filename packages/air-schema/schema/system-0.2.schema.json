@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://air.dev/schema/system-0.2.schema.json", "title": "AIR System v0.2",
+  "type": "object", "additionalProperties": false, "required": ["apiVersion", "kind", "metadata", "spec"],
+  "properties": { "apiVersion": { "const": "air.dev/system/v0.2" }, "kind": { "const": "System" }, "metadata": { "$ref": "https://air.dev/schema/air-0.4.schema.json#/$defs/metadata" }, "spec": { "$ref": "#/$defs/spec" } },
+  "$defs": {
+    "identifier": { "$ref": "https://air.dev/schema/air-0.4.schema.json#/$defs/identifier" },
+    "spec": { "type": "object", "additionalProperties": false, "required": ["applications", "components"], "properties": {
+      "applications": { "type": "object", "propertyNames": { "$ref": "#/$defs/identifier" }, "additionalProperties": { "type": "object", "additionalProperties": false, "required": ["source"], "properties": { "source": { "type": "string", "minLength": 1 } } } },
+      "components": { "type": "object", "minProperties": 1, "propertyNames": { "$ref": "#/$defs/identifier" }, "additionalProperties": { "oneOf": [
+        { "type": "object", "additionalProperties": false, "required": ["kind", "application", "role", "target"], "properties": { "kind": { "const": "managed" }, "application": { "$ref": "#/$defs/identifier" }, "role": { "enum": ["api", "worker", "scheduler", "orchestrator", "realtime"] }, "target": { "enum": ["nextjs", "rust-axum", "python-fastapi"] }, "dependsOn": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/identifier" } } } },
+        { "type": "object", "additionalProperties": false, "required": ["kind", "componentType", "interfaces"], "properties": { "kind": { "const": "foreign" }, "componentType": { "enum": ["service", "library", "database", "broker", "vendor"] }, "interfaces": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } }, "description": { "type": "string" }, "dependsOn": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/identifier" } } } }
+      ] } },
+      "channels": { "$ref": "https://air.dev/schema/system-0.1.schema.json#/$defs/spec/properties/channels" },
+      "sagas": { "$ref": "https://air.dev/schema/system-0.1.schema.json#/$defs/spec/properties/sagas" }
+    } }
+  }
+}
