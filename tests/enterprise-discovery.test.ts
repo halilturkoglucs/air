@@ -12,10 +12,19 @@ async function springFixture(): Promise<string> {
   await writeFile(resolve(root, "pom.xml"), "<project><modelVersion>4.0.0</modelVersion><groupId>example</groupId><artifactId>estate</artifactId><version>1</version><modules><module>orders</module></modules></project>\n", "utf8");
   await writeFile(resolve(root, "orders", "pom.xml"), "<project><modelVersion>4.0.0</modelVersion><artifactId>orders</artifactId></project>\n", "utf8");
   await writeFile(resolve(root, "orders", "src", "main", "java", "example", "Orders.java"), `package example;
-@RestController class OrdersController {
+interface Routes { String API = "/api"; }
+@RestController
+@RequestMapping(Routes.API)
+class OrdersController {
   private final WebClient vendor;
-  @PostMapping("/orders") @Transactional @PreAuthorize("hasRole('BUYER')")
-  OrderResponse place(OrderRequest request) { publisher.publishEvent(request); return null; }
+  private final PricingService pricingService;
+  @PostMapping(
+    value = "/orders",
+    produces = "application/json"
+  )
+  @Transactional
+  @PreAuthorize("hasRole('BUYER')")
+  OrderResponse place(OrderRequest request) { pricingService.quote(request); publisher.publishEvent(request); return null; }
   @KafkaListener(topics = "orders.placed") void consume(String message) {}
   @RabbitListener(queues = "billing.capture") void capture(String message) {}
   @Scheduled(cron = "0 * * * * *") void reconcile() {}
@@ -29,6 +38,10 @@ record OrderResponse(String id) {}
 }
 @Mapper interface OrderMapper {}
 @FeignClient(name = "payments", url = "\${PAYMENTS_URL}") interface PaymentsClient {}
+@Service class PricingService { Object quote(Object request) { return null; } }
+@Configuration class OrdersConfiguration {
+  @Bean Object systemClock() { return new Object(); }
+}
 class DynamicRouter { Object route(String type) { return context.getBean(type); } }
 `, "utf8");
   await writeFile(resolve(root, "orders", "src", "main", "resources", "application.yml"), "spring:\n  application:\n    name: orders\n", { encoding: "utf8", flag: "w" }).catch(async () => {
@@ -106,8 +119,34 @@ spec:
     expect(expected.filter((kind) => kinds.has(kind as never)).length / expected.length).toBeGreaterThanOrEqual(0.95);
     const annotationFalsePositives = result.bundle.nodes.filter((node) => ["PostMapping", "PreAuthorize", "Transactional", "KafkaListener", "RabbitListener", "Scheduled", "Cacheable"].includes(node.name));
     expect(annotationFalsePositives.length / result.bundle.nodes.length).toBeLessThan(0.05);
+    const endpoint = result.bundle.nodes.find((node) => node.kind === "endpoint" && node.name === "place");
+    expect(endpoint?.attributes).toMatchObject({ method: "POST", path: "/api/orders" });
+    expect(result.bundle.nodes.some((node) => node.kind === "service" && node.name === "PricingService" && node.attributes.role === "service")).toBe(true);
+    const pricing = result.bundle.nodes.find((node) => node.kind === "service" && node.name === "PricingService");
+    expect(result.bundle.edges.some((edge) => edge.kind === "calls" && edge.from === endpoint?.id && edge.to === pricing?.id)).toBe(true);
+    expect(result.bundle.nodes.some((node) => node.kind === "configuration" && node.name === "OrdersConfiguration" && node.attributes.role === "configuration-class")).toBe(true);
+    expect(result.bundle.nodes.some((node) => node.kind === "configuration" && node.name === "systemClock" && node.attributes.role === "bean")).toBe(true);
     expect(result.bundle.nodes.every((node) => node.sources.length > 0 && node.sources.every((source) => source.contentHash.length === 64))).toBe(true);
     expect(result.bundle.nodes.filter((node) => node.kind === "dynamic-routing").every((node) => node.confidence === "opaque")).toBe(true);
+  });
+
+  it("keeps ambiguous route constants review-required instead of inventing a path", async () => {
+    const root = await mkdtemp(resolve(tmpdir(), "air-ambiguous-route-"));
+    await mkdir(resolve(root, "src", "main", "java", "example"), { recursive: true });
+    await writeFile(resolve(root, "src", "main", "java", "example", "AmbiguousController.java"), `package example;
+class FirstRoutes { static final String API = "/one"; }
+class SecondRoutes { static final String API = "/two"; }
+@RestController
+@RequestMapping(API)
+class AmbiguousController {
+  @GetMapping("/items") Object list() { return null; }
+}
+`, "utf8");
+    const result = await discoverSpring(root, { analyzer: "source" });
+    const endpoint = result.bundle.nodes.find((node) => node.kind === "endpoint" && node.name === "list");
+    expect(endpoint?.confidence).toBe("inferred");
+    expect(endpoint?.attributes.path).toBeUndefined();
+    expect(endpoint?.attributes.pathExpression).toBe('API + "/items"');
   });
 
   it("rejects unknown fields in discovery documents", async () => {

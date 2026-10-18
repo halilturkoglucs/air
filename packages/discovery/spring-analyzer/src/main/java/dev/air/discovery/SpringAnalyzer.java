@@ -21,15 +21,19 @@ import org.openrewrite.java.tree.J;
 public final class SpringAnalyzer {
   private record Finding(String path, int line, String kind, String name, String semantic, String annotation) {}
 
-  private static final Map<String, String> CLASS_ANNOTATIONS = Map.of(
-      "RestController", "service", "Controller", "service", "Entity", "entity",
-      "Repository", "repository", "FeignClient", "vendor-call", "Mapper", "mapper");
+  private static final Map<String, String> CLASS_ANNOTATIONS = Map.ofEntries(
+      Map.entry("RestController", "service"), Map.entry("Controller", "service"),
+      Map.entry("Service", "service"), Map.entry("Component", "service"),
+      Map.entry("Configuration", "configuration"), Map.entry("ConfigurationProperties", "configuration"),
+      Map.entry("Entity", "entity"), Map.entry("Repository", "repository"),
+      Map.entry("FeignClient", "vendor-call"), Map.entry("Mapper", "mapper"));
   private static final Map<String, String> METHOD_ANNOTATIONS = Map.ofEntries(
       Map.entry("GetMapping", "endpoint"), Map.entry("PostMapping", "endpoint"), Map.entry("PutMapping", "endpoint"),
       Map.entry("PatchMapping", "endpoint"), Map.entry("DeleteMapping", "endpoint"), Map.entry("RequestMapping", "endpoint"),
       Map.entry("KafkaListener", "listener"), Map.entry("RabbitListener", "listener"), Map.entry("EventListener", "listener"),
       Map.entry("Scheduled", "schedule"), Map.entry("Transactional", "transaction"), Map.entry("Query", "query"),
       Map.entry("Cacheable", "cache"), Map.entry("CachePut", "cache"), Map.entry("CacheEvict", "cache"),
+      Map.entry("Bean", "configuration"),
       Map.entry("PreAuthorize", "security"), Map.entry("Secured", "security"), Map.entry("RolesAllowed", "security"));
 
   private static String escape(String value) {
