@@ -154,6 +154,8 @@ pnpm air verify-import capabilities/place-order \
   --candidate http://127.0.0.1:3000
 ```
 
+External discovery calibration reports are available for the large archived [Netflix Conductor](docs/calibration-netflix-conductor.md) corpus and the actively maintained [claims-microservices](docs/calibration-claims-microservices.md) REST/JPA/GraphQL/Kafka service. They are regression evidence, not claims of automatic conversion or completed adoption pilots.
+
 ## Plugin SDK
 
 Provider and deployment integrations use the public, versioned SDK:

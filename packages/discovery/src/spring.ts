@@ -69,6 +69,10 @@ function moduleName(file: SourceFile): string {
   return marker > 0 ? file.relative.slice(0, marker).split("/").at(-1) ?? "root" : "root";
 }
 
+function isTestSource(path: string): boolean {
+  return /(^|\/)src\/(?:test|integrationTest|it)(?:\/|$)/u.test(path);
+}
+
 function addNode(nodes: Map<string, DiscoveryNode>, node: DiscoveryNode): DiscoveryNode {
   const existing = nodes.get(node.id);
   if (!existing) { nodes.set(node.id, node); return node; }
@@ -181,9 +185,51 @@ function argumentExpression(annotation: string, keys: readonly string[] = ["path
   return positional && !/^\w+\s*=/u.test(positional) ? positional : undefined;
 }
 
+function annotationNamed(annotations: string, name: string): string | undefined {
+  const match = new RegExp(`@(?:[\\w.]+\\.)?${name}\\b`, "u").exec(annotations);
+  return match ? readJavaAnnotation(annotations, match.index)?.source : undefined;
+}
+
+function splitTopLevel(source: string): string[] {
+  const parts: string[] = [];
+  let start = 0;
+  let depth = 0;
+  let quote: string | undefined;
+  let escaped = false;
+  for (let index = 0; index < source.length; index += 1) {
+    const character = source[index]!;
+    if (quote) {
+      if (escaped) escaped = false;
+      else if (character === "\\") escaped = true;
+      else if (character === quote) quote = undefined;
+      continue;
+    }
+    if (character === "\"" || character === "'") quote = character;
+    else if ("({[<".includes(character)) depth += 1;
+    else if (")}]>".includes(character)) depth -= 1;
+    else if (character === "," && depth === 0) { parts.push(source.slice(start, index).trim()); start = index + 1; }
+  }
+  parts.push(source.slice(start).trim());
+  return parts.filter(Boolean);
+}
+
+function recordComponentNames(source: string, name: string, offset: number): string[] {
+  const declaration = new RegExp(`\\brecord\\s+${name}\\s*\\(`, "gu");
+  declaration.lastIndex = offset;
+  const match = declaration.exec(source);
+  if (!match || match.index - offset > 2000) return [];
+  const open = source.indexOf("(", match.index);
+  const close = matchingDelimiter(source, open, "(", ")");
+  if (close === undefined) return [];
+  return splitTopLevel(source.slice(open + 1, close)).map((component) => {
+    const withoutAnnotations = component.replace(/@(?:[\w.]+)(?:\s*\((?:[^()"']|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\([^()]*\))*\))?\s*/gu, "");
+    return /([A-Za-z_$][\w$]*)\s*$/u.exec(withoutAnnotations)?.[1];
+  }).filter((field): field is string => Boolean(field));
+}
+
 function collectStringConstants(files: readonly SourceFile[]): JavaConstants {
   const expressions = new Map<string, string>();
-  for (const file of files.filter((candidate) => candidate.relative.endsWith(".java"))) {
+  for (const file of files.filter((candidate) => candidate.relative.endsWith(".java") && !isTestSource(candidate.relative))) {
     const types = [...file.source.matchAll(/\b(?:class|interface|record|enum)\s+(\w+)/gu)].map((match) => ({ name: match[1]!, offset: match.index }));
     for (const match of file.source.matchAll(/\b(?:public\s+|protected\s+|private\s+)?(?:static\s+)?(?:final\s+)?String\s+(\w+)\s*=\s*([^;]+);/gu)) {
       const owner = types.filter((type) => type.offset < match.index).at(-1)?.name;
@@ -246,6 +292,7 @@ function joinRoute(base: string, route: string): string {
 function discoverJava(file: SourceFile, moduleId: string, nodes: Map<string, DiscoveryNode>, edges: Map<string, DiscoveryEdge>, diagnostics: DiscoveryDiagnostic[], constants: JavaConstants): void {
   const source = file.source;
   const controllers: ControllerContext[] = [];
+  const publisherAdapters: { readonly name: string; readonly attributes: Record<string, unknown>; readonly start: number; readonly end: number }[] = [];
   const classMatch = /((?:@[\w.]+(?:\([^)]*\))?\s*)*)(?:public\s+)?(?:abstract\s+)?(class|interface|record|enum)\s+(\w+)/gmu;
   let match: RegExpExecArray | null;
   while ((match = classMatch.exec(source)) !== null) {
@@ -253,24 +300,36 @@ function discoverJava(file: SourceFile, moduleId: string, nodes: Map<string, Dis
     const declarationKind = match[2] ?? "class";
     const name = match[3] ?? "Anonymous";
     const offset = match.index;
-    const declarationWindow = source.slice(offset, offset + 1200);
-    const recordComponents = new RegExp(`record\\s+${name}\\s*\\(([^)]*)\\)`, "u").exec(declarationWindow)?.[1]?.split(",").map((component) => component.trim().split(/\s+/u).at(-1)).filter((field): field is string => Boolean(field)) ?? [];
-    const validation = [...declarationWindow.matchAll(/@(NotNull|NotBlank|Size|Min|Max|Pattern|Email)\b/gu)].map((item) => item[1]!);
+    const recordOpen = declarationKind === "record" ? source.indexOf("(", match.index + match[0].length) : -1;
+    const recordClose = recordOpen >= 0 ? matchingDelimiter(source, recordOpen, "(", ")") : undefined;
+    const bodyOpen = source.indexOf("{", recordClose === undefined ? match.index + match[0].length : recordClose + 1);
+    const bodyClose = bodyOpen >= 0 ? matchingDelimiter(source, bodyOpen, "{", "}") : undefined;
+    const declarationWindow = source.slice(offset, bodyClose === undefined ? offset + 1200 : bodyClose + 1);
+    const recordComponents = declarationKind === "record" ? recordComponentNames(source, name, offset) : [];
+    const validation = [...declarationWindow.matchAll(/@(NotNull|NotBlank|Null|Size|Min|Max|DecimalMin|DecimalMax|Positive|PositiveOrZero|Negative|NegativeOrZero|Pattern|Email|AssertTrue|AssertFalse|Future|FutureOrPresent|Past|PastOrPresent)\b/gu)].map((item) => item[1]!);
     const serialization = [...declarationWindow.matchAll(/@(JsonProperty|JsonAlias|JsonIgnore|JsonFormat)\b/gu)].map((item) => item[1]!);
     const controller = /@(?:RestController|Controller)\b/u.test(annotations);
+    const graphqlController = controller && /@(QueryMapping|MutationMapping|SubscriptionMapping)\b/u.test(declarationWindow);
+    const profile = annotationArgument(annotationNamed(annotations, "Profile") ?? "");
+    const publisherTransport = /\b(?:KafkaTemplate|StreamBridge)\b/u.test(declarationWindow) ? "kafka" : /\bRabbitTemplate\b/u.test(declarationWindow) ? "rabbitmq" : /\bApplicationEventPublisher\b/u.test(declarationWindow) ? "spring-event" : undefined;
     if (controller) {
       const mappingOffset = annotations.search(/@RequestMapping\b/u);
       const mapping = mappingOffset >= 0 ? readJavaAnnotation(annotations, mappingOffset) : undefined;
       controllers.push({ offset, ...(mapping ? mappingPath(mapping.source, constants, file) : { path: "/" }) });
     }
     if (/@(?:Entity|Document)\b/u.test(annotations)) addFinding(nodes, edges, file, moduleId, "entity", name, offset, { persistence: /@Entity/u.test(annotations) ? "jpa" : "document", relationships: [...declarationWindow.matchAll(/@(OneToOne|OneToMany|ManyToOne|ManyToMany)\b/gu)].map((item) => item[1]!) }, "proven", true);
-    else if (controller) addFinding(nodes, edges, file, moduleId, "service", name, offset, { framework: "spring", role: "http-controller" });
+    else if (controller) addFinding(nodes, edges, file, moduleId, "service", name, offset, { framework: graphqlController ? "spring-graphql" : "spring", role: graphqlController ? "graphql-controller" : "http-controller" });
     else if (/@ConfigurationProperties\b/u.test(annotations)) addFinding(nodes, edges, file, moduleId, "configuration", name, offset, { framework: "spring", role: "configuration-properties", prefix: annotationArgument(annotations) });
     else if (/@Configuration\b/u.test(annotations)) addFinding(nodes, edges, file, moduleId, "configuration", name, offset, { framework: "spring", role: "configuration-class" });
     else if (/@(?:FeignClient)\b/u.test(annotations)) addFinding(nodes, edges, file, moduleId, "vendor-call", name, offset, { client: "feign", target: annotationArgument(annotations, "name") ?? annotationArgument(annotations) ?? "dynamic" }, annotationArgument(annotations, "url")?.includes("${") ? "opaque" : "proven", true);
     else if (/(?:Repository|JpaRepository|CrudRepository|PagingAndSortingRepository)\b/u.test(match[0]) || /@Repository\b/u.test(annotations)) addFinding(nodes, edges, file, moduleId, "repository", name, offset, { persistence: "jpa" }, "proven", true);
     else if (/(?:DAO|Dao)$/u.test(name)) addFinding(nodes, edges, file, moduleId, "repository", name, offset, { persistence: "custom-dao" }, "inferred", true, ["Custom DAO semantics require source or runtime evidence before extraction."]);
-    else if (declarationKind === "interface" && /Service$/u.test(name)) addFinding(nodes, edges, file, moduleId, "service", name, offset, { framework: "java", role: "service-contract" }, "inferred");
+    else if (declarationKind === "interface" && /(?:Publisher|Producer)$/u.test(name)) addFinding(nodes, edges, file, moduleId, "publisher", name, offset, { framework: "java", role: "publisher-contract", transport: "dynamic" }, "inferred", true);
+    else if (publisherTransport && /(?:Publisher|Producer)$/u.test(name)) {
+      const attributes = { framework: "spring", role: "publisher-adapter", transport: publisherTransport, ...(profile ? { profiles: [profile] } : {}) };
+      addFinding(nodes, edges, file, moduleId, "publisher", name, offset, attributes, "proven", true);
+      publisherAdapters.push({ name, attributes, start: offset, end: bodyClose ?? source.length });
+    } else if (declarationKind === "interface" && /Service$/u.test(name)) addFinding(nodes, edges, file, moduleId, "service", name, offset, { framework: "java", role: "service-contract" }, "inferred");
     else if (/@(?:JsonDeserialize|JsonSerialize|Valid|Validated)\b/u.test(annotations) || /(?:Request|Response|Dto|DTO|Payload)$/u.test(name)) addFinding(nodes, edges, file, moduleId, "contract", name, offset, { boundary: /(?:Request|Response|Payload)$/u.test(name), serialization: serialization.length > 0 || /@Json/u.test(annotations) ? "jackson" : "java", fields: recordComponents, validation: [...new Set(validation)] });
     else if (/Mapper$/u.test(name) || /@Mapper\b/u.test(annotations)) addFinding(nodes, edges, file, moduleId, "mapper", name, offset, { implementation: /@Mapper/u.test(annotations) ? "mapstruct" : "manual" }, /\b(?:Repository|WebClient|RestClient)\b/u.test(source) ? "opaque" : "inferred", false, /\b(?:Repository|WebClient|RestClient)\b/u.test(source) ? ["Mapper performs a lookup or effect and cannot be reduced to a pure transformation."] : undefined);
     else if (/@(?:Service|Component)\b/u.test(annotations)) addFinding(nodes, edges, file, moduleId, "service", name, offset, { framework: "spring", role: /@Service\b/u.test(annotations) ? "service" : "component" });
@@ -288,6 +347,15 @@ function discoverJava(file: SourceFile, moduleId: string, nodes: Map<string, Dis
     const pathExpression = unresolved ? [controller?.pathExpression ?? (controller?.path !== undefined ? JSON.stringify(controller.path) : undefined), local.pathExpression ?? (local.path !== undefined ? JSON.stringify(local.path) : undefined)].filter(Boolean).join(" + ") : undefined;
     const verb = occurrence[1] === "Request" ? (/method\s*=\s*RequestMethod\.(\w+)/u.exec(annotation.source)?.[1] ?? "GET") : occurrence[1]?.toUpperCase();
     addFinding(nodes, edges, file, moduleId, "endpoint", name, occurrence.index, { method: verb, ...(path !== undefined ? { path } : {}), ...(pathExpression ? { pathExpression } : {}), framework: "spring-mvc" }, pathExpression ? "inferred" : "proven", true, pathExpression ? ["Route contains a source expression that requires build attribution or review."] : undefined);
+  }
+
+  for (const occurrence of source.matchAll(/@(QueryMapping|MutationMapping|SubscriptionMapping)\b/gu)) {
+    const annotation = readJavaAnnotation(source, occurrence.index);
+    if (!annotation) continue;
+    const name = methodFollowingAnnotation(source, annotation.end);
+    if (!name) continue;
+    const operation = occurrence[1] === "QueryMapping" ? "query" : occurrence[1] === "MutationMapping" ? "mutation" : "subscription";
+    addFinding(nodes, edges, file, moduleId, "endpoint", name, occurrence.index, { method: "POST", path: "/graphql", protocol: "graphql", operation, field: annotationArgument(annotation.source) ?? name, framework: "spring-graphql" }, "proven", true);
   }
 
   for (const occurrence of source.matchAll(/@(KafkaListener|RabbitListener|EventListener|Scheduled|Transactional|PreAuthorize|PostAuthorize|Secured|RolesAllowed|Cacheable|CachePut|CacheEvict|Query)\b/gu)) {
@@ -314,10 +382,21 @@ function discoverJava(file: SourceFile, moduleId: string, nodes: Map<string, Dis
     if (name) addFinding(nodes, edges, file, moduleId, "configuration", name, occurrence.index, { framework: "spring", role: "bean", beanName: annotationArgument(annotation.source) });
   }
 
+  const messageClients = new Map<string, { readonly transport: string; readonly method: string }>();
+  for (const client of source.matchAll(/\b(KafkaTemplate|StreamBridge|RabbitTemplate|ApplicationEventPublisher)(?:\s*<[^;=()]+>)?\s+([A-Za-z_$][\w$]*)/gu)) {
+    const type = client[1]!;
+    messageClients.set(client[2]!, { transport: type === "RabbitTemplate" ? "rabbitmq" : type === "ApplicationEventPublisher" ? "spring-event" : "kafka", method: type === "RabbitTemplate" ? "convertAndSend" : type === "ApplicationEventPublisher" ? "publishEvent" : "send" });
+  }
+  for (const [receiver, client] of messageClients) {
+    const invocation = new RegExp(`\\b${receiver}\\s*\\.\\s*${client.method}\\s*\\(`, "gu");
+    for (const occurrence of source.matchAll(invocation)) {
+      const adapter = publisherAdapters.find((candidate) => candidate.start <= occurrence.index && occurrence.index <= candidate.end);
+      if (adapter) addFinding(nodes, edges, file, moduleId, "publisher", adapter.name, occurrence.index, adapter.attributes, "proven", true);
+      else addFinding(nodes, edges, file, moduleId, "publisher", `${receiver}.${client.method}`, occurrence.index, { role: "publish-operation", transport: client.transport }, "proven", true);
+    }
+  }
+
   const expressions: readonly [RegExp, NodeKind, Record<string, unknown>, boolean][] = [
-    [/\b(?:KafkaTemplate|StreamBridge)\b|\.send\s*\(/gu, "publisher", { transport: "kafka-or-broker" }, true],
-    [/\bRabbitTemplate\b|\.convertAndSend\s*\(/gu, "publisher", { transport: "rabbitmq" }, true],
-    [/\.publishEvent\s*\(/gu, "publisher", { transport: "spring-event" }, true],
     [/\bIntegrationFlow\b|IntegrationFlows\./gu, "operation", { framework: "spring-integration" }, true],
     [/\bWebClient\b|\bRestClient\b|\bRestTemplate\b/gu, "vendor-call", { client: "spring-http", target: "dynamic" }, true],
     [/\bRedisTemplate\b|\bReactiveRedisTemplate\b/gu, "cache", { provider: "redis", usage: "unknown" }, true],
@@ -333,7 +412,8 @@ function discoverJava(file: SourceFile, moduleId: string, nodes: Map<string, Dis
 
   if (/\$\{|Environment\.getProperty|@Value\b/u.test(source)) addFinding(nodes, edges, file, moduleId, "configuration", basename(file.relative), 0, { profileDependent: true }, "inferred", false);
   if (/\bIntegrationFlow\b|IntegrationFlows\./u.test(source)) diagnostics.push({ code: "SPRING_INTEGRATION_FLOW_REVIEW", severity: "warning", message: "Spring Integration flow topology was inventoried but requires review before semantic extraction.", source: span(file, source.search(/\bIntegrationFlow\b|IntegrationFlows\./u)) });
-  if (/routing|destinationResolver|resolveDestination/iu.test(source)) diagnostics.push({ code: "SPRING_DYNAMIC_ROUTING", severity: "warning", message: "Dynamic routing was retained as an opaque dependency.", source: span(file, source.search(/routing|destinationResolver|resolveDestination/iu)) });
+  const dynamicRouting = /Class\.forName|Method\.invoke|\.getBean\s*\(|\bspel\b|GroovyShell|ScriptEngine|destinationResolver|resolveDestination/iu;
+  if (dynamicRouting.test(source)) diagnostics.push({ code: "SPRING_DYNAMIC_ROUTING", severity: "warning", message: "Dynamic routing was retained as an opaque dependency.", source: span(file, source.search(dynamicRouting)) });
 }
 
 function matchingDelimiter(source: string, offset: number, open: string, close: string): number | undefined {
@@ -373,7 +453,7 @@ function methodBody(source: string, name: string, startLine: number): { readonly
 
 function addSourceDependencyEdges(files: readonly SourceFile[], nodes: Map<string, DiscoveryNode>, edges: Map<string, DiscoveryEdge>): void {
   const filesByPath = new Map(files.map((file) => [file.relative, file]));
-  const dependencyKinds = new Set<NodeKind>(["service", "repository", "vendor-call"]);
+  const dependencyKinds = new Set<NodeKind>(["service", "repository", "vendor-call", "publisher"]);
   const candidates = [...nodes.values()].filter((node) => dependencyKinds.has(node.kind));
   const byName = new Map<string, DiscoveryNode[]>();
   for (const node of candidates) byName.set(node.name, [...byName.get(node.name) ?? [], node]);
@@ -386,7 +466,7 @@ function addSourceDependencyEdges(files: readonly SourceFile[], nodes: Map<strin
   };
 
   const fieldsByPath = new Map<string, Map<string, { readonly type: string; readonly offset: number }>>();
-  for (const file of files.filter((candidate) => candidate.relative.endsWith(".java"))) {
+  for (const file of files.filter((candidate) => candidate.relative.endsWith(".java") && !isTestSource(candidate.relative))) {
     const fields = new Map<string, { readonly type: string; readonly offset: number }>();
     for (const match of file.source.matchAll(/\b(?:private|protected|public)\s+(?:static\s+)?(?:final\s+)?([A-Z][\w$.]*(?:\s*<[^;=]+>)?)\s+([A-Za-z_$][\w$]*)\s*(?:[;=])/gu)) fields.set(match[2]!, { type: match[1]!.replace(/\s+/gu, ""), offset: match.index });
     fieldsByPath.set(file.relative, fields);
@@ -404,8 +484,8 @@ function addSourceDependencyEdges(files: readonly SourceFile[], nodes: Map<strin
     }
   }
 
-  for (const contract of candidates.filter((node) => node.kind === "service" && node.attributes.role === "service-contract")) {
-    for (const implementation of candidates.filter((node) => node.kind === "service" && node.id !== contract.id)) {
+  for (const contract of candidates.filter((node) => typeof node.attributes.role === "string" && node.attributes.role.endsWith("-contract"))) {
+    for (const implementation of candidates.filter((node) => node.kind === contract.kind && node.id !== contract.id)) {
       const source = implementation.sources[0];
       const file = source ? filesByPath.get(source.path) : undefined;
       if (!file || !new RegExp(`\\bimplements\\s+[^\\{;]*\\b${contract.name}\\b`, "u").test(file.source)) continue;
@@ -463,14 +543,15 @@ export async function discoverSpring(repository: string, options: { readonly nam
     const buildCoordinate = coordinates.get(moduleName(file));
     return buildCoordinate ? { ...file, buildCoordinate } : file;
   });
+  const semanticFiles = files.filter((file) => !isTestSource(file.relative));
   const bytecode = files.some((file) => file.relative.endsWith(".java")) ? [] : await collectBytecode(root);
   if (files.length === 0 && bytecode.length === 0) throw new Error("No supported Spring source, build, or bytecode files were found.");
   const nodes = new Map<string, DiscoveryNode>();
   const edges = new Map<string, DiscoveryEdge>();
   const diagnostics: DiscoveryDiagnostic[] = [];
-  const stringConstants = collectStringConstants(files);
-  const buildFiles = files.filter((file) => file.relative.endsWith("pom.xml") || /(?:build|settings)\.gradle(?:\.kts)?$/u.test(file.relative));
-  for (const build of buildFiles.length > 0 ? buildFiles : files.length > 0 ? [files[0]!] : []) {
+  const stringConstants = collectStringConstants(semanticFiles);
+  const buildFiles = semanticFiles.filter((file) => file.relative.endsWith("pom.xml") || /(?:build|settings)\.gradle(?:\.kts)?$/u.test(file.relative));
+  for (const build of buildFiles.length > 0 ? buildFiles : semanticFiles.length > 0 ? [semanticFiles[0]!] : []) {
     const name = moduleName(build);
     addNode(nodes, { id: stableId("module", name), kind: "module", name, confidence: "proven", observable: false, attributes: { build: build.relative.endsWith("pom.xml") ? "maven" : build.relative.includes("gradle") ? "gradle" : "unknown" }, sources: [span(build)] });
   }
@@ -483,7 +564,7 @@ export async function discoverSpring(repository: string, options: { readonly nam
     const node = addNode(nodes, { id: stableId("service", compiled.relative, name), kind: "service", name, module, confidence: "opaque", observable: false, attributes: { language: "jvm-bytecode", sourceAttribution: "unavailable" }, sources: [source], diagnostics: ["Bytecode was inventoried because Java source attribution was unavailable."] });
     edges.set(stableId("edge", "contains", moduleId, node.id), { id: stableId("edge", "contains", moduleId, node.id), kind: "contains", from: moduleId, to: node.id, confidence: "inferred", sources: [source] });
   }
-  for (const file of files) {
+  for (const file of semanticFiles) {
     const module = moduleName(file);
     const moduleId = stableId("module", module);
     if (!nodes.has(moduleId)) addNode(nodes, { id: moduleId, kind: "module", name: module, confidence: "proven", observable: false, attributes: { build: "inherited" }, sources: [span(file)] });
@@ -495,7 +576,7 @@ export async function discoverSpring(repository: string, options: { readonly nam
   }
   const openRewrite = analyzerRequested === "source" ? undefined : await runOpenRewrite(root);
   if (openRewrite) {
-    const byPath = new Map(files.map((file) => [file.relative, file]));
+    const byPath = new Map(semanticFiles.map((file) => [file.relative, file]));
     for (const finding of openRewrite) {
       const file = byPath.get(finding.path);
       if (!file) continue;
@@ -504,7 +585,7 @@ export async function discoverSpring(repository: string, options: { readonly nam
       else addFinding(nodes, edges, file, stableId("module", moduleName(file)), finding.kind, finding.name, Math.max(0, file.source.split(/\r?\n/u).slice(0, Math.max(0, finding.line - 1)).join("\n").length), { analyzer: "openrewrite", analyzerVersion: "8.90.4", annotation: finding.annotation }, "proven", ["endpoint", "listener", "schedule", "vendor-call", "transaction", "query", "cache"].includes(finding.kind));
     }
   }
-  addSourceDependencyEdges(files, nodes, edges);
+  addSourceDependencyEdges(semanticFiles, nodes, edges);
   const entries = [...nodes.values()].filter((node) => node.kind === "endpoint" || node.kind === "listener" || node.kind === "schedule");
   const effects = [...nodes.values()].filter((node) => ["transaction", "publisher", "vendor-call", "repository", "query", "cache", "dynamic-routing", "foreign-operation"].includes(node.kind));
   for (const entry of entries) {

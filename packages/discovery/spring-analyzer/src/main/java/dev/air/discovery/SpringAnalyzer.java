@@ -30,6 +30,7 @@ public final class SpringAnalyzer {
   private static final Map<String, String> METHOD_ANNOTATIONS = Map.ofEntries(
       Map.entry("GetMapping", "endpoint"), Map.entry("PostMapping", "endpoint"), Map.entry("PutMapping", "endpoint"),
       Map.entry("PatchMapping", "endpoint"), Map.entry("DeleteMapping", "endpoint"), Map.entry("RequestMapping", "endpoint"),
+      Map.entry("QueryMapping", "endpoint"), Map.entry("MutationMapping", "endpoint"), Map.entry("SubscriptionMapping", "endpoint"),
       Map.entry("KafkaListener", "listener"), Map.entry("RabbitListener", "listener"), Map.entry("EventListener", "listener"),
       Map.entry("Scheduled", "schedule"), Map.entry("Transactional", "transaction"), Map.entry("Query", "query"),
       Map.entry("Cacheable", "cache"), Map.entry("CachePut", "cache"), Map.entry("CacheEvict", "cache"),
@@ -94,12 +95,21 @@ public final class SpringAnalyzer {
     JavaParser parser = JavaParser.fromJavaVersion().logCompilationWarningsAndErrors(true).build();
     List<Finding> findings = new ArrayList<>();
     try (Stream<Path> paths = Files.walk(root)) {
-      for (Path file : paths.filter(path -> path.toString().endsWith(".java")).sorted(Comparator.comparing(Path::toString)).toList()) {
+      for (Path file : paths.filter(path -> path.toString().endsWith(".java"))
+          .filter(path -> !isTestSource(root.relativize(path)))
+          .sorted(Comparator.comparing(Path::toString)).toList()) {
         try { findings.addAll(analyze(root, file, parser)); }
         catch (Exception error) { System.err.println(relative(root, file) + ": " + error.getMessage()); }
       }
     }
     findings.stream().sorted(Comparator.comparing(Finding::path).thenComparingInt(Finding::line).thenComparing(Finding::kind)).map(SpringAnalyzer::json).forEach(System.out::println);
+  }
+
+  private static boolean isTestSource(Path relative) {
+    String path = relative.toString().replace('\\', '/');
+    return path.contains("/src/test/") || path.startsWith("src/test/")
+        || path.contains("/src/integrationTest/") || path.startsWith("src/integrationTest/")
+        || path.contains("/src/it/") || path.startsWith("src/it/");
   }
 
   private static String relative(Path root, Path path) { return root.relativize(path).toString().replace('\\', '/'); }

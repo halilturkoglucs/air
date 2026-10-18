@@ -154,14 +154,14 @@ Implemented on the current development line:
 - `air.dev/discovery/v0.1` JSONL/YAML bundle with stable IDs, source hashes, confidence, multidimensional coverage, reviewer decisions, and rebuildable SQLite index
 - incremental rescans that retain decisions only while evidence is unchanged
 - pinned OpenRewrite 8.90.4 Java analyzer plus a conservative, review-required source fallback
-- Java Spring inventory for modules, HTTP, DTOs, JPA, repositories/queries/transactions, security, Kafka, RabbitMQ, Spring events, schedules, caches/Redis, outbound HTTP, configuration, and dynamic routing
+- Java Spring inventory for modules, REST and GraphQL boundaries, annotated records/DTOs, JPA, repositories/queries/transactions, security, Kafka, RabbitMQ, Spring events, schedules, caches/Redis, outbound HTTP, configuration, profile-selected publisher adapters, and dynamic routing
 - inventory-only Kotlin findings and explicit opaque diagnostics
 - loopback-only local architecture workbench with provenance and approve/reject/rename/merge/mark-opaque decisions
 - compatibility warning on the original `import-spring` command
 
-The first independent calibration now uses the archived Netflix Conductor snapshot and is documented in [Netflix Conductor discovery calibration](calibration-netflix-conductor.md). It found and removed annotation-named endpoint false positives, added complete route composition, and connected source-derived service/DAO topology. This is a stable external regression corpus, not a completed conventional-service pilot.
+Two independent calibrations now cover complementary shapes. The archived [Netflix Conductor calibration](calibration-netflix-conductor.md) found and removed annotation-named endpoint false positives, added complete route composition, and connected source-derived service/DAO topology at scale. The actively maintained [claims-microservices calibration](calibration-claims-microservices.md) hardened production/test separation, annotated records, GraphQL boundaries, and profile-switched Spring/Kafka publisher adapters. These are reproducible external regression corpora, not completed pilots.
 
-Before a v0.11 release: run the conventional-service architecture pilot on an actively maintained service and calibrate recall/false positives on at least one additional independent codebase.
+Before a v0.11 release: run the conventional-service architecture-inventory pilot with real reviewer decisions and measure archaeology time, review effort, and unexplained behavior. The independent-codebase calibration gate is complete; the human adoption pilot is not.
 
 ## 12. Evidence and capability extraction — v0.12 foundation implemented
 

@@ -18,6 +18,7 @@ interface Routes { String API = "/api"; }
 class OrdersController {
   private final WebClient vendor;
   private final PricingService pricingService;
+  private final ApplicationEventPublisher publisher;
   @PostMapping(
     value = "/orders",
     produces = "application/json"
@@ -147,6 +148,71 @@ class AmbiguousController {
     expect(endpoint?.confidence).toBe("inferred");
     expect(endpoint?.attributes.path).toBeUndefined();
     expect(endpoint?.attributes.pathExpression).toBe('API + "/items"');
+  });
+
+  it("separates test code and models annotated records, GraphQL, and profile publisher adapters", async () => {
+    const root = await mkdtemp(resolve(tmpdir(), "air-spring-precision-"));
+    const main = resolve(root, "src", "main", "java", "example");
+    const test = resolve(root, "src", "test", "java", "example");
+    const testResources = resolve(root, "src", "test", "resources");
+    await mkdir(main, { recursive: true });
+    await mkdir(test, { recursive: true });
+    await mkdir(testResources, { recursive: true });
+    await writeFile(resolve(root, "pom.xml"), "<project><modelVersion>4.0.0</modelVersion><groupId>example</groupId><artifactId>precision</artifactId><version>1</version></project>\n", "utf8");
+    await writeFile(resolve(main, "SubmitClaimRequest.java"), `package example;
+record SubmitClaimRequest(
+  @NotBlank String policyNumber,
+  @Size(max = 2000) String description,
+  @DecimalMin(value = "0.0", inclusive = false) BigDecimal amount) {}
+`, "utf8");
+    await writeFile(resolve(main, "ClaimGraphqlController.java"), `package example;
+@Controller class ClaimGraphqlController {
+  private final ClaimService service;
+  @QueryMapping ClaimResponse claim(Long id) { return service.getById(id); }
+  @QueryMapping("claims") Object allClaims() { return service.list(); }
+}
+@Service class ClaimService { Object getById(Long id) { return null; } Object list() { return null; } }
+record ClaimResponse(Long id) {}
+`, "utf8");
+    await writeFile(resolve(main, "EventPublisher.java"), "package example; public interface EventPublisher { void publish(Object event); }\n", "utf8");
+    await writeFile(resolve(main, "KafkaEventPublisher.java"), `package example;
+@Component @Profile("kafka") class KafkaEventPublisher implements EventPublisher {
+  private final KafkaTemplate<String, Object> kafkaTemplate;
+  public void publish(Object event) { kafkaTemplate.send("claims", event); }
+}
+`, "utf8");
+    await writeFile(resolve(main, "LocalEventPublisher.java"), `package example;
+@Component @Profile("!kafka") class LocalEventPublisher implements EventPublisher {
+  private final ApplicationEventPublisher delegate;
+  public void publish(Object event) { delegate.publishEvent(event); }
+}
+`, "utf8");
+    await writeFile(resolve(main, "KafkaTopics.java"), "package example; /** Deterministic event-to-topic routing. */ class KafkaTopics {}\n", "utf8");
+    await writeFile(resolve(test, "LocalEventListenerTest.java"), `package example;
+class LocalEventListenerTest {
+  private final ApplicationEventPublisher publisher;
+  void emitsOnlyTestEvidence() { publisher.publishEvent("test"); }
+}
+`, "utf8");
+    await writeFile(resolve(testResources, "application-test.yml"), "spring:\n  kafka:\n    bootstrap-servers: test-only\n", "utf8");
+
+    const result = await discoverSpring(root, { analyzer: "source" });
+    const request = result.bundle.nodes.find((node) => node.kind === "contract" && node.name === "SubmitClaimRequest");
+    expect(request?.attributes.fields).toEqual(["policyNumber", "description", "amount"]);
+    expect(request?.attributes.validation).toEqual(["NotBlank", "Size", "DecimalMin"]);
+    const graphql = result.bundle.nodes.filter((node) => node.kind === "endpoint" && node.attributes.protocol === "graphql");
+    expect(graphql).toHaveLength(2);
+    expect(graphql.map((node) => node.attributes.field).sort()).toEqual(["claim", "claims"]);
+    expect(graphql.every((node) => node.attributes.path === "/graphql" && node.observable)).toBe(true);
+    const publisherAdapters = result.bundle.nodes.filter((node) => node.kind === "publisher" && node.attributes.role === "publisher-adapter");
+    expect(publisherAdapters).toHaveLength(2);
+    expect(publisherAdapters.map((node) => node.attributes.transport).sort()).toEqual(["kafka", "spring-event"]);
+    expect(publisherAdapters.map((node) => node.attributes.profiles).sort()).toEqual([["!kafka"], ["kafka"]]);
+    expect(result.bundle.nodes.filter((node) => node.kind === "publisher" && node.attributes.role === "publish-operation")).toHaveLength(0);
+    expect(result.bundle.nodes.some((node) => node.sources.some((source) => source.path.includes("src/test/")))).toBe(false);
+    expect(result.diagnostics.some((diagnostic) => diagnostic.code === "SPRING_DYNAMIC_ROUTING")).toBe(false);
+    const contract = result.bundle.nodes.find((node) => node.kind === "publisher" && node.attributes.role === "publisher-contract");
+    expect(publisherAdapters.every((adapter) => result.bundle.edges.some((edge) => edge.kind === "calls" && edge.from === contract?.id && edge.to === adapter.id))).toBe(true);
   });
 
   it("rejects unknown fields in discovery documents", async () => {
