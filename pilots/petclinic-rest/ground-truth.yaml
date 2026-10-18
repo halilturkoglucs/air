@@ -1,0 +1,81 @@
+format: air.dev/pilot-ground-truth/v0.1
+repository: https://github.com/spring-petclinic/spring-petclinic-rest
+commit: afc8fc1d3b8ec8de69414482b3bd70a1da78cb95
+commitDate: 2026-10-04T16:53:05+02:00
+frozenBeforeAirScan: true
+sources:
+  openapi: src/main/resources/openapi.yml
+  java: src/main/java
+  runtimeProfile: postgres,spring-data-jpa
+expectations:
+  modules: 1
+  controllers: 10
+  services:
+    contracts: [ClinicService, UserService]
+    implementations: [ClinicServiceImpl, UserServiceImpl]
+  entities: [Owner, Pet, PetType, Role, Specialty, User, Vet, Visit]
+  mappedSuperclasses: [BaseEntity, NamedEntity, Person]
+  mappers: [OwnerMapper, PetMapper, PetTypeMapper, SpecialtyMapper, UserMapper, VetMapper, VisitMapper]
+  repositories:
+    contracts: [OwnerRepository, PetRepository, PetTypeRepository, SpecialtyRepository, UserRepository, VetRepository, VisitRepository]
+    profileAdapterCounts:
+      jdbc: 7
+      jpa: 7
+      spring-data-jpa: 7
+  annotations:
+    transactions: 38
+    methodSecurity: 36
+    cacheOperations: 1
+    configurations: 3
+    beans: 4
+  publicOperations:
+    - { method: GET, path: "/api/oops", operationId: failingRequest }
+    - { method: GET, path: "/api/owners", operationId: listOwners }
+    - { method: POST, path: "/api/owners", operationId: addOwner }
+    - { method: GET, path: "/api/v2/owners", operationId: listOwnersPage }
+    - { method: GET, path: "/api/owners/{ownerId}", operationId: getOwner }
+    - { method: PUT, path: "/api/owners/{ownerId}", operationId: updateOwner }
+    - { method: DELETE, path: "/api/owners/{ownerId}", operationId: deleteOwner }
+    - { method: POST, path: "/api/owners/{ownerId}/pets", operationId: addPetToOwner }
+    - { method: GET, path: "/api/owners/{ownerId}/pets/{petId}", operationId: getOwnersPet }
+    - { method: PUT, path: "/api/owners/{ownerId}/pets/{petId}", operationId: updateOwnersPet }
+    - { method: POST, path: "/api/owners/{ownerId}/pets/{petId}/visits", operationId: addVisitToOwner }
+    - { method: GET, path: "/api/pettypes", operationId: listPetTypes }
+    - { method: POST, path: "/api/pettypes", operationId: addPetType }
+    - { method: GET, path: "/api/pettypes/{petTypeId}", operationId: getPetType }
+    - { method: PUT, path: "/api/pettypes/{petTypeId}", operationId: updatePetType }
+    - { method: DELETE, path: "/api/pettypes/{petTypeId}", operationId: deletePetType }
+    - { method: GET, path: "/api/pets", operationId: listPets }
+    - { method: GET, path: "/api/v2/pets", operationId: listPetsPage }
+    - { method: GET, path: "/api/pets/{petId}", operationId: getPet }
+    - { method: PUT, path: "/api/pets/{petId}", operationId: updatePet }
+    - { method: DELETE, path: "/api/pets/{petId}", operationId: deletePet }
+    - { method: GET, path: "/api/visits", operationId: listVisits }
+    - { method: POST, path: "/api/visits", operationId: addVisit }
+    - { method: GET, path: "/api/visits/{visitId}", operationId: getVisit }
+    - { method: PUT, path: "/api/visits/{visitId}", operationId: updateVisit }
+    - { method: DELETE, path: "/api/visits/{visitId}", operationId: deleteVisit }
+    - { method: GET, path: "/api/specialties", operationId: listSpecialties }
+    - { method: POST, path: "/api/specialties", operationId: addSpecialty }
+    - { method: GET, path: "/api/specialties/{specialtyId}", operationId: getSpecialty }
+    - { method: PUT, path: "/api/specialties/{specialtyId}", operationId: updateSpecialty }
+    - { method: DELETE, path: "/api/specialties/{specialtyId}", operationId: deleteSpecialty }
+    - { method: GET, path: "/api/vets", operationId: listVets }
+    - { method: POST, path: "/api/vets", operationId: addVet }
+    - { method: GET, path: "/api/vets/{vetId}", operationId: getVet }
+    - { method: PUT, path: "/api/vets/{vetId}", operationId: updateVet }
+    - { method: DELETE, path: "/api/vets/{vetId}", operationId: deleteVet }
+    - { method: POST, path: "/api/users", operationId: addUser }
+knownBoundaries:
+  - OpenAPI-generated API interfaces and DTOs are build artifacts; the checked-in OpenAPI contract is authoritative for public operations.
+  - Repository implementations are mutually exclusive profile alternatives, not 21 simultaneously active stores.
+  - Mapped superclasses contribute persistence fields but are not aggregate entities.
+  - AspectJ call monitoring and the custom PetAge validation annotation are inventory-only until explicitly supported.
+  - Conditional security configuration is deployment-dependent and must remain visible rather than being treated as always active.
+acceptance:
+  documentedOperationRecallMinimum: 0.95
+  supportedFalsePositiveMaximum: 0.05
+  requireUniqueDocumentedOperations: true
+  requireCompleteProvenance: true
+  requireStableIds: true
+  prohibitTestTopology: true

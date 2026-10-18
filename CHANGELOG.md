@@ -2,13 +2,16 @@
 
 All notable changes are recorded here. AIR follows the pre-1.0 policy in `docs/versioning.md`.
 
-## Unreleased — enterprise discovery
+## 0.11.0 - 2026-10-18
 
 - Added discovery v0.1 bundles with stable provenance, confidence, coverage, incremental review decisions, and a rebuildable local SQLite index.
-- Added a pinned OpenRewrite Java/Spring analyzer, conservative source fallback, runtime evidence ingestion with default redaction, and a local architecture workbench.
+- Added a pinned, npm-packaged OpenRewrite Java/Spring analyzer, conservative source fallback, runtime evidence ingestion with default redaction, and a reviewer-attributed local architecture workbench.
+- Added module/system/entry-point/capability graph views, reachable dependency slices, filters, edge provenance, hash-verified source excerpts, required rejection/opaque reasons, diagnostics, unmatched evidence, and review progress.
+- Added closed discovery-report v0.1 validation plus deterministic source-free JSON and self-contained HTML export through `air discovery report`.
 - Added Application v0.10 outbound ports/failures/transformations and System v0.2 foreign components.
-- Added `discover`, `evidence ingest`, `workbench`, `extract`, `verify-import`, and capability adoption workflows.
+- Added `discover`, `evidence ingest`, and `workbench`; preserved `extract`, `verify-import`, and capability adoption as explicitly experimental workflows.
 - Added privacy-safe verification v0.3 legacy/candidate observations, evidence-bound adoption gates, and extraction blockers for unexplained observable side effects.
+- Added the pinned Spring Petclinic REST rehearsal with repeatable source/OpenRewrite identities, 100% operation recall and provenance, sanitized metrics, and clean macOS/Linux npm-install gates.
 
 ## 0.10.0 - 2026-10-09
 

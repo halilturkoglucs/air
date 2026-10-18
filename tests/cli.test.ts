@@ -30,6 +30,8 @@ describe("AIR CLI", () => {
     const version = captureIo();
     expect(await runCli(["--version"], version.io)).toBe(0);
     expect(version.stdout()).toBe(`${cliPackage.version}\n`);
+    expect(help.stdout()).toContain("air discovery report");
+    expect(help.stdout()).toContain("EXPERIMENTAL: extract");
   });
 
   it("validates a file", async () => {
@@ -58,6 +60,12 @@ describe("AIR CLI", () => {
 
     expect(exitCode).toBe(2);
     expect(output.stderr()).toBe("Usage: air validate <file>\n");
+  });
+
+  it("requires an attributable reviewer for the discovery workbench", async () => {
+    const output = captureIo();
+    expect(await runCli(["workbench", "discovery"], output.io)).toBe(2);
+    expect(output.stderr()).toContain("--reviewer <id>");
   });
 
   it("compiles AIR to a Next.js project", async () => {

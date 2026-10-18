@@ -7,7 +7,7 @@ AIR is an experimental, language-neutral Application Intermediate Representation
 
 For existing enterprise systems, AIR does **not** promise one-click repository-to-YAML conversion. It builds an evidence-backed architecture map, then helps teams review, verify, and replace one business capability at a time. Architecture inventory is the entry point; verified modernization is the outcome.
 
-AIR CLI v0.10 accepts application documents from v0.1 through v0.9. The current v0.11 development line additionally accepts Application v0.10 and System v0.2 for reviewed modernization boundaries:
+AIR CLI v0.11 accepts application documents from v0.1 through v0.10 and System documents through v0.2. Discovery is the supported enterprise product boundary in this release; extraction, differential import verification, and adoption remain experimental:
 
 - entities, relationships, CRUD HTTP operations, contracts, principals, and declared errors
 - transactional create/update/delete commands, guards, preconditions, ownership, role/scope policies, and invariant expressions
@@ -140,12 +140,15 @@ pnpm air verify-system examples/complex-commerce/system.air.yaml \
 pnpm air provider-check examples/complex-commerce/deployment.compose.yaml --live
 
 # Discover first; nothing found here becomes authoritative AIR automatically:
-# Deep Spring discovery requires Java 17+; v0.11 packages will include the pinned analyzer JAR.
+# Deep Spring discovery requires Java 17+. The npm package includes the pinned analyzer JAR.
 pnpm air discover spring ../legacy-orders \
   --output .air/discovery \
-  --analyzer auto
+  --analyzer openrewrite
 pnpm air evidence ingest ./staging-otlp.json --discovery .air/discovery
-pnpm air workbench .air/discovery
+pnpm air workbench .air/discovery --reviewer alice@example.com
+pnpm air discovery report .air/discovery --output .air/report
+
+# The remaining modernization commands are intentionally experimental in v0.11.
 pnpm air extract .air/discovery \
   --capability endpoint:reviewed-id \
   --output capabilities/place-order
@@ -161,7 +164,7 @@ External discovery calibration reports are available for the large archived [Net
 Provider and deployment integrations use the public, versioned SDK:
 
 ```bash
-npm install @halilturkoglucs/air-plugin-sdk@0.10.0
+npm install @halilturkoglucs/air-plugin-sdk@0.11.0
 ```
 
 Implement `AirProviderPlugin` for brokers, caches, or databases, or `AirDeployerPlugin` for deployment profiles. Export the implementation through an `AirPluginModule`, set `apiVersion` to `AIR_PLUGIN_API_VERSION`, and declare an immutable plugin `id` and `version`. Deployment documents must name the plugin explicitly and lock that version; AIR does not discover or execute arbitrary installed packages.

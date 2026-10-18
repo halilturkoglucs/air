@@ -146,6 +146,8 @@ export async function readDiscoveryBundle(directory: string): Promise<DiscoveryB
 }
 
 export async function saveDecision(directory: string, decision: ReviewerDecision): Promise<void> {
+  const label = `Discovery decision ${decision.subjectId}`;
+  if (!validateDecision(decision)) throw schemaErrors(label, validateDecision.errors);
   const bundle = await readDiscoveryBundle(directory);
   const node = bundle.nodes.find((candidate) => candidate.id === decision.subjectId);
   if (!node) throw new Error(`Unknown discovery subject ${decision.subjectId}.`);

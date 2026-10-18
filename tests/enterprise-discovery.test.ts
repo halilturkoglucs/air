@@ -1,9 +1,11 @@
 import { createServer } from "node:http";
+import { existsSync } from "node:fs";
 import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { adoptExtractedCapability, discoverSpring, evidenceHash, extractCapability, ingestEvidence, readDiscoveryBundle, saveDecision, startWorkbench, verifyImportedCapability, writeDiscoveryBundle } from "@air/discovery";
+import { adoptExtractedCapability, createDiscoveryReport, discoverSpring, evidenceHash, extractCapability, ingestEvidence, readDiscoveryBundle, saveDecision, startWorkbench, verifyImportedCapability, writeDiscoveryBundle, writeDiscoveryReport } from "@air/discovery";
+import { runCli, type CliIo } from "@halilturkoglucs/air";
 import { parseAir, parseSystem } from "@air/parser";
 
 async function springFixture(): Promise<string> {
@@ -150,6 +152,61 @@ class AmbiguousController {
     expect(endpoint?.attributes.pathExpression).toBe('API + "/items"');
   });
 
+  it("joins checked-in OpenAPI contracts to generated-interface implementations", async () => {
+    const root = await mkdtemp(resolve(tmpdir(), "air-openapi-spring-"));
+    const source = resolve(root, "src", "main");
+    await mkdir(resolve(source, "java", "example"), { recursive: true });
+    await mkdir(resolve(source, "resources"), { recursive: true });
+    await writeFile(resolve(root, "pom.xml"), "<project><modelVersion>4.0.0</modelVersion><groupId>example</groupId><artifactId>api-first</artifactId><version>1</version></project>\n", "utf8");
+    await writeFile(resolve(source, "resources", "application.properties"), "server.servlet.context-path=/petclinic\n", "utf8");
+    await writeFile(resolve(source, "resources", "openapi.yml"), `openapi: 3.1.0
+servers:
+  - url: http://localhost:9966/petclinic/api
+paths:
+  /owners/{ownerId}:
+    get:
+      operationId: getOwner
+      responses: { "200": { description: ok } }
+  /missing:
+    get:
+      operationId: missingOperation
+      responses: { "200": { description: ok } }
+`, "utf8");
+    await writeFile(resolve(source, "java", "example", "OwnerController.java"), `package example;
+@RestController
+class OwnerController implements OwnersApi {
+  public OwnerResponse getOwner(Integer ownerId) { return null; }
+}
+@Service class OwnerService { public Object getOwner(Integer ownerId) { return null; } }
+`, "utf8");
+    await writeFile(resolve(source, "java", "example", "NestedAnnotations.java"), `package example;
+@Entity
+@Table(uniqueConstraints = @UniqueConstraint(columnNames = {"username", "role"}))
+class Role {}
+/** Base class for persisted records. */
+@MappedSuperclass
+public class BaseRecord {}
+@Configuration
+@EnableMethodSecurity // a comment between annotations must not hide @Configuration
+@ConditionalOnProperty(name = "security.enabled", havingValue = "true")
+class SecurityConfiguration {}
+`, "utf8");
+
+    const result = await discoverSpring(root, { analyzer: "source" });
+    const owner = result.bundle.nodes.find((node) => node.kind === "endpoint" && node.name === "getOwner");
+    expect(owner).toMatchObject({ confidence: "proven", attributes: { method: "GET", path: "/api/owners/{ownerId}", operationId: "getOwner" } });
+    expect(owner?.sources.map((item) => item.path).sort()).toEqual([
+      "src/main/java/example/OwnerController.java",
+      "src/main/resources/openapi.yml",
+    ]);
+    const missing = result.bundle.nodes.find((node) => node.kind === "endpoint" && node.name === "missingOperation");
+    expect(missing).toMatchObject({ confidence: "inferred", attributes: { method: "GET", path: "/api/missing", implementationMatches: 0 } });
+    expect(missing?.diagnostics).toContain("OpenAPI operation has no uniquely attributed source implementation.");
+    expect(result.bundle.nodes.find((node) => node.kind === "entity" && node.name === "Role")?.attributes.role).toBe("entity");
+    expect(result.bundle.nodes.find((node) => node.kind === "entity" && node.name === "BaseRecord")?.attributes.role).toBe("mapped-superclass");
+    expect(result.bundle.nodes.find((node) => node.kind === "configuration" && node.name === "SecurityConfiguration")?.attributes).toMatchObject({ role: "configuration-class", condition: { property: "security.enabled", havingValue: "true" } });
+  });
+
   it("separates test code and models annotated records, GraphQL, and profile publisher adapters", async () => {
     const root = await mkdtemp(resolve(tmpdir(), "air-spring-precision-"));
     const main = resolve(root, "src", "main", "java", "example");
@@ -215,6 +272,15 @@ class LocalEventListenerTest {
     expect(publisherAdapters.every((adapter) => result.bundle.edges.some((edge) => edge.kind === "calls" && edge.from === contract?.id && edge.to === adapter.id))).toBe(true);
   });
 
+  it.skipIf(!existsSync(resolve("packages/discovery/spring-analyzer/target/air-spring-analyzer.jar")))("runs the pinned OpenRewrite fixture through discovery", async () => {
+    const root = resolve("packages/discovery/spring-analyzer/src/test/resources/fixture");
+    const result = await discoverSpring(root, { analyzer: "openrewrite" });
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.severity === "error")).toEqual([]);
+    expect(result.bundle.manifest.metadata).toMatchObject({ analyzer: "spring-openrewrite", analyzerVersion: "8.90.4" });
+    expect(result.bundle.nodes.find((node) => node.kind === "endpoint" && node.name === "place")?.attributes).toMatchObject({ analyzer: "openrewrite", analyzerVersion: "8.90.4" });
+    expect(result.bundle.nodes.find((node) => node.kind === "listener" && node.name === "consume")?.attributes).toMatchObject({ analyzer: "openrewrite", analyzerVersion: "8.90.4" });
+  });
+
   it("rejects unknown fields in discovery documents", async () => {
     const root = await springFixture();
     const result = await discoverSpring(root, { analyzer: "source" });
@@ -231,7 +297,8 @@ class LocalEventListenerTest {
     const first = await discoverSpring(root, { analyzer: "source" });
     await writeDiscoveryBundle(directory, first.bundle);
     const endpoint = first.bundle.nodes.find((node) => node.kind === "endpoint")!;
-    await saveDecision(directory, { subjectId: endpoint.id, action: "approve", evidenceHash: evidenceHash(endpoint.sources), decidedAt: new Date().toISOString() });
+    await expect(saveDecision(directory, { subjectId: endpoint.id, action: "mark-opaque", evidenceHash: evidenceHash(endpoint.sources), decidedAt: new Date().toISOString(), reviewer: "test-reviewer" })).rejects.toThrow("reason");
+    await saveDecision(directory, { subjectId: endpoint.id, action: "approve", evidenceHash: evidenceHash(endpoint.sources), decidedAt: new Date().toISOString(), reviewer: "test-reviewer" });
     const second = await discoverSpring(root, { analyzer: "source" });
     await writeDiscoveryBundle(directory, second.bundle);
     expect((await readDiscoveryBundle(directory)).decisions[0]?.invalidated).not.toBe(true);
@@ -263,7 +330,7 @@ class LocalEventListenerTest {
     expect((await extractCapability(directory, endpoint.id, resolve(output, "blocked"))).blockers.length).toBeGreaterThan(0);
     const selectedIds = new Set([endpoint.id, ...loaded.edges.filter((edge) => edge.from === endpoint.id).map((edge) => edge.to)]);
     for (const node of loaded.nodes.filter((candidate) => selectedIds.has(candidate.id))) {
-      await saveDecision(directory, { subjectId: node.id, action: node.confidence === "opaque" ? "mark-opaque" : "approve", evidenceHash: evidenceHash(node.sources), decidedAt: new Date().toISOString() });
+      await saveDecision(directory, { subjectId: node.id, action: node.confidence === "opaque" ? "mark-opaque" : "approve", ...(node.confidence === "opaque" ? { reason: "Retain as a typed foreign boundary in this fixture." } : {}), evidenceHash: evidenceHash(node.sources), decidedAt: new Date().toISOString(), reviewer: "test-reviewer" });
     }
     const extracted = await extractCapability(directory, endpoint.id, resolve(output, "accepted"));
     expect(extracted.blockers).toEqual([]);
@@ -272,18 +339,54 @@ class LocalEventListenerTest {
     expect(parseSystem(await readFile(resolve(extracted.output, "system.yaml"), "utf8")).apiVersion).toBe("air.dev/system/v0.2");
   });
 
-  it("serves the local workbench and records reviewed decisions", async () => {
+  it("serves safe source excerpts and records attributable review decisions", async () => {
     const root = await springFixture();
     const directory = await mkdtemp(resolve(tmpdir(), "air-workbench-"));
     const result = await discoverSpring(root, { analyzer: "source" });
     await writeDiscoveryBundle(directory, result.bundle);
-    const workbench = await startWorkbench(directory, { port: 0 });
+    const workbench = await startWorkbench(directory, { port: 0, reviewer: "pilot-reviewer" });
     try {
       expect(await fetch(workbench.url).then((response) => response.text())).toContain("AIR Discovery Workbench");
       const endpoint = result.bundle.nodes.find((node) => node.kind === "endpoint")!;
+      const rejected = await fetch(`${workbench.url}/api/decisions`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ subjectId: endpoint.id, action: "reject" }) });
+      expect(rejected.status).toBe(400);
+      expect(await rejected.text()).toContain("requires a reason");
+      const excerpt = await fetch(`${workbench.url}/api/source?nodeId=${encodeURIComponent(endpoint.id)}&sourceIndex=0`);
+      expect(excerpt.status).toBe(200);
+      expect(await excerpt.json()).toMatchObject({ path: endpoint.sources[0]!.path, contentHash: endpoint.sources[0]!.contentHash });
       expect((await fetch(`${workbench.url}/api/decisions`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ subjectId: endpoint.id, action: "approve" }) })).status).toBe(204);
-      expect((await readDiscoveryBundle(directory)).decisions[0]?.action).toBe("approve");
+      expect((await readDiscoveryBundle(directory)).decisions[0]).toMatchObject({ action: "approve", reviewer: "pilot-reviewer" });
+      await writeFile(resolve(root, endpoint.sources[0]!.path), "changed after discovery\n", "utf8");
+      expect((await fetch(`${workbench.url}/api/source?nodeId=${encodeURIComponent(endpoint.id)}&sourceIndex=0`)).status).toBe(400);
     } finally { await new Promise<void>((done) => workbench.server.close(() => done())); }
+  });
+
+  it("exports deterministic, schema-validated reports without source or payload contents", async () => {
+    const root = await springFixture();
+    const directory = await mkdtemp(resolve(tmpdir(), "air-discovery-report-bundle-"));
+    const output = await mkdtemp(resolve(tmpdir(), "air-discovery-report-output-"));
+    const result = await discoverSpring(root, { analyzer: "source" });
+    await writeDiscoveryBundle(directory, result.bundle);
+    const report = createDiscoveryReport(result.bundle);
+    expect(report.apiVersion).toBe("air.dev/discovery-report/v0.1");
+    expect(report.summary.entryPoints).toBeGreaterThan(0);
+    expect(report.topology.every((edge) => edge.provenance.length > 0)).toBe(true);
+    const first = await writeDiscoveryReport(directory, output);
+    const firstJson = await readFile(first.json, "utf8");
+    const firstHtml = await readFile(first.html, "utf8");
+    const second = await writeDiscoveryReport(directory, output);
+    expect(await readFile(second.json, "utf8")).toBe(firstJson);
+    expect(await readFile(second.html, "utf8")).toBe(firstHtml);
+    expect(firstJson).not.toContain("class OrdersController");
+    expect(firstHtml).not.toContain("class OrdersController");
+    expect(firstHtml).toContain("Source contents and runtime payloads are not embedded");
+    const cliOutput = await mkdtemp(resolve(tmpdir(), "air-discovery-report-cli-"));
+    let stdout = ""; let stderr = "";
+    const io: CliIo = { stdout: (value) => { stdout += value; }, stderr: (value) => { stderr += value; } };
+    expect(await runCli(["discovery", "report", directory, "--output", cliOutput], io)).toBe(0);
+    expect(stdout).toContain("Discovery report:");
+    expect(stderr).toBe("");
+    expect(JSON.parse(await readFile(resolve(cliOutput, "report.json"), "utf8"))).toMatchObject({ apiVersion: "air.dev/discovery-report/v0.1" });
   });
 
   it("records legacy/candidate HTTP equivalence in verification v0.3", async () => {

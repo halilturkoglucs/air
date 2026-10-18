@@ -11,7 +11,52 @@ permissions:
   id-token: write
 
 jobs:
+  clean-install:
+    name: Clean npm install (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.19.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Install and build distribution
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+          mvn -q -DskipTests package -f packages/discovery/spring-analyzer/pom.xml
+      - name: Pack CLI with the pinned analyzer
+        run: |
+          mkdir -p "${RUNNER_TEMP}/air-package"
+          npm pack --cache "${RUNNER_TEMP}/npm-cache" --workspace=false ./packages/cli --pack-destination "${RUNNER_TEMP}/air-package"
+          test -f packages/discovery/spring-analyzer/target/air-spring-analyzer.jar
+      - name: Verify a clean installed discovery report
+        run: |
+          mkdir -p "${RUNNER_TEMP}/air-smoke"
+          cd "${RUNNER_TEMP}/air-smoke"
+          npm init -y
+          npm install "${RUNNER_TEMP}"/air-package/halilturkoglucs-air-*.tgz
+          test -f node_modules/@halilturkoglucs/air/analyzers/air-spring-analyzer.jar
+          expected_version="$(node --print "require('${GITHUB_WORKSPACE}/packages/cli/package.json').version")"
+          test "$(node_modules/.bin/air --version)" = "$expected_version"
+          node_modules/.bin/air discover spring "${GITHUB_WORKSPACE}/packages/discovery/spring-analyzer/src/test/resources/fixture" --output discovery --analyzer openrewrite
+          node_modules/.bin/air discovery report discovery --output report
+          test -s report/report.json
+          test -s report/report.html
+
   package:
+    needs: clean-install
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -28,6 +73,8 @@ jobs:
           java-version: "21"
       - name: Install
         run: pnpm install --frozen-lockfile
+      - name: Build pinned OpenRewrite analyzer
+        run: mvn -q -DskipTests package -f packages/discovery/spring-analyzer/pom.xml
       - name: Verify release versions
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
@@ -40,8 +87,6 @@ jobs:
           test "$root_version" = "$tag_version"
       - name: Release gate
         run: pnpm release:check
-      - name: Build pinned OpenRewrite analyzer
-        run: mvn -q -DskipTests package -f packages/discovery/spring-analyzer/pom.xml
       - name: Verify npm package contents
         run: |
           npm pack --dry-run --cache "${RUNNER_TEMP}/npm-cache" --workspace=false ./packages/plugin-sdk

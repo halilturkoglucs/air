@@ -1,19 +1,22 @@
 # Pilot program
 
+AIR v0.11 is pilot-first: unfamiliar-service discovery and review is the supported outcome. Capability extraction and replacement are separate later pilots and remain experimental.
+
+The internal [Spring Petclinic REST rehearsal](../pilots/petclinic-rest/report.md) pins an unseen corpus, freezes ground truth before scanning, exercises PostgreSQL 16, compares source and OpenRewrite scans, completes all review through the workbench, and records sanitized metrics. It is release-gating regression evidence, not independent customer validation.
+
 The first pilots should test trust and adoption cost, not raw feature count. Use a bounded service with PostgreSQL 16, fewer than ten entities, one transactional command, and no regulated or production customer data.
 
 ## Recommended pilot sequence
 
-1. Baseline the existing service: tests, schema, routes, build time, artifact size, and one representative transaction.
-2. Choose one entry path: new AIR document, PostgreSQL import, OpenAPI import, or Next.js/Drizzle import.
-3. Run `air target-check` before compilation and preserve the JSON compatibility report.
-4. Compile into an isolated directory, run `air ownership`, and mark intentionally maintained artifacts with `air adopt`.
-5. Add verification scenarios for success, domain failure, authorization, rollback, and replay where applicable.
-6. Run live conformance against a disposable database. Run differential verification only when evaluating multiple targets.
-7. Record setup time, manual edits, diagnostics that required interpretation, regenerated-file drift, and whether the team would repeat the workflow.
+1. Pin the corpus commit and freeze independent ground truth before the first AIR scan.
+2. Baseline tests, documented operations, persistence profiles, and a disposable runtime.
+3. Run source and OpenRewrite discovery twice from clean directories; compare semantic identities and provenance.
+4. Review every entry point and observable boundary through `air workbench --reviewer`; never edit bundle files manually.
+5. Export `air discovery report`, then record setup, scan, review, false-positive, miss, archaeology, and intervention metrics.
+6. For later experimental pilots, extract only one reviewed capability and require differential evidence before adoption.
 
 ## Exit criteria
 
-A successful pilot has a reproducible command log, passing semantic and live evidence, no unexplained generated changes, and an explicit keep/stop decision. Performance evidence is optional unless performance is the pilot hypothesis. Never count generated lines of code as the primary outcome.
+A successful discovery pilot has a reproducible command log, complete provenance, stable identities, explicit unresolved behavior, no source/payload leakage, no hand-edited bundle files, and an explicit keep/stop decision. It measures archaeology and review time—not imported class count or YAML size.
 
-Use the repository’s AIR pilot issue template for a sanitized report. The initial decision set should compare at least three pilots: greenfield, imported, and partial-adoption. Promote a workflow only when two independent pilots complete it without undocumented intervention.
+Use the repository’s AIR pilot issue template for a sanitized report. An external design-partner discovery pilot follows v0.11. Promote typed extraction only after the v0.12 vendor-REST pilot, and promote verified replacement only after the v0.13 transactional Kafka/strangler pilot.
