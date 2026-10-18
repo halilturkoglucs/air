@@ -136,6 +136,6 @@ jobs:
         run: gh release create "$GITHUB_REF_NAME" artifacts/release/* --verify-tag --generate-notes --title "AIR $GITHUB_REF_NAME"
       - uses: actions/upload-artifact@v6
         with:
-          name: air-${{ github.ref_name }}
+          name: air-${{ github.run_id }}
           path: artifacts/release
           if-no-files-found: error
