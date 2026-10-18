@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://air.dev/schema/discovery-report-0.1.schema.json",
+  "title": "AIR Discovery Report v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "generatedAt", "repositoryHash", "analyzer", "summary", "coverage", "modules", "entryPoints", "unresolved", "diagnostics", "topology"],
+  "properties": {
+    "apiVersion": { "const": "air.dev/discovery-report/v0.1" },
+    "kind": { "const": "DiscoveryReport" },
+    "generatedAt": { "type": "string", "minLength": 1 },
+    "repositoryHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "analyzer": {
+      "type": "object", "additionalProperties": false, "required": ["name", "version"],
+      "properties": { "name": { "type": "string", "minLength": 1 }, "version": { "type": "string", "minLength": 1 } }
+    },
+    "summary": {
+      "type": "object", "additionalProperties": false,
+      "required": ["nodes", "edges", "evidence", "entryPoints", "activeDecisions", "invalidatedDecisions", "unreviewed", "unresolved", "unmatchedEvidence"],
+      "properties": {
+        "nodes": { "type": "integer", "minimum": 0 }, "edges": { "type": "integer", "minimum": 0 }, "evidence": { "type": "integer", "minimum": 0 },
+        "entryPoints": { "type": "integer", "minimum": 0 }, "activeDecisions": { "type": "integer", "minimum": 0 }, "invalidatedDecisions": { "type": "integer", "minimum": 0 },
+        "unreviewed": { "type": "integer", "minimum": 0 }, "unresolved": { "type": "integer", "minimum": 0 }, "unmatchedEvidence": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "coverage": {
+      "type": "object", "additionalProperties": { "$ref": "#/$defs/coverage" }
+    },
+    "modules": { "type": "array", "items": { "$ref": "#/$defs/nodeSummary" } },
+    "entryPoints": { "type": "array", "items": { "$ref": "#/$defs/entryPoint" } },
+    "unresolved": { "type": "array", "items": { "$ref": "#/$defs/unresolved" } },
+    "diagnostics": { "type": "array", "items": { "$ref": "#/$defs/diagnostic" } },
+    "topology": { "type": "array", "items": { "$ref": "#/$defs/edge" } }
+  },
+  "$defs": {
+    "confidence": { "enum": ["proven", "observed", "inferred", "opaque", "conflicting"] },
+    "source": {
+      "type": "object", "additionalProperties": false, "required": ["path", "contentHash"],
+      "properties": { "path": { "type": "string", "minLength": 1 }, "startLine": { "type": "integer", "minimum": 1 }, "endLine": { "type": "integer", "minimum": 1 }, "contentHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }, "symbol": { "type": "string" }, "buildCoordinate": { "type": "string" } }
+    },
+    "coverage": {
+      "type": "object", "additionalProperties": false, "required": ["supported", "proven", "observed", "inferred", "opaque", "conflicting"],
+      "properties": { "supported": { "type": "integer", "minimum": 0 }, "proven": { "type": "integer", "minimum": 0 }, "observed": { "type": "integer", "minimum": 0 }, "inferred": { "type": "integer", "minimum": 0 }, "opaque": { "type": "integer", "minimum": 0 }, "conflicting": { "type": "integer", "minimum": 0 } }
+    },
+    "nodeSummary": {
+      "type": "object", "additionalProperties": false, "required": ["id", "kind", "name", "confidence", "review", "provenance"],
+      "properties": { "id": { "type": "string" }, "kind": { "type": "string" }, "name": { "type": "string" }, "module": { "type": "string" }, "confidence": { "$ref": "#/$defs/confidence" }, "review": { "type": "string", "enum": ["unreviewed", "approved", "rejected", "renamed", "merged", "opaque", "invalidated"] }, "provenance": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/source" } } }
+    },
+    "entryPoint": {
+      "type": "object", "additionalProperties": false, "required": ["id", "kind", "name", "confidence", "review", "provenance", "reachable"],
+      "properties": {
+        "id": { "type": "string" }, "kind": { "type": "string" }, "name": { "type": "string" }, "module": { "type": "string" },
+        "confidence": { "$ref": "#/$defs/confidence" }, "review": { "type": "string", "enum": ["unreviewed", "approved", "rejected", "renamed", "merged", "opaque", "invalidated"] },
+        "provenance": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/source" } },
+        "method": { "type": "string" }, "path": { "type": "string" }, "protocol": { "type": "string" },
+        "reachable": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
+      }
+    },
+    "unresolved": {
+      "type": "object", "additionalProperties": false, "required": ["id", "kind", "name", "confidence", "review", "provenance", "reason"],
+      "properties": {
+        "id": { "type": "string" }, "kind": { "type": "string" }, "name": { "type": "string" }, "module": { "type": "string" },
+        "confidence": { "$ref": "#/$defs/confidence" }, "review": { "type": "string", "enum": ["unreviewed", "approved", "rejected", "renamed", "merged", "opaque", "invalidated"] },
+        "provenance": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/source" } },
+        "reason": { "type": "string", "minLength": 1 }
+      }
+    },
+    "diagnostic": {
+      "type": "object", "additionalProperties": false, "required": ["nodeId", "message"],
+      "properties": { "nodeId": { "type": "string" }, "message": { "type": "string", "minLength": 1 } }
+    },
+    "edge": {
+      "type": "object", "additionalProperties": false, "required": ["id", "kind", "from", "to", "confidence", "provenance"],
+      "properties": { "id": { "type": "string" }, "kind": { "type": "string" }, "from": { "type": "string" }, "to": { "type": "string" }, "confidence": { "$ref": "#/$defs/confidence" }, "provenance": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/source" } } }
+    }
+  }
+}

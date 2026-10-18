@@ -147,25 +147,29 @@ External provider/deployer conformance and real-world complex-service pilots are
 - preserve proposal and acceptance provenance
 - require human review for security, destructive migration, and data-loss-sensitive changes
 
-## 11. Enterprise discovery — v0.11 implementation line
+## 11. Enterprise discovery — v0.11 release candidate complete
 
-Implemented on the current development line:
+Supported in v0.11:
 
 - `air.dev/discovery/v0.1` JSONL/YAML bundle with stable IDs, source hashes, confidence, multidimensional coverage, reviewer decisions, and rebuildable SQLite index
 - incremental rescans that retain decisions only while evidence is unchanged
-- pinned OpenRewrite 8.90.4 Java analyzer plus a conservative, review-required source fallback
+- npm-packaged, pinned OpenRewrite 8.90.4 Java analyzer plus a conservative, review-required source fallback; clean installations need Java 17+ but not Maven
 - Java Spring inventory for modules, REST and GraphQL boundaries, annotated records/DTOs, JPA, repositories/queries/transactions, security, Kafka, RabbitMQ, Spring events, schedules, caches/Redis, outbound HTTP, configuration, profile-selected publisher adapters, and dynamic routing
 - inventory-only Kotlin findings and explicit opaque diagnostics
-- loopback-only local architecture workbench with provenance and approve/reject/rename/merge/mark-opaque decisions
+- loopback-only local architecture workbench with module/system/entry-point/capability views, reachable slices, filters, edge provenance, hash-verified source excerpts, reviewer identity, required rejection/opaque reasons, diagnostics, unmatched evidence, and review progress
+- deterministic, source-free `air.dev/discovery-report/v0.1` JSON and self-contained HTML reports
 - compatibility warning on the original `import-spring` command
+- explicit experimental labels on extraction, differential import verification, and capability adoption
 
 Two independent calibrations now cover complementary shapes. The archived [Netflix Conductor calibration](calibration-netflix-conductor.md) found and removed annotation-named endpoint false positives, added complete route composition, and connected source-derived service/DAO topology at scale. The actively maintained [claims-microservices calibration](calibration-claims-microservices.md) hardened production/test separation, annotated records, GraphQL boundaries, and profile-switched Spring/Kafka publisher adapters. These are reproducible external regression corpora, not completed pilots.
 
-Before a v0.11 release: run the conventional-service architecture-inventory pilot with real reviewer decisions and measure archaeology time, review effort, and unexplained behavior. The independent-codebase calibration gate is complete; the human adoption pilot is not.
+The release-gating [Spring Petclinic REST rehearsal](../pilots/petclinic-rest/report.md) pinned commit `afc8fc1d3b8ec8de69414482b3bd70a1da78cb95` before scanning. It passed 237 Maven tests against disposable PostgreSQL 16, found all 37 documented operations exactly once, produced 100% provenance, excluded test topology, matched source/OpenRewrite identities, preserved node and edge IDs across repeated clean scans, and completed 154 workbench decisions without hand editing. One source-unattributed OpenAPI operation correctly remains opaque.
 
-## 12. Evidence and capability extraction — v0.12 foundation implemented
+An external design-partner architecture-inventory pilot follows the release. It must measure human archaeology time, review effort, unexplained behavior, and willingness to repeat the workflow; the internal rehearsal is not independent enterprise validation.
 
-Implemented foundation:
+## 12. Evidence and typed extraction — v0.12 next
+
+Experimental foundation already present:
 
 - redacted OTLP/JSONL/test evidence ingestion with explicit field allowlisting
 - Application v0.10 outbound ports, operation failures, ordered invocation metadata, and bounded transformations
@@ -174,9 +178,14 @@ Implemented foundation:
 - extraction blockers for unreviewed inferred, opaque, or conflicting observable behavior
 - generated Application/System/verification/capability artifacts bound to repository and evidence hashes
 
-Remaining release gate: deeper database/message/outbound observation adapters and two real capability pilots (vendor HTTP and transactional Kafka).
+v0.12 release work:
 
-## 13. Verified replacement — v0.13 foundation implemented
+- replace heuristic evidence matching with deterministic route/method, JVM symbol, database, messaging-destination, and trace-correlation identities
+- add self-hosted PostgreSQL before/after, Kafka/Rabbit message, and outbound HTTP observation adapters
+- generate real contracts, entities, ports, transformations, failures, and scenarios from reviewed evidence instead of placeholder imported contracts
+- complete one vendor-REST capability pilot; unresolved writes or outbound effects must block extraction
+
+## 13. Verified replacement — v0.13 next
 
 Implemented foundation:
 
@@ -185,7 +194,15 @@ Implemented foundation:
 - typed foreign-component retention and evidence-bound `air adopt <capability>`
 - extraction ownership promotion only when blockers are empty and a matching evidence-bound differential result passes
 
-Remaining release gate: production-grade self-hosted observation adapters, shadow/replay routing, and a successful strangler replacement pilot. A release claim requires equivalent responses, errors, state, messages, and outbound calls for every required scenario.
+v0.13 release work:
+
+- complete a transactional Kafka capability pilot with database and message equivalence
+- add controlled staging replay, shadow comparison, and generated adapters around retained foreign operations
+- compare responses, errors, database changes, messages, and outbound invocations
+- permit adoption only when every required scenario passes against the same evidence hash
+- demonstrate one complete strangler-style replacement before making a supported modernization claim
+
+Later breadth follows repeatable pilots: deep Kotlin, more Java frameworks, multi-repository federation, collaboration/RBAC/audit/CI policies, then optional AI-assisted naming and grouping behind deterministic review.
 
 ## 14. Advanced research
 

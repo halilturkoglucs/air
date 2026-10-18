@@ -1,0 +1,56 @@
+{
+  "format": "air.dev/pilot-metrics/v0.1",
+  "repository": "https://github.com/spring-petclinic/spring-petclinic-rest",
+  "commit": "afc8fc1d3b8ec8de69414482b3bd70a1da78cb95",
+  "repositoryHash": "c341230d03dbe9ec629bb21d101c1febaa2501274da5e6771f115e49f2df3ee7",
+  "analyzers": {
+    "source": "air-spring-source/0.1.0",
+    "openrewrite": "spring-openrewrite/8.90.4"
+  },
+  "baseline": {
+    "mavenTests": 237,
+    "mavenFailures": 0,
+    "mavenSeconds": 37.661,
+    "postgresVersion": "16.4",
+    "applicationStartupSeconds": 2.515,
+    "healthStatus": "UP"
+  },
+  "discovery": {
+    "nodes": 196,
+    "edges": 300,
+    "nodeProvenancePercent": 100,
+    "edgeProvenancePercent": 100,
+    "documentedOperationsExpected": 37,
+    "documentedOperationsFoundExactlyOnce": 37,
+    "documentedOperationRecall": 1,
+    "supportedConstructRecall": 1,
+    "supportedFalsePositiveRate": 0,
+    "testSourceNodes": 0,
+    "testSourceEdges": 0,
+    "sourceOpenRewriteIdentityMatch": true,
+    "repeatedNodeIdsStable": true,
+    "repeatedEdgeIdsStable": true,
+    "sourceScanSeconds": { "minimum": 0.58, "maximum": 0.61 },
+    "openRewriteScanSeconds": { "minimum": 1.73, "maximum": 1.74 }
+  },
+  "review": {
+    "scope": 154,
+    "approved": 153,
+    "rejected": 0,
+    "opaque": 1,
+    "unreviewedObservable": 0,
+    "verifiedSourceExcerpts": 190,
+    "scriptedWorkbenchSeconds": 1.913,
+    "handEditedBundleFiles": false
+  },
+  "report": {
+    "entryPoints": 38,
+    "unresolvedBoundaries": 1,
+    "unmatchedEvidence": 0,
+    "embedsSourceOrPayloadValues": false
+  },
+  "groundTruthAdjudications": [
+    "The frozen cacheOperations count was one, but source review proved that @Cacheable appears only in a comment; the actual supported count is zero.",
+    "JdbcVisitRowMapper and JdbcPetRowMapper are valid manual row mappers omitted from the frozen mapper list; they are not false positives."
+  ]
+}

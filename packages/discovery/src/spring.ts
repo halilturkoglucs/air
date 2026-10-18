@@ -3,6 +3,7 @@ import { basename, dirname, extname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { parse as parseYaml } from "yaml";
 import { contentHash, stableId } from "./ids.js";
 import { DISCOVERY_API_VERSION, type Confidence, type CoverageDimension, type DiscoveryBundle, type DiscoveryDiagnostic, type DiscoveryEdge, type DiscoveryNode, type NodeKind, type SourceSpan, type SpringDiscoveryResult } from "./types.js";
 
@@ -15,6 +16,8 @@ interface OpenRewriteFinding { readonly path: string; readonly line: number; rea
 interface JavaAnnotation { readonly source: string; readonly end: number }
 interface ControllerContext { readonly offset: number; readonly path?: string; readonly pathExpression?: string }
 interface JavaConstants { readonly simple: ReadonlyMap<string, string>; readonly qualified: ReadonlyMap<string, string> }
+interface OpenApiOperation { readonly operationId?: unknown }
+interface OpenApiDocument { readonly servers?: readonly { readonly url?: unknown }[]; readonly paths?: Readonly<Record<string, Readonly<Record<string, OpenApiOperation>>>> }
 const execFileAsync = promisify(execFile);
 
 async function runOpenRewrite(root: string): Promise<readonly OpenRewriteFinding[] | undefined> {
@@ -190,6 +193,76 @@ function annotationNamed(annotations: string, name: string): string | undefined 
   return match ? readJavaAnnotation(annotations, match.index)?.source : undefined;
 }
 
+function annotationsBeforeDeclaration(source: string, declarationOffset: number): string {
+  const searchStart = Math.max(0, declarationOffset - 16_384);
+  let earliest = declarationOffset;
+  const annotationPattern = /@(?:[\w.]+)(?=\s|\()/gu;
+  annotationPattern.lastIndex = searchStart;
+  let match: RegExpExecArray | null;
+  while ((match = annotationPattern.exec(source)) !== null && match.index < declarationOffset) {
+    const first = readJavaAnnotation(source, match.index);
+    if (!first || first.end > declarationOffset) continue;
+    let cursor = first.end;
+    while (cursor < declarationOffset) {
+      cursor = skipJavaTrivia(source, cursor);
+      if (source[cursor] !== "@") break;
+      const next = readJavaAnnotation(source, cursor);
+      if (!next || next.end > declarationOffset) break;
+      cursor = next.end;
+    }
+    if (skipJavaTrivia(source, cursor) === declarationOffset) earliest = Math.min(earliest, match.index);
+  }
+  return source.slice(earliest, declarationOffset);
+}
+
+function javaStructure(source: string): string {
+  const output = [...source];
+  let quote: string | undefined;
+  let lineComment = false;
+  let blockComment = false;
+  let escaped = false;
+  for (let index = 0; index < output.length; index += 1) {
+    const character = source[index]!;
+    const next = source[index + 1];
+    if (lineComment) {
+      if (character === "\n" || character === "\r") lineComment = false;
+      else output[index] = " ";
+      continue;
+    }
+    if (blockComment) {
+      if (character === "*" && next === "/") { output[index] = " "; output[index + 1] = " "; index += 1; blockComment = false; }
+      else if (character !== "\n" && character !== "\r") output[index] = " ";
+      continue;
+    }
+    if (quote) {
+      if (escaped) escaped = false;
+      else if (character === "\\") escaped = true;
+      else if (character === quote) quote = undefined;
+      if (character !== "\n" && character !== "\r") output[index] = " ";
+      continue;
+    }
+    if (character === "/" && next === "/") { output[index] = " "; output[index + 1] = " "; index += 1; lineComment = true; }
+    else if (character === "/" && next === "*") { output[index] = " "; output[index + 1] = " "; index += 1; blockComment = true; }
+    else if (character === "\"" || character === "'") { output[index] = " "; quote = character; }
+  }
+  return output.join("");
+}
+
+const JAVA_TYPE_DECLARATION = /\b(?:(?:public|protected|private|abstract|static|final|sealed|non-sealed|strictfp)\s+)*(class|interface|record|enum)\s+(\w+)/gmu;
+
+function controllerRanges(file: SourceFile): readonly { readonly start: number; readonly end: number }[] {
+  const ranges: { start: number; end: number }[] = [];
+  const declarations = new RegExp(JAVA_TYPE_DECLARATION.source, JAVA_TYPE_DECLARATION.flags);
+  for (const match of javaStructure(file.source).matchAll(declarations)) {
+    if (!["class", "record"].includes(match[1] ?? "")) continue;
+    if (!/@(?:RestController|Controller)\b/u.test(annotationsBeforeDeclaration(file.source, match.index))) continue;
+    const open = file.source.indexOf("{", match.index + match[0].length);
+    const close = open >= 0 ? matchingDelimiter(file.source, open, "{", "}") : undefined;
+    if (open >= 0) ranges.push({ start: open, end: close ?? file.source.length });
+  }
+  return ranges;
+}
+
 function splitTopLevel(source: string): string[] {
   const parts: string[] = [];
   let start = 0;
@@ -289,16 +362,67 @@ function joinRoute(base: string, route: string): string {
   return parts.length === 0 ? "/" : `/${parts.join("/")}`;
 }
 
+function springContextPath(files: readonly SourceFile[]): string {
+  for (const file of files.filter((candidate) => /application.*\.properties$/u.test(candidate.relative))) {
+    const value = /^\s*server\.servlet\.context-path\s*=\s*([^#\r\n]+)/mu.exec(file.source)?.[1]?.trim();
+    if (value) return value === "/" ? "" : `/${value.replace(/^\/+|\/+$/gu, "")}`;
+  }
+  return "";
+}
+
+function openApiBasePath(document: OpenApiDocument, contextPath: string): string {
+  const server = document.servers?.find((candidate) => typeof candidate.url === "string")?.url;
+  if (typeof server !== "string" || server.includes("{")) return "";
+  try {
+    const path = new URL(server, "http://air.invalid").pathname.replace(/\/$/u, "");
+    return contextPath && (path === contextPath || path.startsWith(`${contextPath}/`)) ? path.slice(contextPath.length) : path;
+  } catch { return ""; }
+}
+
+function discoverOpenApi(files: readonly SourceFile[], nodes: Map<string, DiscoveryNode>, edges: Map<string, DiscoveryEdge>): void {
+  const java = files.filter((file) => file.relative.endsWith(".java") && /@(?:RestController|Controller)\b/u.test(file.source)).map((file) => ({ file, ranges: controllerRanges(file) }));
+  const contextPath = springContextPath(files);
+  for (const contract of files.filter((file) => /(^|\/)(?:openapi|swagger)\.ya?ml$/iu.test(file.relative))) {
+    let document: OpenApiDocument;
+    try { document = parseYaml(contract.source) as OpenApiDocument; } catch { continue; }
+    const base = openApiBasePath(document, contextPath);
+    for (const [route, pathItem] of Object.entries(document.paths ?? {})) {
+      for (const method of ["get", "post", "put", "patch", "delete"] as const) {
+        const operation = pathItem[method];
+        if (!operation) continue;
+        const operationId = typeof operation.operationId === "string" && operation.operationId.trim() ? operation.operationId.trim() : `${method}-${route}`;
+        const path = joinRoute(base, route);
+        const escaped = operationId.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+        const declaration = new RegExp(`\\b(?:public|protected)\\s+(?:(?:static|final|synchronized|abstract|default|native|strictfp)\\s+)*(?:<[^>{};]+>\\s*)?[^{};=]{1,300}?\\b${escaped}\\s*\\(`, "gu");
+        const implementations = java.flatMap(({ file, ranges }) => [...file.source.matchAll(declaration)].filter((match) => ranges.some((range) => range.start < match.index && match.index < range.end)).map((match) => ({ file, offset: match.index + match[0].lastIndexOf(operationId) })));
+        const contractOffset = contract.source.indexOf(`operationId: ${operationId}`);
+        const attributes = { method: method.toUpperCase(), path, operationId, framework: "openapi-spring", contract: contract.relative };
+        if (implementations.length === 1) {
+          const implementation = implementations[0]!;
+          const moduleId = stableId("module", moduleName(implementation.file));
+          const endpoint = addFinding(nodes, edges, implementation.file, moduleId, "endpoint", operationId, implementation.offset, attributes, "proven", true);
+          addNode(nodes, { ...endpoint, sources: [...endpoint.sources, span(contract, Math.max(0, contractOffset), operationId)] });
+        } else {
+          const moduleId = stableId("module", moduleName(contract));
+          const endpoint = addFinding(nodes, edges, contract, moduleId, "endpoint", operationId, Math.max(0, contractOffset), { ...attributes, implementationMatches: implementations.length }, "inferred", true, [implementations.length === 0 ? "OpenAPI operation has no uniquely attributed source implementation." : "OpenAPI operation matches multiple source implementations."]);
+          addNode(nodes, endpoint);
+        }
+      }
+    }
+  }
+}
+
 function discoverJava(file: SourceFile, moduleId: string, nodes: Map<string, DiscoveryNode>, edges: Map<string, DiscoveryEdge>, diagnostics: DiscoveryDiagnostic[], constants: JavaConstants): void {
   const source = file.source;
   const controllers: ControllerContext[] = [];
   const publisherAdapters: { readonly name: string; readonly attributes: Record<string, unknown>; readonly start: number; readonly end: number }[] = [];
-  const classMatch = /((?:@[\w.]+(?:\([^)]*\))?\s*)*)(?:public\s+)?(?:abstract\s+)?(class|interface|record|enum)\s+(\w+)/gmu;
+  const classMatch = new RegExp(JAVA_TYPE_DECLARATION.source, JAVA_TYPE_DECLARATION.flags);
+  const structure = javaStructure(source);
   let match: RegExpExecArray | null;
-  while ((match = classMatch.exec(source)) !== null) {
-    const annotations = match[1] ?? "";
-    const declarationKind = match[2] ?? "class";
-    const name = match[3] ?? "Anonymous";
+  while ((match = classMatch.exec(structure)) !== null) {
+    const annotations = annotationsBeforeDeclaration(source, match.index);
+    const declarationKind = match[1] ?? "class";
+    const name = match[2] ?? "Anonymous";
     const offset = match.index;
     const recordOpen = declarationKind === "record" ? source.indexOf("(", match.index + match[0].length) : -1;
     const recordClose = recordOpen >= 0 ? matchingDelimiter(source, recordOpen, "(", ")") : undefined;
@@ -311,18 +435,24 @@ function discoverJava(file: SourceFile, moduleId: string, nodes: Map<string, Dis
     const controller = /@(?:RestController|Controller)\b/u.test(annotations);
     const graphqlController = controller && /@(QueryMapping|MutationMapping|SubscriptionMapping)\b/u.test(declarationWindow);
     const profile = annotationArgument(annotationNamed(annotations, "Profile") ?? "");
+    const conditional = annotationNamed(annotations, "ConditionalOnProperty");
     const publisherTransport = /\b(?:KafkaTemplate|StreamBridge)\b/u.test(declarationWindow) ? "kafka" : /\bRabbitTemplate\b/u.test(declarationWindow) ? "rabbitmq" : /\bApplicationEventPublisher\b/u.test(declarationWindow) ? "spring-event" : undefined;
     if (controller) {
       const mappingOffset = annotations.search(/@RequestMapping\b/u);
       const mapping = mappingOffset >= 0 ? readJavaAnnotation(annotations, mappingOffset) : undefined;
       controllers.push({ offset, ...(mapping ? mappingPath(mapping.source, constants, file) : { path: "/" }) });
     }
-    if (/@(?:Entity|Document)\b/u.test(annotations)) addFinding(nodes, edges, file, moduleId, "entity", name, offset, { persistence: /@Entity/u.test(annotations) ? "jpa" : "document", relationships: [...declarationWindow.matchAll(/@(OneToOne|OneToMany|ManyToOne|ManyToMany)\b/gu)].map((item) => item[1]!) }, "proven", true);
+    if (/@(?:Entity|Document)\b/u.test(annotations)) addFinding(nodes, edges, file, moduleId, "entity", name, offset, { persistence: /@Entity/u.test(annotations) ? "jpa" : "document", role: "entity", relationships: [...declarationWindow.matchAll(/@(OneToOne|OneToMany|ManyToOne|ManyToMany)\b/gu)].map((item) => item[1]!) }, "proven", true);
+    else if (/@MappedSuperclass\b/u.test(annotations)) addFinding(nodes, edges, file, moduleId, "entity", name, offset, { persistence: "jpa", role: "mapped-superclass" }, "proven", false);
     else if (controller) addFinding(nodes, edges, file, moduleId, "service", name, offset, { framework: graphqlController ? "spring-graphql" : "spring", role: graphqlController ? "graphql-controller" : "http-controller" });
     else if (/@ConfigurationProperties\b/u.test(annotations)) addFinding(nodes, edges, file, moduleId, "configuration", name, offset, { framework: "spring", role: "configuration-properties", prefix: annotationArgument(annotations) });
-    else if (/@Configuration\b/u.test(annotations)) addFinding(nodes, edges, file, moduleId, "configuration", name, offset, { framework: "spring", role: "configuration-class" });
+    else if (/@Configuration\b/u.test(annotations)) addFinding(nodes, edges, file, moduleId, "configuration", name, offset, { framework: "spring", role: "configuration-class", ...(conditional ? { condition: { property: annotationArgument(conditional, "name"), havingValue: annotationArgument(conditional, "havingValue") } } : {}), ...(profile ? { profiles: [profile] } : {}) });
     else if (/@(?:FeignClient)\b/u.test(annotations)) addFinding(nodes, edges, file, moduleId, "vendor-call", name, offset, { client: "feign", target: annotationArgument(annotations, "name") ?? annotationArgument(annotations) ?? "dynamic" }, annotationArgument(annotations, "url")?.includes("${") ? "opaque" : "proven", true);
-    else if (/(?:Repository|JpaRepository|CrudRepository|PagingAndSortingRepository)\b/u.test(match[0]) || /@Repository\b/u.test(annotations)) addFinding(nodes, edges, file, moduleId, "repository", name, offset, { persistence: "jpa" }, "proven", true);
+    else if (/(?:Repository|JpaRepository|CrudRepository|PagingAndSortingRepository)\b/u.test(match[0]) || /@Repository\b/u.test(annotations)) {
+      const contract = declarationKind === "interface" && !profile && !/extends\s+[^\{;]*\b(?:Repository|JpaRepository|CrudRepository|PagingAndSortingRepository)\s*</u.test(declarationWindow);
+      const persistence = profile === "jdbc" ? "jdbc" : profile === "spring-data-jpa" ? "spring-data-jpa" : profile === "jpa" || /\bEntityManager\b/u.test(declarationWindow) ? "jpa" : contract ? "abstract" : "jpa";
+      addFinding(nodes, edges, file, moduleId, "repository", name, offset, { persistence, role: contract ? "repository-contract" : "repository-adapter", ...(profile ? { profiles: [profile] } : {}) }, contract ? "inferred" : "proven", true);
+    }
     else if (/(?:DAO|Dao)$/u.test(name)) addFinding(nodes, edges, file, moduleId, "repository", name, offset, { persistence: "custom-dao" }, "inferred", true, ["Custom DAO semantics require source or runtime evidence before extraction."]);
     else if (declarationKind === "interface" && /(?:Publisher|Producer)$/u.test(name)) addFinding(nodes, edges, file, moduleId, "publisher", name, offset, { framework: "java", role: "publisher-contract", transport: "dynamic" }, "inferred", true);
     else if (publisherTransport && /(?:Publisher|Producer)$/u.test(name)) {
@@ -332,7 +462,7 @@ function discoverJava(file: SourceFile, moduleId: string, nodes: Map<string, Dis
     } else if (declarationKind === "interface" && /Service$/u.test(name)) addFinding(nodes, edges, file, moduleId, "service", name, offset, { framework: "java", role: "service-contract" }, "inferred");
     else if (/@(?:JsonDeserialize|JsonSerialize|Valid|Validated)\b/u.test(annotations) || /(?:Request|Response|Dto|DTO|Payload)$/u.test(name)) addFinding(nodes, edges, file, moduleId, "contract", name, offset, { boundary: /(?:Request|Response|Payload)$/u.test(name), serialization: serialization.length > 0 || /@Json/u.test(annotations) ? "jackson" : "java", fields: recordComponents, validation: [...new Set(validation)] });
     else if (/Mapper$/u.test(name) || /@Mapper\b/u.test(annotations)) addFinding(nodes, edges, file, moduleId, "mapper", name, offset, { implementation: /@Mapper/u.test(annotations) ? "mapstruct" : "manual" }, /\b(?:Repository|WebClient|RestClient)\b/u.test(source) ? "opaque" : "inferred", false, /\b(?:Repository|WebClient|RestClient)\b/u.test(source) ? ["Mapper performs a lookup or effect and cannot be reduced to a pure transformation."] : undefined);
-    else if (/@(?:Service|Component)\b/u.test(annotations)) addFinding(nodes, edges, file, moduleId, "service", name, offset, { framework: "spring", role: /@Service\b/u.test(annotations) ? "service" : "component" });
+    else if (/@(?:Service|Component)\b/u.test(annotations)) addFinding(nodes, edges, file, moduleId, "service", name, offset, { framework: "spring", role: /@Service\b/u.test(annotations) ? "service" : "component", ...(profile ? { profiles: [profile] } : {}) });
   }
 
   for (const occurrence of source.matchAll(/@(Get|Post|Put|Patch|Delete|Request)Mapping\b/gu)) {
@@ -488,7 +618,7 @@ function addSourceDependencyEdges(files: readonly SourceFile[], nodes: Map<strin
     for (const implementation of candidates.filter((node) => node.kind === contract.kind && node.id !== contract.id)) {
       const source = implementation.sources[0];
       const file = source ? filesByPath.get(source.path) : undefined;
-      if (!file || !new RegExp(`\\bimplements\\s+[^\\{;]*\\b${contract.name}\\b`, "u").test(file.source)) continue;
+      if (!file || !new RegExp(`\\b(?:implements|extends)\\s+[^\\{;]*\\b${contract.name}\\b`, "u").test(file.source)) continue;
       const edge: DiscoveryEdge = { id: stableId("edge", "calls", contract.id, implementation.id), kind: "calls", from: contract.id, to: implementation.id, confidence: "inferred", sources: [span(file, file.source.search(new RegExp(`\\b${contract.name}\\b`, "u")), `${implementation.name} implements ${contract.name}`)] };
       edges.set(edge.id, edge);
     }
@@ -574,6 +704,7 @@ export async function discoverSpring(repository: string, options: { readonly nam
       diagnostics.push({ code: "KOTLIN_INVENTORY_ONLY", severity: "warning", message: `${file.relative} was inventoried without deep Kotlin semantics.`, source: span(file) });
     } else if (/application.*\.(?:properties|ya?ml)$/u.test(file.relative)) addFinding(nodes, edges, file, moduleId, "configuration", basename(file.relative), 0, { format: extname(file.relative).slice(1), redacted: true }, "proven", false);
   }
+  discoverOpenApi(semanticFiles, nodes, edges);
   const openRewrite = analyzerRequested === "source" ? undefined : await runOpenRewrite(root);
   if (openRewrite) {
     const byPath = new Map(semanticFiles.map((file) => [file.relative, file]));

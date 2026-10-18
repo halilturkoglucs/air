@@ -22,7 +22,7 @@ import { importPostgres } from "@air/import-postgres";
 import { importOpenApiSource } from "@air/import-openapi";
 import { importNextjs } from "@air/import-nextjs";
 import { importSpring } from "@air/import-spring";
-import { adoptExtractedCapability, discoverSpring, discoveryFromAirCandidate, extractCapability, ingestEvidence, mergeDiscoveryBundles, readDiscoveryBundle, startWorkbench, verifyImportedCapability, writeDiscoveryBundle, type DiscoveryBundle } from "@air/discovery";
+import { adoptExtractedCapability, discoverSpring, discoveryFromAirCandidate, extractCapability, ingestEvidence, mergeDiscoveryBundles, readDiscoveryBundle, startWorkbench, verifyImportedCapability, writeDiscoveryBundle, writeDiscoveryReport, type DiscoveryBundle } from "@air/discovery";
 import { startLanguageServer } from "@air/language-server";
 import { NextjsTargetAdapter, type NextjsTargetOptions } from "@air/target-nextjs";
 import { RustTargetAdapter, type RustTargetOptions } from "@air/target-rust";
@@ -67,10 +67,11 @@ Usage:
   air import-openapi [options]                Import OpenAPI 3.x into reviewable AIR
   air import-nextjs [options]                 Import Next.js App Router + Drizzle into AIR
   air discover spring <repository> [options] Build an evidence-backed discovery bundle
+  air discovery report <bundle> [options] Export a deterministic discovery report
   air evidence ingest <trace> [options]      Ingest redacted runtime/test evidence
   air workbench <discovery> [options]        Start the local architecture workbench
-  air extract <discovery> [options]          Extract one reviewed business capability
-  air verify-import <capability> [options]   Compare legacy and candidate behavior
+  air extract <discovery> [options]          EXPERIMENTAL: extract one reviewed capability
+  air verify-import <capability> [options]   EXPERIMENTAL: compare legacy and candidate behavior
   air verify <file> --scenarios <file> [--output <file>]
                                               Execute canonical verification scenarios
   air verify-live <file> [options]             Verify a running target over HTTP + PostgreSQL
@@ -79,7 +80,7 @@ Usage:
   air evidence-pack [options]                  Assemble immutable verification evidence
   air evidence-verify <directory>              Verify every evidence-pack checksum
   air ownership <directory> [--json]          Inspect generated/user ownership boundaries
-  air adopt <directory> --user-owned <path>   Release selected artifacts to user ownership
+  air adopt <directory> --user-owned <path>   EXPERIMENTAL for capability adoption
   air reconcile <directory> [--json]          Alias for ownership drift inspection
   air target-check <file> [options]           Solve target compatibility and preferences
   air lsp                                      Start the AIR language server over stdio
@@ -1006,23 +1007,41 @@ async function evidenceCommand(args: readonly string[], io: CliIo): Promise<numb
 
 async function workbenchCommand(args: readonly string[], io: CliIo): Promise<number> {
   const [directory, ...options] = args;
-  const usage = "Usage: air workbench <discovery> [--host 127.0.0.1] [--port 4319]\n";
+  const usage = "Usage: air workbench <discovery> --reviewer <id> [--host 127.0.0.1] [--port 4319]\n";
   if (!directory || directory.startsWith("--")) { io.stderr(usage); return 2; }
-  let host = "127.0.0.1"; let port = 4319;
+  let host = "127.0.0.1"; let port = 4319; let reviewer: string | undefined;
   for (let index = 0; index < options.length; index += 1) {
     const option = options[index]; const value = options[index + 1];
-    if (!option || !["--host", "--port"].includes(option) || !value || value.startsWith("--")) { io.stderr(usage); return 2; }
+    if (!option || !["--host", "--port", "--reviewer"].includes(option) || !value || value.startsWith("--")) { io.stderr(usage); return 2; }
     index += 1;
-    if (option === "--host") host = value; else port = Number(value);
+    if (option === "--host") host = value; else if (option === "--port") port = Number(value); else reviewer = value.trim();
   }
-  if (!Number.isInteger(port) || port < 0 || port > 65535) { io.stderr(usage); return 2; }
+  if (!Number.isInteger(port) || port < 0 || port > 65535 || !reviewer) { io.stderr(usage); return 2; }
   try {
-    const workbench = await startWorkbench(resolve(directory), { host, port });
+    const workbench = await startWorkbench(resolve(directory), { host, port, reviewer });
     io.stdout(`AIR discovery workbench: ${workbench.url}\nPress Ctrl-C to stop.\n`);
     await new Promise<void>((resolvePromise) => {
       const stop = (): void => { workbench.server.close(() => resolvePromise()); };
       process.once("SIGINT", stop); process.once("SIGTERM", stop);
     });
+    return 0;
+  } catch (error) { io.stderr(formatError(error)); return 1; }
+}
+
+async function discoveryCommand(args: readonly string[], io: CliIo): Promise<number> {
+  const [action, directory, ...options] = args;
+  const usage = "Usage: air discovery report <bundle> --output <directory>\n";
+  if (action !== "report" || !directory || directory.startsWith("--")) { io.stderr(usage); return 2; }
+  let output: string | undefined;
+  for (let index = 0; index < options.length; index += 1) {
+    const option = options[index]; const value = options[index + 1];
+    if (option !== "--output" || !value || value.startsWith("--") || output) { io.stderr(usage); return 2; }
+    output = value; index += 1;
+  }
+  if (!output) { io.stderr(usage); return 2; }
+  try {
+    const result = await writeDiscoveryReport(resolve(directory), resolve(output));
+    io.stdout(`Discovery report: ${result.json}\nHTML report: ${result.html}\n  ${result.report.summary.entryPoints} entry point(s), ${result.report.summary.unresolved} unresolved boundar${result.report.summary.unresolved === 1 ? "y" : "ies"}\n`);
     return 0;
   } catch (error) { io.stderr(formatError(error)); return 1; }
 }
@@ -1832,6 +1851,7 @@ export async function runCli(args: readonly string[], io: CliIo = defaultIo): Pr
   if (command === "import-nextjs") return importNextjsCommand(args.slice(1), io);
   if (command === "import-spring") return importSpringCommand(args.slice(1), io);
   if (command === "discover") return discoverCommand(args.slice(1), io);
+  if (command === "discovery") return discoveryCommand(args.slice(1), io);
   if (command === "evidence") return evidenceCommand(args.slice(1), io);
   if (command === "workbench") return workbenchCommand(args.slice(1), io);
   if (command === "extract") return extractCommand(args.slice(1), io);

@@ -42,7 +42,7 @@ The authoritative Java path is the pinned OpenRewrite 8.90.4 analyzer in `packag
 mvn -q -DskipTests package -f packages/discovery/spring-analyzer/pom.xml
 ```
 
-`air discover spring` uses the analyzer when its shaded JAR is present, or when `AIR_OPENREWRITE_ANALYZER_JAR` names it. `--analyzer openrewrite` fails if it is unavailable. `--analyzer auto` can use the conservative source analyzer, but emits a review-required diagnostic. The source analyzer is a resilience and bootstrap path, not a claim of equivalent Java type attribution.
+The v0.11 npm CLI includes the shaded analyzer JAR and requires Java 17 or newer for deep Spring discovery; it does not require Maven or a source checkout. `AIR_OPENREWRITE_ANALYZER_JAR` can explicitly select a development build. `--analyzer openrewrite` fails if the analyzer or Java is unavailable. `--analyzer auto` can use the conservative source analyzer, but emits a review-required diagnostic. The source analyzer is a resilience and bootstrap path, not a claim of equivalent Java type attribution.
 
 The first pass inventories Maven/Gradle modules, controllers, boundary DTOs, Jackson/validation signals, JPA entities/repositories/queries/transactions, Spring Security declarations, Kafka/Rabbit/Spring event interactions, Integration flows, schedules, Feign/WebClient/RestClient calls, caches/Redis, properties, and dynamic routing. Kotlin is deliberately inventory-only in discovery v0.1.
 
@@ -60,13 +60,18 @@ Authorization, cookies, secrets, tokens, passwords, payloads, bodies, and common
 
 ```bash
 air discover spring ./legacy-service --output .air/discovery
-air workbench .air/discovery
+air workbench .air/discovery --reviewer alice@example.com
+air discovery report .air/discovery --output .air/report
+
+# Experimental in v0.11:
 air extract .air/discovery --capability endpoint:... --output capabilities/place-order
 ```
 
-The workbench binds to loopback only. It provides entry-point and system views, provenance navigation, confidence and coverage, and decisions to approve, reject, rename, merge, or retain a typed opaque boundary.
+The workbench binds to loopback only. It provides module, system, entry-point, and reachable-capability views; module/kind/confidence/unresolved filters; edge provenance; content-hash-verified source excerpts; diagnostics; unmatched evidence; and review progress. Rejection and `mark-opaque` decisions require reasons, and every decision records the requested reviewer identity.
 
-Extraction follows outgoing evidence edges from one entry point. It fails when an inferred, opaque, or conflicting observable effect has not been reviewed. Accepted pure mappers become bounded transformations; vendor dependencies become typed outbound ports; reviewed opaque behavior becomes a foreign System v0.2 component. The generated capability directory contains Application v0.10, System v0.2, verification v0.3, and an evidence-bound capability manifest.
+`air discovery report` writes deterministic `report.json` and self-contained `report.html`. The JSON validates against the closed `air.dev/discovery-report/v0.1` schema. Reports contain topology, coverage, confidence, unresolved boundaries, review state, analyzer versions, and provenance metadata, but never source excerpts or payload values.
+
+Extraction is experimental in v0.11. It follows outgoing evidence edges from one entry point and fails when an inferred, opaque, or conflicting observable effect has not been reviewed. Accepted pure mappers become bounded transformations; vendor dependencies become typed outbound ports; reviewed opaque behavior becomes a foreign System v0.2 component. The generated capability directory contains Application v0.10, System v0.2, verification v0.3, and an evidence-bound capability manifest.
 
 ## Differential verification and adoption
 
@@ -78,7 +83,7 @@ air verify-import capabilities/place-order \
 air adopt capabilities/place-order
 ```
 
-Verification v0.3 compares normalized legacy and candidate HTTP status, selected headers, and bodies. Suites can also request database, message, and outbound-call observations from a self-hosted observation adapter. Persisted results contain content hashes and sizes instead of raw bodies or side-effect values; sensitive response headers are redacted. A failed, missing, or stale comparison does not transfer ownership. `air adopt` writes an immutable evidence-hash-linked adoption record only when the latest result passed for the same extracted capability and discovery evidence.
+Verification and adoption are experimental in v0.11. Verification v0.3 compares normalized legacy and candidate HTTP status, selected headers, and bodies. Suites can also request database, message, and outbound-call observations from a self-hosted observation adapter. Persisted results contain content hashes and sizes instead of raw bodies or side-effect values; sensitive response headers are redacted. A failed, missing, or stale comparison does not transfer ownership. `air adopt` writes an immutable evidence-hash-linked adoption record only when the latest result passed for the same extracted capability and discovery evidence.
 
 ## Representation policy
 
