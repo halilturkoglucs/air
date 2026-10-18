@@ -12,6 +12,9 @@ const SOURCE_EXTENSIONS = new Set([".java", ".kt", ".xml", ".properties", ".yml"
 interface SourceFile { readonly absolute: string; readonly relative: string; readonly source: string; readonly hash: string; readonly buildCoordinate?: string }
 interface BytecodeFile { readonly relative: string; readonly hash: string }
 interface OpenRewriteFinding { readonly path: string; readonly line: number; readonly kind: NodeKind; readonly name: string; readonly semantic: string; readonly annotation: string }
+interface JavaAnnotation { readonly source: string; readonly end: number }
+interface ControllerContext { readonly offset: number; readonly path?: string; readonly pathExpression?: string }
+interface JavaConstants { readonly simple: ReadonlyMap<string, string>; readonly qualified: ReadonlyMap<string, string> }
 const execFileAsync = promisify(execFile);
 
 async function runOpenRewrite(root: string): Promise<readonly OpenRewriteFinding[] | undefined> {
@@ -90,70 +93,225 @@ function annotationArgument(annotation: string, key = "value"): string | undefin
   return named ?? /\(\s*"([^"]+)"/u.exec(annotation)?.[1];
 }
 
-function discoverJava(file: SourceFile, moduleId: string, nodes: Map<string, DiscoveryNode>, edges: Map<string, DiscoveryEdge>, diagnostics: DiscoveryDiagnostic[]): void {
+function readJavaAnnotation(source: string, offset: number): JavaAnnotation | undefined {
+  if (source[offset] !== "@") return undefined;
+  let cursor = offset + 1;
+  while (cursor < source.length && /[\w.$]/u.test(source[cursor]!)) cursor += 1;
+  const nameEnd = cursor;
+  while (cursor < source.length && /\s/u.test(source[cursor]!)) cursor += 1;
+  if (source[cursor] !== "(") return { source: source.slice(offset, nameEnd), end: nameEnd };
+  let depth = 0;
+  let quote: string | undefined;
+  let escaped = false;
+  for (; cursor < source.length; cursor += 1) {
+    const character = source[cursor]!;
+    if (quote) {
+      if (escaped) escaped = false;
+      else if (character === "\\") escaped = true;
+      else if (character === quote) quote = undefined;
+      continue;
+    }
+    if (character === "\"" || character === "'") quote = character;
+    else if (character === "(") depth += 1;
+    else if (character === ")" && --depth === 0) return { source: source.slice(offset, cursor + 1), end: cursor + 1 };
+  }
+  return { source: source.slice(offset), end: source.length };
+}
+
+function skipJavaTrivia(source: string, start: number): number {
+  let cursor = start;
+  while (cursor < source.length) {
+    const whitespace = /^\s+/u.exec(source.slice(cursor));
+    if (whitespace) { cursor += whitespace[0].length; continue; }
+    if (source.startsWith("//", cursor)) { cursor = source.indexOf("\n", cursor + 2); if (cursor < 0) return source.length; continue; }
+    if (source.startsWith("/*", cursor)) { const end = source.indexOf("*/", cursor + 2); return end < 0 ? source.length : skipJavaTrivia(source, end + 2); }
+    break;
+  }
+  return cursor;
+}
+
+function methodFollowingAnnotation(source: string, start: number): string | undefined {
+  let cursor = start;
+  while (cursor < source.length) {
+    cursor = skipJavaTrivia(source, cursor);
+    if (source[cursor] !== "@") break;
+    const annotation = readJavaAnnotation(source, cursor);
+    if (!annotation) break;
+    cursor = annotation.end;
+  }
+  cursor = skipJavaTrivia(source, cursor);
+  const boundaryCandidates = [source.indexOf("{", cursor), source.indexOf(";", cursor)].filter((value) => value >= 0);
+  const boundary = Math.min(...boundaryCandidates, cursor + 8000);
+  const declaration = source.slice(cursor, Math.min(boundary, cursor + 8000));
+  if (/\b(?:class|interface|record|enum|@interface)\b/u.test(declaration)) return undefined;
+  const open = declaration.indexOf("(");
+  if (open < 0) return undefined;
+  return /([A-Za-z_$][\w$]*)\s*$/u.exec(declaration.slice(0, open))?.[1];
+}
+
+function argumentExpression(annotation: string, keys: readonly string[] = ["path", "value"]): string | undefined {
+  const open = annotation.indexOf("(");
+  const close = annotation.lastIndexOf(")");
+  if (open < 0 || close <= open) return undefined;
+  const body = annotation.slice(open + 1, close);
+  const argumentsList: string[] = [];
+  let start = 0;
+  let depth = 0;
+  let quote: string | undefined;
+  let escaped = false;
+  for (let index = 0; index < body.length; index += 1) {
+    const character = body[index]!;
+    if (quote) {
+      if (escaped) escaped = false;
+      else if (character === "\\") escaped = true;
+      else if (character === quote) quote = undefined;
+      continue;
+    }
+    if (character === "\"" || character === "'") quote = character;
+    else if ("({[".includes(character)) depth += 1;
+    else if (")}]".includes(character)) depth -= 1;
+    else if (character === "," && depth === 0) { argumentsList.push(body.slice(start, index).trim()); start = index + 1; }
+  }
+  argumentsList.push(body.slice(start).trim());
+  for (const key of keys) {
+    const named = argumentsList.map((argument) => new RegExp(`^${key}\\s*=\\s*([\\s\\S]+)$`, "u").exec(argument)?.[1]?.trim()).find(Boolean);
+    if (named) return named;
+  }
+  const positional = argumentsList[0];
+  return positional && !/^\w+\s*=/u.test(positional) ? positional : undefined;
+}
+
+function collectStringConstants(files: readonly SourceFile[]): JavaConstants {
+  const expressions = new Map<string, string>();
+  for (const file of files.filter((candidate) => candidate.relative.endsWith(".java"))) {
+    const types = [...file.source.matchAll(/\b(?:class|interface|record|enum)\s+(\w+)/gu)].map((match) => ({ name: match[1]!, offset: match.index }));
+    for (const match of file.source.matchAll(/\b(?:public\s+|protected\s+|private\s+)?(?:static\s+)?(?:final\s+)?String\s+(\w+)\s*=\s*([^;]+);/gu)) {
+      const owner = types.filter((type) => type.offset < match.index).at(-1)?.name;
+      if (owner) expressions.set(`${packageName(file.source)}.${owner}.${match[1]}`.replace(/^\./u, ""), match[2]!.trim());
+    }
+  }
+  const qualified = new Map<string, string>();
+  const resolveExpression = (key: string, expression: string): string | undefined => {
+    const owner = key.slice(0, key.lastIndexOf("."));
+    const tokens = expression.split("+").map((token) => token.trim());
+    if (tokens.length === 0 || tokens.some((token) => token.length === 0)) return undefined;
+    const resolved = tokens.map((token) => {
+      if (/^"(?:\\.|[^"\\])*"$/u.test(token)) { try { return JSON.parse(token) as string; } catch { return undefined; } }
+      const local = qualified.get(`${owner}.${token}`);
+      if (local !== undefined) return local;
+      const matches = [...qualified].filter(([name]) => name.endsWith(`.${token}`)).map(([, value]) => value);
+      const unique = [...new Set(matches)];
+      return unique.length === 1 ? unique[0] : undefined;
+    });
+    return resolved.every((value): value is string => value !== undefined) ? resolved.join("") : undefined;
+  };
+  for (let pass = 0; pass < expressions.size + 1; pass += 1) {
+    let changed = false;
+    for (const [key, expression] of expressions) {
+      if (qualified.has(key)) continue;
+      const value = resolveExpression(key, expression);
+      if (value !== undefined) { qualified.set(key, value); changed = true; }
+    }
+    if (!changed) break;
+  }
+  const bySimple = new Map<string, Set<string>>();
+  for (const [key, value] of qualified) {
+    const name = key.split(".").at(-1)!;
+    bySimple.set(name, new Set([...(bySimple.get(name) ?? []), value]));
+  }
+  const simple = new Map([...bySimple].filter(([, values]) => values.size === 1).map(([name, values]) => [name, [...values][0]!]));
+  return { simple, qualified };
+}
+
+function mappingPath(annotation: string, constants: JavaConstants, file: SourceFile): { readonly path?: string; readonly pathExpression?: string } {
+  const expression = argumentExpression(annotation);
+  if (!expression) return { path: "/" };
+  const candidate = expression.replace(/^\{\s*/u, "").replace(/\s*\}$/u, "").split(",", 1)[0]!.trim();
+  if (/^"(?:\\.|[^"\\])*"$/u.test(candidate)) { try { return { path: JSON.parse(candidate) as string }; } catch { /* retain expression */ } }
+  const exactImport = new RegExp(`\\bimport\\s+static\\s+([\\w.]+\\.${candidate.replaceAll(".", "\\.")})\\s*;`, "u").exec(file.source)?.[1];
+  const wildcardOwner = new RegExp("\\bimport\\s+static\\s+([\\w.]+)\\.\\*\\s*;", "gu");
+  const wildcardMatches = [...file.source.matchAll(wildcardOwner)].map((match) => constants.qualified.get(`${match[1]}.${candidate}`)).filter((value): value is string => value !== undefined);
+  const qualifiedMatches = [...constants.qualified].filter(([name]) => name.endsWith(`.${candidate}`)).map(([, value]) => value);
+  const fileSpecific = exactImport ? constants.qualified.get(exactImport) : undefined;
+  const choices = [...new Set([fileSpecific, ...wildcardMatches, ...(candidate.includes(".") ? qualifiedMatches : []), constants.simple.get(candidate)].filter((value): value is string => value !== undefined))];
+  const resolved = choices.length === 1 ? choices[0] : undefined;
+  return resolved === undefined ? { pathExpression: candidate } : { path: resolved };
+}
+
+function joinRoute(base: string, route: string): string {
+  const parts = [base, route].filter((part) => part && part !== "/").map((part) => part.replace(/^\/+|\/+$/gu, ""));
+  return parts.length === 0 ? "/" : `/${parts.join("/")}`;
+}
+
+function discoverJava(file: SourceFile, moduleId: string, nodes: Map<string, DiscoveryNode>, edges: Map<string, DiscoveryEdge>, diagnostics: DiscoveryDiagnostic[], constants: JavaConstants): void {
   const source = file.source;
-  const classMatch = /((?:@[\w.]+(?:\([^)]*\))?\s*)*)(?:public\s+)?(?:abstract\s+)?(?:class|interface|record|enum)\s+(\w+)/gmu;
+  const controllers: ControllerContext[] = [];
+  const classMatch = /((?:@[\w.]+(?:\([^)]*\))?\s*)*)(?:public\s+)?(?:abstract\s+)?(class|interface|record|enum)\s+(\w+)/gmu;
   let match: RegExpExecArray | null;
   while ((match = classMatch.exec(source)) !== null) {
     const annotations = match[1] ?? "";
-    const name = match[2] ?? "Anonymous";
+    const declarationKind = match[2] ?? "class";
+    const name = match[3] ?? "Anonymous";
     const offset = match.index;
     const declarationWindow = source.slice(offset, offset + 1200);
     const recordComponents = new RegExp(`record\\s+${name}\\s*\\(([^)]*)\\)`, "u").exec(declarationWindow)?.[1]?.split(",").map((component) => component.trim().split(/\s+/u).at(-1)).filter((field): field is string => Boolean(field)) ?? [];
     const validation = [...declarationWindow.matchAll(/@(NotNull|NotBlank|Size|Min|Max|Pattern|Email)\b/gu)].map((item) => item[1]!);
     const serialization = [...declarationWindow.matchAll(/@(JsonProperty|JsonAlias|JsonIgnore|JsonFormat)\b/gu)].map((item) => item[1]!);
+    const controller = /@(?:RestController|Controller)\b/u.test(annotations);
+    if (controller) {
+      const mappingOffset = annotations.search(/@RequestMapping\b/u);
+      const mapping = mappingOffset >= 0 ? readJavaAnnotation(annotations, mappingOffset) : undefined;
+      controllers.push({ offset, ...(mapping ? mappingPath(mapping.source, constants, file) : { path: "/" }) });
+    }
     if (/@(?:Entity|Document)\b/u.test(annotations)) addFinding(nodes, edges, file, moduleId, "entity", name, offset, { persistence: /@Entity/u.test(annotations) ? "jpa" : "document", relationships: [...declarationWindow.matchAll(/@(OneToOne|OneToMany|ManyToOne|ManyToMany)\b/gu)].map((item) => item[1]!) }, "proven", true);
-    else if (/@(?:RestController|Controller)\b/u.test(annotations)) addFinding(nodes, edges, file, moduleId, "service", name, offset, { framework: "spring", role: "http-controller" });
+    else if (controller) addFinding(nodes, edges, file, moduleId, "service", name, offset, { framework: "spring", role: "http-controller" });
+    else if (/@ConfigurationProperties\b/u.test(annotations)) addFinding(nodes, edges, file, moduleId, "configuration", name, offset, { framework: "spring", role: "configuration-properties", prefix: annotationArgument(annotations) });
+    else if (/@Configuration\b/u.test(annotations)) addFinding(nodes, edges, file, moduleId, "configuration", name, offset, { framework: "spring", role: "configuration-class" });
     else if (/@(?:FeignClient)\b/u.test(annotations)) addFinding(nodes, edges, file, moduleId, "vendor-call", name, offset, { client: "feign", target: annotationArgument(annotations, "name") ?? annotationArgument(annotations) ?? "dynamic" }, annotationArgument(annotations, "url")?.includes("${") ? "opaque" : "proven", true);
     else if (/(?:Repository|JpaRepository|CrudRepository|PagingAndSortingRepository)\b/u.test(match[0]) || /@Repository\b/u.test(annotations)) addFinding(nodes, edges, file, moduleId, "repository", name, offset, { persistence: "jpa" }, "proven", true);
+    else if (/(?:DAO|Dao)$/u.test(name)) addFinding(nodes, edges, file, moduleId, "repository", name, offset, { persistence: "custom-dao" }, "inferred", true, ["Custom DAO semantics require source or runtime evidence before extraction."]);
+    else if (declarationKind === "interface" && /Service$/u.test(name)) addFinding(nodes, edges, file, moduleId, "service", name, offset, { framework: "java", role: "service-contract" }, "inferred");
     else if (/@(?:JsonDeserialize|JsonSerialize|Valid|Validated)\b/u.test(annotations) || /(?:Request|Response|Dto|DTO|Payload)$/u.test(name)) addFinding(nodes, edges, file, moduleId, "contract", name, offset, { boundary: /(?:Request|Response|Payload)$/u.test(name), serialization: serialization.length > 0 || /@Json/u.test(annotations) ? "jackson" : "java", fields: recordComponents, validation: [...new Set(validation)] });
     else if (/Mapper$/u.test(name) || /@Mapper\b/u.test(annotations)) addFinding(nodes, edges, file, moduleId, "mapper", name, offset, { implementation: /@Mapper/u.test(annotations) ? "mapstruct" : "manual" }, /\b(?:Repository|WebClient|RestClient)\b/u.test(source) ? "opaque" : "inferred", false, /\b(?:Repository|WebClient|RestClient)\b/u.test(source) ? ["Mapper performs a lookup or effect and cannot be reduced to a pure transformation."] : undefined);
+    else if (/@(?:Service|Component)\b/u.test(annotations)) addFinding(nodes, edges, file, moduleId, "service", name, offset, { framework: "spring", role: /@Service\b/u.test(annotations) ? "service" : "component" });
   }
 
-  const method = /((?:@[\w.]+(?:\([^)]*\))?\s*)+)(?:(?:public|protected|private|static|final|synchronized)\s+)*(?:[\w<>?,.@\[\]]+\s+)+(\w+)\s*\([^)]*\)/gmu;
-  while ((match = method.exec(source)) !== null) {
-    const annotations = match[1] ?? "";
-    const name = match[2] ?? "operation";
-    const offset = match.index;
-    const mapping = /@(Get|Post|Put|Patch|Delete|Request)Mapping\s*(\([^)]*\))?/u.exec(annotations);
-    if (mapping) {
-      const verb = mapping[1] === "Request" ? (/method\s*=\s*RequestMethod\.(\w+)/u.exec(mapping[2] ?? "")?.[1] ?? "GET") : mapping[1]?.toUpperCase();
-      addFinding(nodes, edges, file, moduleId, "endpoint", name, offset, { method: verb, path: annotationArgument(mapping[0]) ?? "/", framework: "spring-mvc" }, "proven", true);
-    }
-    const listenerKinds: readonly [RegExp, string][] = [[/@KafkaListener\b/u, "kafka"], [/@RabbitListener\b/u, "rabbitmq"], [/@EventListener\b/u, "spring-event"]];
-    for (const [pattern, transport] of listenerKinds) if (pattern.test(annotations)) addFinding(nodes, edges, file, moduleId, "listener", name, offset, { transport, destination: annotationArgument(annotations, transport === "kafka" ? "topics" : "queues") ?? annotationArgument(annotations) ?? "dynamic" }, annotations.includes("${") ? "opaque" : "proven", true);
-    if (/@Scheduled\b/u.test(annotations)) addFinding(nodes, edges, file, moduleId, "schedule", name, offset, { cron: annotationArgument(annotations, "cron"), fixedDelay: annotationArgument(annotations, "fixedDelayString") }, annotations.includes("${") ? "inferred" : "proven", true);
-    if (/@Transactional\b/u.test(annotations)) addFinding(nodes, edges, file, moduleId, "transaction", name, offset, { propagation: /propagation\s*=\s*Propagation\.(\w+)/u.exec(annotations)?.[1] ?? "REQUIRED" }, "proven", true);
-    if (/@(?:PreAuthorize|PostAuthorize|Secured|RolesAllowed)\b/u.test(annotations)) addFinding(nodes, edges, file, moduleId, "security", name, offset, { declaration: annotations.trim() }, /@PreAuthorize\([^)]*[+]/u.test(annotations) ? "opaque" : "proven", true);
-    if (/@Cacheable\b/u.test(annotations) || /@CachePut\b/u.test(annotations) || /@CacheEvict\b/u.test(annotations)) addFinding(nodes, edges, file, moduleId, "cache", name, offset, { operation: /@(Cacheable|CachePut|CacheEvict)/u.exec(annotations)?.[1], cache: annotationArgument(annotations, "cacheNames") ?? annotationArgument(annotations) }, annotations.includes("key =") ? "inferred" : "proven", true);
-    if (/@Query\b/u.test(annotations)) addFinding(nodes, edges, file, moduleId, "query", name, offset, { query: annotationArgument(annotations), native: /nativeQuery\s*=\s*true/u.test(annotations) }, "proven", true);
+  for (const occurrence of source.matchAll(/@(Get|Post|Put|Patch|Delete|Request)Mapping\b/gu)) {
+    const annotation = readJavaAnnotation(source, occurrence.index);
+    if (!annotation) continue;
+    const name = methodFollowingAnnotation(source, annotation.end);
+    if (!name) continue;
+    const local = mappingPath(annotation.source, constants, file);
+    const controller = controllers.filter((candidate) => candidate.offset < occurrence.index).at(-1);
+    const unresolved = controller?.pathExpression !== undefined || local.pathExpression !== undefined;
+    const path = unresolved ? undefined : local.path !== undefined && controller?.path !== undefined ? joinRoute(controller.path, local.path) : local.path;
+    const pathExpression = unresolved ? [controller?.pathExpression ?? (controller?.path !== undefined ? JSON.stringify(controller.path) : undefined), local.pathExpression ?? (local.path !== undefined ? JSON.stringify(local.path) : undefined)].filter(Boolean).join(" + ") : undefined;
+    const verb = occurrence[1] === "Request" ? (/method\s*=\s*RequestMethod\.(\w+)/u.exec(annotation.source)?.[1] ?? "GET") : occurrence[1]?.toUpperCase();
+    addFinding(nodes, edges, file, moduleId, "endpoint", name, occurrence.index, { method: verb, ...(path !== undefined ? { path } : {}), ...(pathExpression ? { pathExpression } : {}), framework: "spring-mvc" }, pathExpression ? "inferred" : "proven", true, pathExpression ? ["Route contains a source expression that requires build attribution or review."] : undefined);
   }
 
-  let lineOffset = 0;
-  let pendingAnnotations = "";
-  let pendingOffset = 0;
-  for (const line of source.split(/(?<=\n)/u)) {
-    const trimmed = line.trim();
-    if (trimmed.startsWith("@") && !/[{;}]/u.test(trimmed)) {
-      if (!pendingAnnotations) pendingOffset = lineOffset;
-      pendingAnnotations += line;
-      lineOffset += line.length;
-      continue;
-    }
-    const annotatedLine = `${pendingAnnotations}${line}`;
-    const annotationOffset = pendingAnnotations ? pendingOffset : lineOffset;
-    if (annotatedLine.includes("@")) {
-      const calls = [...annotatedLine.matchAll(/\b(\w+)\s*\(/gu)].map((candidate) => candidate[1]!).filter((name) => !["hasRole", "hasAuthority", "value"].includes(name));
-      const name = calls.at(-1);
-      if (name) {
-        const mapping = /@(Get|Post|Put|Patch|Delete|Request)Mapping\b/u.exec(annotatedLine);
-        if (mapping) addFinding(nodes, edges, file, moduleId, "endpoint", name, annotationOffset, { method: mapping[1] === "Request" ? "GET" : mapping[1]?.toUpperCase(), path: annotationArgument(annotatedLine) ?? "/", framework: "spring-mvc" }, "proven", true);
-        if (/@Transactional\b/u.test(annotatedLine)) addFinding(nodes, edges, file, moduleId, "transaction", name, annotationOffset, { propagation: /Propagation\.(\w+)/u.exec(annotatedLine)?.[1] ?? "REQUIRED" }, "proven", true);
-        if (/@(?:PreAuthorize|PostAuthorize|Secured|RolesAllowed)\b/u.test(annotatedLine)) addFinding(nodes, edges, file, moduleId, "security", name, annotationOffset, { declaration: annotatedLine.trim() }, annotatedLine.includes("+") ? "opaque" : "proven", true);
-      }
-    }
-    pendingAnnotations = "";
-    lineOffset += line.length;
+  for (const occurrence of source.matchAll(/@(KafkaListener|RabbitListener|EventListener|Scheduled|Transactional|PreAuthorize|PostAuthorize|Secured|RolesAllowed|Cacheable|CachePut|CacheEvict|Query)\b/gu)) {
+    const annotation = readJavaAnnotation(source, occurrence.index);
+    if (!annotation) continue;
+    const name = methodFollowingAnnotation(source, annotation.end);
+    if (!name) continue;
+    const annotationName = occurrence[1]!;
+    if (["KafkaListener", "RabbitListener", "EventListener"].includes(annotationName)) {
+      const transport = annotationName === "KafkaListener" ? "kafka" : annotationName === "RabbitListener" ? "rabbitmq" : "spring-event";
+      const destinationKey = transport === "kafka" ? "topics" : transport === "rabbitmq" ? "queues" : "value";
+      addFinding(nodes, edges, file, moduleId, "listener", name, occurrence.index, { transport, destination: annotationArgument(annotation.source, destinationKey) ?? annotationArgument(annotation.source) ?? "dynamic" }, annotation.source.includes("${") ? "opaque" : "proven", true);
+    } else if (annotationName === "Scheduled") addFinding(nodes, edges, file, moduleId, "schedule", name, occurrence.index, { cron: annotationArgument(annotation.source, "cron"), fixedDelay: annotationArgument(annotation.source, "fixedDelayString") }, annotation.source.includes("${") ? "inferred" : "proven", true);
+    else if (annotationName === "Transactional") addFinding(nodes, edges, file, moduleId, "transaction", name, occurrence.index, { propagation: /propagation\s*=\s*Propagation\.(\w+)/u.exec(annotation.source)?.[1] ?? "REQUIRED" }, "proven", true);
+    else if (["PreAuthorize", "PostAuthorize", "Secured", "RolesAllowed"].includes(annotationName)) addFinding(nodes, edges, file, moduleId, "security", name, occurrence.index, { declaration: annotation.source.trim() }, annotation.source.includes("+") ? "opaque" : "proven", true);
+    else if (["Cacheable", "CachePut", "CacheEvict"].includes(annotationName)) addFinding(nodes, edges, file, moduleId, "cache", name, occurrence.index, { operation: annotationName, cache: annotationArgument(annotation.source, "cacheNames") ?? annotationArgument(annotation.source) }, annotation.source.includes("key =") ? "inferred" : "proven", true);
+    else if (annotationName === "Query") addFinding(nodes, edges, file, moduleId, "query", name, occurrence.index, { query: annotationArgument(annotation.source), native: /nativeQuery\s*=\s*true/u.test(annotation.source) }, "proven", true);
+  }
+
+  for (const occurrence of source.matchAll(/@Bean\b/gu)) {
+    const annotation = readJavaAnnotation(source, occurrence.index);
+    if (!annotation) continue;
+    const name = methodFollowingAnnotation(source, annotation.end);
+    if (name) addFinding(nodes, edges, file, moduleId, "configuration", name, occurrence.index, { framework: "spring", role: "bean", beanName: annotationArgument(annotation.source) });
   }
 
   const expressions: readonly [RegExp, NodeKind, Record<string, unknown>, boolean][] = [
@@ -178,6 +336,100 @@ function discoverJava(file: SourceFile, moduleId: string, nodes: Map<string, Dis
   if (/routing|destinationResolver|resolveDestination/iu.test(source)) diagnostics.push({ code: "SPRING_DYNAMIC_ROUTING", severity: "warning", message: "Dynamic routing was retained as an opaque dependency.", source: span(file, source.search(/routing|destinationResolver|resolveDestination/iu)) });
 }
 
+function matchingDelimiter(source: string, offset: number, open: string, close: string): number | undefined {
+  let depth = 0;
+  let quote: string | undefined;
+  let escaped = false;
+  for (let cursor = offset; cursor < source.length; cursor += 1) {
+    const character = source[cursor]!;
+    if (quote) {
+      if (escaped) escaped = false;
+      else if (character === "\\") escaped = true;
+      else if (character === quote) quote = undefined;
+      continue;
+    }
+    if (character === "\"" || character === "'") quote = character;
+    else if (character === open) depth += 1;
+    else if (character === close && --depth === 0) return cursor;
+  }
+  return undefined;
+}
+
+function methodBody(source: string, name: string, startLine: number): { readonly body: string; readonly offset: number } | undefined {
+  const lineOffset = source.split(/(?<=\n)/u).slice(0, Math.max(0, startLine - 1)).join("").length;
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  const declaration = new RegExp(`\\b${escaped}\\s*\\(`, "gu");
+  declaration.lastIndex = lineOffset;
+  const match = declaration.exec(source);
+  if (!match || match.index - lineOffset > 8000) return undefined;
+  const parametersStart = source.indexOf("(", match.index + name.length);
+  const parametersEnd = matchingDelimiter(source, parametersStart, "(", ")");
+  if (parametersEnd === undefined) return undefined;
+  const bodyStart = source.indexOf("{", parametersEnd);
+  if (bodyStart < 0 || bodyStart - parametersEnd > 2000) return undefined;
+  const bodyEnd = matchingDelimiter(source, bodyStart, "{", "}");
+  return bodyEnd === undefined ? undefined : { body: source.slice(bodyStart + 1, bodyEnd), offset: bodyStart + 1 };
+}
+
+function addSourceDependencyEdges(files: readonly SourceFile[], nodes: Map<string, DiscoveryNode>, edges: Map<string, DiscoveryEdge>): void {
+  const filesByPath = new Map(files.map((file) => [file.relative, file]));
+  const dependencyKinds = new Set<NodeKind>(["service", "repository", "vendor-call"]);
+  const candidates = [...nodes.values()].filter((node) => dependencyKinds.has(node.kind));
+  const byName = new Map<string, DiscoveryNode[]>();
+  for (const node of candidates) byName.set(node.name, [...byName.get(node.name) ?? [], node]);
+  const resolveType = (type: string, file: SourceFile): DiscoveryNode | undefined => {
+    const simple = type.replace(/<.*$/u, "").replace(/\[\]$/u, "").split(".").at(-1)!;
+    const matches = byName.get(simple) ?? [];
+    if (matches.length <= 1) return matches[0];
+    const imported = new RegExp(`\\bimport\\s+([\\w.]+\\.${simple})\\s*;`, "u").exec(file.source)?.[1];
+    return matches.find((node) => node.qualifiedName === imported) ?? matches.find((node) => node.module === moduleName(file)) ?? matches[0];
+  };
+
+  const fieldsByPath = new Map<string, Map<string, { readonly type: string; readonly offset: number }>>();
+  for (const file of files.filter((candidate) => candidate.relative.endsWith(".java"))) {
+    const fields = new Map<string, { readonly type: string; readonly offset: number }>();
+    for (const match of file.source.matchAll(/\b(?:private|protected|public)\s+(?:static\s+)?(?:final\s+)?([A-Z][\w$.]*(?:\s*<[^;=]+>)?)\s+([A-Za-z_$][\w$]*)\s*(?:[;=])/gu)) fields.set(match[2]!, { type: match[1]!.replace(/\s+/gu, ""), offset: match.index });
+    fieldsByPath.set(file.relative, fields);
+  }
+
+  for (const owner of candidates.filter((node) => node.kind === "service" || node.kind === "repository")) {
+    const source = owner.sources[0];
+    const file = source ? filesByPath.get(source.path) : undefined;
+    if (!file) continue;
+    for (const field of fieldsByPath.get(file.relative)?.values() ?? []) {
+      const target = resolveType(field.type, file);
+      if (!target || target.id === owner.id) continue;
+      const edge: DiscoveryEdge = { id: stableId("edge", "depends-on", owner.id, target.id), kind: "depends-on", from: owner.id, to: target.id, confidence: "inferred", sources: [span(file, field.offset, `${owner.name}->${target.name}`)] };
+      edges.set(edge.id, edge);
+    }
+  }
+
+  for (const contract of candidates.filter((node) => node.kind === "service" && node.attributes.role === "service-contract")) {
+    for (const implementation of candidates.filter((node) => node.kind === "service" && node.id !== contract.id)) {
+      const source = implementation.sources[0];
+      const file = source ? filesByPath.get(source.path) : undefined;
+      if (!file || !new RegExp(`\\bimplements\\s+[^\\{;]*\\b${contract.name}\\b`, "u").test(file.source)) continue;
+      const edge: DiscoveryEdge = { id: stableId("edge", "calls", contract.id, implementation.id), kind: "calls", from: contract.id, to: implementation.id, confidence: "inferred", sources: [span(file, file.source.search(new RegExp(`\\b${contract.name}\\b`, "u")), `${implementation.name} implements ${contract.name}`)] };
+      edges.set(edge.id, edge);
+    }
+  }
+
+  for (const entry of [...nodes.values()].filter((node) => ["endpoint", "listener", "schedule"].includes(node.kind))) {
+    const source = entry.sources[0];
+    const file = source ? filesByPath.get(source.path) : undefined;
+    const body = file && source?.startLine ? methodBody(file.source, entry.name, source.startLine) : undefined;
+    if (!file || !body) continue;
+    const fields = fieldsByPath.get(file.relative) ?? new Map();
+    for (const call of body.body.matchAll(/\b([A-Za-z_$][\w$]*)\s*\.\s*([A-Za-z_$][\w$]*)\s*\(/gu)) {
+      const field = fields.get(call[1]!);
+      const target = field ? resolveType(field.type, file) : undefined;
+      if (!target || target.id === entry.id) continue;
+      const edge: DiscoveryEdge = { id: stableId("edge", "calls", entry.id, target.id), kind: "calls", from: entry.id, to: target.id, confidence: "inferred", sources: [span(file, body.offset + call.index, `${target.name}.${call[2]}`)] };
+      edges.set(edge.id, edge);
+    }
+  }
+}
+
 function coverage(nodes: readonly DiscoveryNode[]): Record<string, CoverageDimension> {
   const result: Record<string, CoverageDimension> = {};
   for (const node of nodes) {
@@ -199,6 +451,14 @@ export async function discoverSpring(repository: string, options: { readonly nam
     const version = (maven ? /<version>([^<]+)<\/version>/u : /\bversion\s*=\s*["']([^"']+)["']/u).exec(file.source)?.[1] ?? "inherited";
     return [moduleName(file), `${group}:${artifact}:${version}`] as const;
   }));
+  const rootCoordinate = coordinates.get("root")?.split(":");
+  const inheritedGroup = rootCoordinate?.[0] === "unknown" ? undefined : rootCoordinate?.[0];
+  const inheritedVersion = rootCoordinate?.[2] === "inherited" ? undefined : rootCoordinate?.[2];
+  for (const [module, coordinate] of coordinates) {
+    if (module === "root") continue;
+    const [group, artifact, version] = coordinate.split(":");
+    coordinates.set(module, `${group === "unknown" ? inheritedGroup ?? group : group}:${artifact}:${version === "inherited" ? inheritedVersion ?? version : version}`);
+  }
   files = files.map((file) => {
     const buildCoordinate = coordinates.get(moduleName(file));
     return buildCoordinate ? { ...file, buildCoordinate } : file;
@@ -208,6 +468,7 @@ export async function discoverSpring(repository: string, options: { readonly nam
   const nodes = new Map<string, DiscoveryNode>();
   const edges = new Map<string, DiscoveryEdge>();
   const diagnostics: DiscoveryDiagnostic[] = [];
+  const stringConstants = collectStringConstants(files);
   const buildFiles = files.filter((file) => file.relative.endsWith("pom.xml") || /(?:build|settings)\.gradle(?:\.kts)?$/u.test(file.relative));
   for (const build of buildFiles.length > 0 ? buildFiles : files.length > 0 ? [files[0]!] : []) {
     const name = moduleName(build);
@@ -226,7 +487,7 @@ export async function discoverSpring(repository: string, options: { readonly nam
     const module = moduleName(file);
     const moduleId = stableId("module", module);
     if (!nodes.has(moduleId)) addNode(nodes, { id: moduleId, kind: "module", name: module, confidence: "proven", observable: false, attributes: { build: "inherited" }, sources: [span(file)] });
-    if (file.relative.endsWith(".java")) discoverJava(file, moduleId, nodes, edges, diagnostics);
+    if (file.relative.endsWith(".java")) discoverJava(file, moduleId, nodes, edges, diagnostics, stringConstants);
     else if (file.relative.endsWith(".kt")) {
       addFinding(nodes, edges, file, moduleId, "service", basename(file.relative, ".kt"), 0, { language: "kotlin", support: "inventory" }, "opaque", false, ["Deep Kotlin semantic extraction is not available in discovery v0.1."]);
       diagnostics.push({ code: "KOTLIN_INVENTORY_ONLY", severity: "warning", message: `${file.relative} was inventoried without deep Kotlin semantics.`, source: span(file) });
@@ -243,6 +504,7 @@ export async function discoverSpring(repository: string, options: { readonly nam
       else addFinding(nodes, edges, file, stableId("module", moduleName(file)), finding.kind, finding.name, Math.max(0, file.source.split(/\r?\n/u).slice(0, Math.max(0, finding.line - 1)).join("\n").length), { analyzer: "openrewrite", analyzerVersion: "8.90.4", annotation: finding.annotation }, "proven", ["endpoint", "listener", "schedule", "vendor-call", "transaction", "query", "cache"].includes(finding.kind));
     }
   }
+  addSourceDependencyEdges(files, nodes, edges);
   const entries = [...nodes.values()].filter((node) => node.kind === "endpoint" || node.kind === "listener" || node.kind === "schedule");
   const effects = [...nodes.values()].filter((node) => ["transaction", "publisher", "vendor-call", "repository", "query", "cache", "dynamic-routing", "foreign-operation"].includes(node.kind));
   for (const entry of entries) {

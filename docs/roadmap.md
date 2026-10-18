@@ -159,7 +159,9 @@ Implemented on the current development line:
 - loopback-only local architecture workbench with provenance and approve/reject/rename/merge/mark-opaque decisions
 - compatibility warning on the original `import-spring` command
 
-Before a v0.11 release: run the conventional-service architecture pilot and calibrate recall/false positives on an independent codebase.
+The first independent calibration now uses the archived Netflix Conductor snapshot and is documented in [Netflix Conductor discovery calibration](calibration-netflix-conductor.md). It found and removed annotation-named endpoint false positives, added complete route composition, and connected source-derived service/DAO topology. This is a stable external regression corpus, not a completed conventional-service pilot.
+
+Before a v0.11 release: run the conventional-service architecture pilot on an actively maintained service and calibrate recall/false positives on at least one additional independent codebase.
 
 ## 12. Evidence and capability extraction — v0.12 foundation implemented
 
