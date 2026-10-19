@@ -3,6 +3,13 @@
   "version": "0.11.0",
   "description": "Stable provider and deployer plugin contracts for AIR.",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/halilturkoglucs/air",
+    "directory": "packages/plugin-sdk"
+  },
+  "homepage": "https://github.com/halilturkoglucs/air#readme",
+  "bugs": "https://github.com/halilturkoglucs/air/issues",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
