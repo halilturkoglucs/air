@@ -221,7 +221,7 @@ jobs:
             --artifact postgres=artifacts/evidence/system-postgres.json \
             --output artifacts/system-evidence-pack
           node packages/cli/dist/bin.js evidence-verify artifacts/system-evidence-pack
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: air-conformance-evidence
