@@ -1,6 +1,6 @@
 # AIR CLI
 
-The AIR command validates, imports, compiles, verifies, and benchmarks applications described with the Application Intermediate Representation.
+**AI writes the migration. AIR proves what changed.** The AIR CLI freezes reviewed legacy behavior and independently checks an agent-written replacement. It also preserves the earlier discovery, Application IR, compiler, provider, and conformance workflows.
 
 ```bash
 npm install --global @halilturkoglucs/air
@@ -10,6 +10,17 @@ air --help
 
 The current public release is `0.11.0`. For a reproducible installation, use
 `npm install --global @halilturkoglucs/air@0.11.0`.
+
+The `air check` workflow is the unreleased v0.12 preview. It uses stable JSON output and needs no hand-authored Application AIR YAML:
+
+```bash
+air check validate check.yaml --policy policy.yaml --json
+air check baseline check.yaml --target legacy.target.yaml --policy policy.yaml --output .air/check/baseline --json
+air check run check.yaml --baseline .air/check/baseline --target candidate.target.yaml --policy policy.yaml --output .air/check/run --json
+air check explain .air/check/run/result.json --json
+```
+
+Candidate differences exit `1`, invalid or stale input exits `2`, and infrastructure failures exit `3`. Baselines are content-addressed and overwrite-protected; raw observed values and credentials are absent by default.
 
 Spring discovery requires Java 17 or newer. The npm package includes AIR's pinned OpenRewrite analyzer, so Maven and an AIR source checkout are not required:
 

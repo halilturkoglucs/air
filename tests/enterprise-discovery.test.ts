@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { adoptExtractedCapability, canonicalEvidenceIdentities, createDiscoveryReport, discoverSpring, evidenceHash, extractCapability, ingestEvidence, normalizeHttpRoute, parseEvidenceCaptureProfile, readDiscoveryBundle, saveDecision, startWorkbench, verifyImportedCapability, writeDiscoveryBundle, writeDiscoveryReport } from "@air/discovery";
+import { adoptExtractedCapability, canonicalEvidenceIdentities, createCheckBaseline, createDiscoveryReport, discoverSpring, evidenceHash, extractCapability, ingestEvidence, normalizeHttpRoute, parseCheckBaseline, parseCheckDocument, parseCheckPolicy, parseCheckTarget, parseEvidenceCaptureProfile, readDiscoveryBundle, runMigrationCheck, saveDecision, startWorkbench, validateMigrationCheck, verifyImportedCapability, writeDiscoveryBundle, writeDiscoveryReport } from "@air/discovery";
 import { runCli, type CliIo } from "@halilturkoglucs/air";
 import { parseAir, parseSystem } from "@air/parser";
 
@@ -554,4 +554,86 @@ spec:
       expect(await adoptExtractedCapability(capability)).toBe(resolve(capability, "adoption.json"));
     } finally { await new Promise<void>((done) => server.close(() => done())); }
   });
+
+  it("creates privacy-safe immutable check baselines and detects semantic differences", async () => {
+    const root = await mkdtemp(resolve(tmpdir(), "air-check-command-"));
+    const implementation = (status: number): string => `const id = crypto.randomUUID(); const now = new Date().toISOString(); console.log(JSON.stringify({http:{status:${status},headers:{"content-type":"application/json"},body:{id,createdAt:now}},database:{rows:[{id,createdAt:now,state:"created"}]},messages:[{id,createdAt:now,type:"created"}],outbound:[{operation:"vendor.create",id}],ordering:["database","outbound","messages"],failures:[],retryability:false}));`;
+    await writeFile(resolve(root, "legacy.mjs"), implementation(201), "utf8");
+    await writeFile(resolve(root, "candidate.mjs"), implementation(201), "utf8");
+    await writeFile(resolve(root, "mutant.mjs"), implementation(202), "utf8");
+    const check = parseCheckDocument(`
+apiVersion: air.dev/check/v0.1
+kind: Check
+metadata: { name: create-document }
+spec:
+  capability: { id: documents.create }
+  observations: [http, database, messages, outbound, ordering, failures, retryability]
+  scenarios:
+    - id: success
+      request: { kind: command }
+  normalization:
+    - { kind: typed-token, pointer: /http/body/id, format: uuid, binding: document-id }
+    - { kind: typed-token, pointer: /database/rows/0/id, format: uuid, binding: document-id }
+    - { kind: typed-token, pointer: /messages/0/id, format: uuid, binding: document-id }
+    - { kind: typed-token, pointer: /outbound/0/id, format: uuid, binding: document-id }
+    - { kind: typed-token, pointer: /http/body/createdAt, format: timestamp, binding: created-at }
+    - { kind: typed-token, pointer: /database/rows/0/createdAt, format: timestamp, binding: created-at }
+    - { kind: typed-token, pointer: /messages/0/createdAt, format: timestamp, binding: created-at }
+`);
+    const target = (script: string, name: string) => parseCheckTarget(`apiVersion: air.dev/check-target/v0.1\nkind: CheckTarget\nmetadata: { name: ${name} }\nspec:\n  type: command\n  fixtureIsolation: process\n  command:\n    argv: [${JSON.stringify(process.execPath)}, ${script}]\n`);
+    const baseline = await createCheckBaseline({ check, target: target("legacy.mjs", "legacy"), repositoryRoot: root, repositoryHash: "a".repeat(64), clean: true });
+    expect(baseline.releasable).toBe(true);
+    expect(JSON.stringify(baseline)).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/iu);
+    expect(parseCheckBaseline(JSON.stringify(baseline)).baselineId).toBe(baseline.baselineId);
+    const equivalent = await runMigrationCheck({ check, baseline, target: target("candidate.mjs", "candidate"), repositoryRoot: root, repositoryHash: "b".repeat(64) });
+    expect(equivalent).toMatchObject({ passed: true, mismatches: [] });
+    const different = await runMigrationCheck({ check, baseline, target: target("mutant.mjs", "mutant"), repositoryRoot: root, repositoryHash: "c".repeat(64) });
+    expect(different.passed).toBe(false);
+    expect(different.mismatches).toContainEqual(expect.objectContaining({ classification: "candidate-difference", selector: "/http/status", repair: "candidate-code" }));
+    const tampered = structuredClone(baseline) as { baselineId: string; scenarios: { observation: { kind: string; entries?: Record<string, unknown> } }[] };
+    tampered.scenarios[0]!.observation = { kind: "object", entries: {} };
+    expect(() => parseCheckBaseline(JSON.stringify(tampered))).toThrow("does not match baselineId");
+  });
+
+  it("fails closed on unsafe targets, forbidden normalization, and inconsistent bindings", async () => {
+    expect(() => parseCheckTarget("apiVersion: air.dev/check-target/v0.1\nkind: CheckTarget\nmetadata: { name: unsafe }\nspec: { type: command, workingDirectory: ../escape, command: { argv: [node] } }\n")).toThrow();
+    expect(() => parseCheckTarget("apiVersion: air.dev/check-target/v0.1\nkind: CheckTarget\nmetadata: { name: secret }\nspec: { type: command, environment: { TOKEN: secret-value }, command: { argv: [node] } }\n")).toThrow();
+    const check = parseCheckDocument("apiVersion: air.dev/check/v0.1\nkind: Check\nmetadata: { name: strict }\nspec:\n  capability: { id: strict }\n  observations: [http]\n  scenarios: [{ id: one, request: { kind: http, method: GET, path: /one } }]\n  normalization: [{ kind: ignore, pointer: /http/body/noise, reason: nondeterministic legacy field }]\n");
+    const policy = parseCheckPolicy("apiVersion: air.dev/check-policy/v0.1\nkind: CheckPolicy\nmetadata: { name: strict }\nspec: { allowedNormalizations: [typed-token], requireCleanBaseline: true }\n");
+    expect(validateMigrationCheck(check, policy)).toContain("Normalization ignore at /http/body/noise is not allowed by policy.");
+    expect(() => parseCheckDocument("apiVersion: air.dev/check/v0.1\nkind: Check\nmetadata: { name: scripts }\nspec: { capability: { id: x }, observations: [http], scenarios: [{ id: one, request: { kind: http, method: GET, path: / } }], normalization: [{ kind: script, pointer: /http }] }\n")).toThrow();
+    const stateful = parseCheckDocument("apiVersion: air.dev/check/v0.1\nkind: Check\nmetadata: { name: stateful }\nspec: { capability: { id: x }, observations: [database], scenarios: [{ id: one, request: { kind: command } }] }\n");
+    const ambiguousFixture = parseCheckTarget(`apiVersion: air.dev/check-target/v0.1\nkind: CheckTarget\nmetadata: { name: ambiguous }\nspec: { type: command, command: { argv: [${JSON.stringify(process.execPath)}, -e, ${JSON.stringify("console.log('{\\\"database\\\":{}}')")}] } }\n`);
+    await expect(createCheckBaseline({ check: stateful, target: ambiguousFixture, repositoryRoot: process.cwd(), repositoryHash: "a".repeat(64), clean: true })).rejects.toThrow("explicitly declare fixtureIsolation");
+    const prototypeCheck = parseCheckDocument("apiVersion: air.dev/check/v0.1\nkind: Check\nmetadata: { name: prototype-safe }\nspec: { capability: { id: x }, observations: [database], scenarios: [{ id: one, request: { kind: command } }], normalization: [{ kind: ignore, pointer: /__proto__/polluted, reason: adversarial }] }\n");
+    const isolated = parseCheckTarget(`apiVersion: air.dev/check-target/v0.1\nkind: CheckTarget\nmetadata: { name: isolated }\nspec: { type: command, fixtureIsolation: process, command: { argv: [${JSON.stringify(process.execPath)}, -e, ${JSON.stringify("console.log('{\\\"database\\\":{}}')")}] } }\n`);
+    await expect(createCheckBaseline({ check: prototypeCheck, target: isolated, repositoryRoot: process.cwd(), repositoryHash: "a".repeat(64), clean: true })).rejects.toThrow("protected prototype-chain segment");
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+  });
+
+  it("detects all 15 capability-replacement mutants and passes 20 clean reruns", async () => {
+    const benchmark = resolve(process.cwd(), "benchmarks/capability-replacement");
+    const [checkSource, policySource, legacySource, candidateSource, mutantsSource] = await Promise.all([
+      readFile(resolve(benchmark, "check.yaml"), "utf8"), readFile(resolve(benchmark, "policy.yaml"), "utf8"),
+      readFile(resolve(benchmark, "legacy.target.yaml"), "utf8"), readFile(resolve(benchmark, "candidate.target.yaml"), "utf8"),
+      readFile(resolve(benchmark, "mutants.json"), "utf8"),
+    ]);
+    const check = parseCheckDocument(checkSource); const policy = parseCheckPolicy(policySource);
+    const legacy = parseCheckTarget(legacySource); const candidate = parseCheckTarget(candidateSource);
+    const baseline = await createCheckBaseline({ check, policy, target: legacy, repositoryRoot: process.cwd(), repositoryHash: "d".repeat(64), clean: true });
+    for (let run = 0; run < 20; run += 1) {
+      const result = await runMigrationCheck({ check, policy, baseline, target: candidate, repositoryRoot: process.cwd(), repositoryHash: "e".repeat(64) });
+      expect(result.passed, `clean rerun ${run + 1}`).toBe(true);
+    }
+    const mutants = JSON.parse(mutantsSource) as string[];
+    expect(mutants).toHaveLength(15);
+    for (const mutant of mutants) {
+      const mutantTarget = structuredClone(candidate) as { metadata: { name: string }; spec: { command?: { argv: string[] } } };
+      mutantTarget.metadata.name = `mutant-${mutant}`;
+      mutantTarget.spec.command!.argv = ["node", "candidate.mjs", mutant];
+      const result = await runMigrationCheck({ check, policy, baseline, target: mutantTarget as never, repositoryRoot: process.cwd(), repositoryHash: "f".repeat(64) });
+      expect(result.passed, mutant).toBe(false);
+      expect(result.mismatches.length, mutant).toBeGreaterThan(0);
+    }
+  }, 30_000);
 });

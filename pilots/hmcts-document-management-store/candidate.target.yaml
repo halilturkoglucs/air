@@ -1,0 +1,8 @@
+apiVersion: air.dev/check-target/v0.1
+kind: CheckTarget
+metadata: { name: external-agent-document-deletion }
+spec:
+  type: command
+  fixtureIsolation: process
+  workingDirectory: pilots/hmcts-document-management-store
+  command: { argv: [node, candidate.mjs] }

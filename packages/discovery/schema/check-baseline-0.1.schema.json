@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://air.dev/schema/check-baseline-0.1.schema.json",
+  "title": "AIR check baseline",
+  "type": "object", "additionalProperties": false,
+  "required": ["apiVersion", "kind", "baselineId", "createdAt", "releasable", "hashes", "target", "scenarios"],
+  "properties": {
+    "apiVersion": { "const": "air.dev/check-baseline/v0.1" }, "kind": { "const": "CheckBaseline" },
+    "baselineId": { "$ref": "#/$defs/hash" }, "createdAt": { "type": "string", "format": "date-time" }, "releasable": { "type": "boolean" },
+    "hashes": { "type": "object", "additionalProperties": false, "required": ["repository", "check", "policy", "normalization", "target"], "properties": { "repository": { "$ref": "#/$defs/hash" }, "discovery": { "$ref": "#/$defs/hash" }, "check": { "$ref": "#/$defs/hash" }, "policy": { "$ref": "#/$defs/hash" }, "normalization": { "$ref": "#/$defs/hash" }, "target": { "$ref": "#/$defs/hash" } } },
+    "target": { "type": "object", "additionalProperties": false, "required": ["name", "type"], "properties": { "name": { "type": "string" }, "type": { "enum": ["http", "command"] } } },
+    "scenarios": { "type": "array", "minItems": 1, "items": { "type": "object", "additionalProperties": false, "required": ["id", "observation"], "properties": { "id": { "type": "string" }, "observation": { "$ref": "#/$defs/node" } } } }
+  },
+  "$defs": {
+    "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "node": {
+      "oneOf": [
+        { "type": "object", "additionalProperties": false, "required": ["kind", "type", "bytes", "sha256"], "properties": { "kind": { "const": "leaf" }, "type": { "enum": ["null", "boolean", "number", "string", "undefined"] }, "bytes": { "type": "integer", "minimum": 0 }, "sha256": { "$ref": "#/$defs/hash" }, "token": { "type": "string" } } },
+        { "type": "object", "additionalProperties": false, "required": ["kind", "entries"], "properties": { "kind": { "const": "object" }, "entries": { "type": "object", "additionalProperties": { "$ref": "#/$defs/node" } } } },
+        { "type": "object", "additionalProperties": false, "required": ["kind", "items"], "properties": { "kind": { "const": "array" }, "items": { "type": "array", "items": { "$ref": "#/$defs/node" } } } }
+      ]
+    }
+  }
+}

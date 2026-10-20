@@ -1,0 +1,11 @@
+apiVersion: air.dev/check/v0.1
+kind: Check
+metadata: { name: hmcts-scheduled-document-deletion }
+spec:
+  capability: { id: schedule:uk.gov.hmcts.dm.task.CaseDocumentsDeletionTask }
+  observations: [database, outbound, ordering, failures, retryability]
+  scenarios:
+    - { id: complete-success, request: { kind: command, arguments: [success], input: { documentId: fixed-document } } }
+    - { id: em-anno-failure, request: { kind: command, arguments: [em-anno-failure], input: { documentId: fixed-document } } }
+    - { id: em-npa-failure, request: { kind: command, arguments: [em-npa-failure], input: { documentId: fixed-document } } }
+    - { id: blob-failure, request: { kind: command, arguments: [blob-failure], input: { documentId: fixed-document } } }

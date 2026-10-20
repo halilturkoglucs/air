@@ -22,7 +22,7 @@ import { importPostgres } from "@air/import-postgres";
 import { importOpenApiSource } from "@air/import-openapi";
 import { importNextjs } from "@air/import-nextjs";
 import { importSpring } from "@air/import-spring";
-import { adoptExtractedCapability, discoverSpring, discoveryFromAirCandidate, extractCapability, ingestEvidence, mergeDiscoveryBundles, readDiscoveryBundle, startWorkbench, verifyImportedCapability, writeDiscoveryBundle, writeDiscoveryReport, type DiscoveryBundle } from "@air/discovery";
+import { CheckInfrastructureError, CheckInputError, adoptExtractedCapability, createCheckBaseline, discoverSpring, discoveryFromAirCandidate, extractCapability, ingestEvidence, initializeMigrationCheck, loadCheckBaseline, loadCheckPolicy, loadCheckTarget, loadMigrationCheck, mergeDiscoveryBundles, parseCheckResult, readDiscoveryBundle, runMigrationCheck, startWorkbench, validateMigrationCheck, verifyImportedCapability, writeCheckBaseline, writeCheckResult, writeDiscoveryBundle, writeDiscoveryReport, type CheckMismatch, type DiscoveryBundle } from "@air/discovery";
 import { startLanguageServer } from "@air/language-server";
 import { NextjsTargetAdapter, type NextjsTargetOptions } from "@air/target-nextjs";
 import { RustTargetAdapter, type RustTargetOptions } from "@air/target-rust";
@@ -56,9 +56,14 @@ const defaultIo: CliIo = {
 
 export const VERSION = packageJson.version;
 
-const HELP = `AIR compiler toolkit ${VERSION}
+const HELP = `AIR verification and compiler toolkit ${VERSION}
 
 Usage:
+  air check init <discovery> --capability <id> --output <directory>
+  air check validate <check.yaml> [--policy <file>] [--json]
+  air check baseline <check.yaml> --target <file> --output <directory> [--policy <file>] [--allow-dirty] [--json]
+  air check run <check.yaml> --baseline <directory> --target <file> --output <directory> [--policy <file>] [--json]
+  air check explain <result.json> [--json]
   air validate <file>                         Parse and validate AIR YAML
   air inspect <file>                          Print a semantic summary
   air migrate <file> [options]                Migrate AIR to a newer schema
@@ -1098,6 +1103,107 @@ async function verifyImportCommand(args: readonly string[], io: CliIo): Promise<
   } catch (error) { io.stderr(formatError(error)); return 1; }
 }
 
+function checkFailureCode(error: unknown): 2 | 3 {
+  return error instanceof CheckInputError || (error instanceof Error && "code" in error && ["ENOENT", "EEXIST"].includes(String(error.code))) ? 2 : 3;
+}
+
+function gitRepositoryState(): { readonly root: string; readonly hash: string; readonly clean: boolean } {
+  const rootResult = spawnSync("git", ["rev-parse", "--show-toplevel"], { cwd: process.cwd(), encoding: "utf8", shell: false });
+  const hashResult = spawnSync("git", ["rev-parse", "HEAD"], { cwd: process.cwd(), encoding: "utf8", shell: false });
+  if (rootResult.status !== 0 || hashResult.status !== 0) throw new CheckInputError("air check baseline and run must execute inside a tracked Git repository.");
+  const status = spawnSync("git", ["status", "--porcelain", "--untracked-files=no"], { cwd: process.cwd(), encoding: "utf8", shell: false });
+  if (status.status !== 0) throw new CheckInfrastructureError("Could not inspect the Git working tree.");
+  return { root: rootResult.stdout.trim(), hash: createHash("sha256").update(hashResult.stdout.trim()).digest("hex"), clean: status.stdout.trim().length === 0 };
+}
+
+function explainMismatch(mismatch: CheckMismatch): string {
+  const action = mismatch.repair === "candidate-code" ? "fix candidate code" : "repair the harness";
+  return `${mismatch.classification} ${mismatch.scenario} ${mismatch.selector}: ${action}; provenance ${mismatch.provenance}`;
+}
+
+async function checkCommand(args: readonly string[], io: CliIo): Promise<number> {
+  const [action, input, ...options] = args;
+  const usages = {
+    init: "Usage: air check init <discovery> --capability <id> --output <directory>\n",
+    validate: "Usage: air check validate <check.yaml> [--policy <file>] [--json]\n",
+    baseline: "Usage: air check baseline <check.yaml> --target <file> --output <directory> [--policy <file>] [--allow-dirty] [--json]\n",
+    run: "Usage: air check run <check.yaml> --baseline <directory> --target <file> --output <directory> [--policy <file>] [--json]\n",
+    explain: "Usage: air check explain <result.json> [--json]\n",
+  } as const;
+  if (!action || !(action in usages) || !input || input.startsWith("--")) {
+    io.stderr(Object.values(usages).join("")); return 2;
+  }
+  const usage = usages[action as keyof typeof usages];
+  let json = false; let allowDirty = false; const values = new Map<string, string>();
+  const allowed = action === "init" ? new Set(["--capability", "--output"])
+    : action === "validate" ? new Set(["--policy"])
+      : action === "baseline" ? new Set(["--target", "--output", "--policy"])
+        : action === "run" ? new Set(["--baseline", "--target", "--output", "--policy"])
+          : new Set<string>();
+  for (let index = 0; index < options.length; index += 1) {
+    const option = options[index];
+    if (option === "--json") { json = true; continue; }
+    if (option === "--allow-dirty" && action === "baseline") { allowDirty = true; continue; }
+    const value = options[index + 1];
+    if (!option || !allowed.has(option) || !value || value.startsWith("--") || values.has(option)) { io.stderr(usage); return 2; }
+    values.set(option, value); index += 1;
+  }
+  try {
+    if (action === "init") {
+      const capability = values.get("--capability"); const output = values.get("--output");
+      if (!capability || !output) { io.stderr(usage); return 2; }
+      const path = await initializeMigrationCheck(resolve(input), capability, resolve(output));
+      if (json) io.stdout(`${JSON.stringify({ ok: true, check: path, reviewRequired: true })}\n`);
+      else io.stdout(`Check review candidate: ${path}\nReview and replace the generated scenario before creating a baseline.\n`);
+      return 0;
+    }
+    if (action === "validate") {
+      const [check, policy] = await Promise.all([loadMigrationCheck(resolve(input)), loadCheckPolicy(values.get("--policy") ? resolve(values.get("--policy")!) : undefined)]);
+      const violations = validateMigrationCheck(check, policy);
+      if (json) io.stdout(`${JSON.stringify({ ok: violations.length === 0, check: resolve(input), violations })}\n`);
+      else if (violations.length === 0) io.stdout(`PASS ${resolve(input)}\n`); else for (const violation of violations) io.stderr(`POLICY ${violation}\n`);
+      return violations.length === 0 ? 0 : 1;
+    }
+    if (action === "baseline") {
+      const targetPath = values.get("--target"); const output = values.get("--output");
+      if (!targetPath || !output) { io.stderr(usage); return 2; }
+      const repository = gitRepositoryState();
+      if (!repository.clean && !allowDirty) throw new CheckInputError("Tracked working tree is dirty; commit/stash changes or pass --allow-dirty for a non-releasable baseline.");
+      const [check, target, policy] = await Promise.all([loadMigrationCheck(resolve(input)), loadCheckTarget(resolve(targetPath)), loadCheckPolicy(values.get("--policy") ? resolve(values.get("--policy")!) : undefined)]);
+      const baseline = await createCheckBaseline({ check, target, policy, repositoryRoot: repository.root, repositoryHash: repository.hash, clean: repository.clean, allowDirty });
+      const path = await writeCheckBaseline(resolve(output), baseline);
+      const response = { ok: true, baselineId: baseline.baselineId, releasable: baseline.releasable, path };
+      if (json) io.stdout(`${JSON.stringify(response)}\n`); else io.stdout(`Baseline ${baseline.baselineId}: ${path}\n${baseline.releasable ? "Releasable clean-tree baseline." : "NON-RELEASABLE dirty-tree baseline."}\n`);
+      return 0;
+    }
+    if (action === "run") {
+      const baselinePath = values.get("--baseline"); const targetPath = values.get("--target"); const output = values.get("--output");
+      if (!baselinePath || !targetPath || !output) { io.stderr(usage); return 2; }
+      const repository = gitRepositoryState();
+      const [check, baseline, target, policy] = await Promise.all([loadMigrationCheck(resolve(input)), loadCheckBaseline(resolve(baselinePath)), loadCheckTarget(resolve(targetPath)), loadCheckPolicy(values.get("--policy") ? resolve(values.get("--policy")!) : undefined)]);
+      const result = await runMigrationCheck({ check, baseline, target, policy, repositoryRoot: repository.root, repositoryHash: repository.hash });
+      const path = await writeCheckResult(resolve(output), result);
+      if (json) io.stdout(`${JSON.stringify({ ...result, path })}\n`);
+      else {
+        io.stdout(`${result.passed ? "PASS" : "FAIL"} migration check against baseline ${result.baselineId}\nResult: ${path}\n`);
+        for (const mismatch of result.mismatches) io.stderr(`  ${explainMismatch(mismatch)}\n`);
+      }
+      return result.passed ? 0 : 1;
+    }
+    if (options.some((option) => option !== "--json")) { io.stderr(usage); return 2; }
+    const result = parseCheckResult(await readFile(resolve(input), "utf8"));
+    const explanation = { passed: result.passed, baselineId: result.baselineId, differences: result.mismatches.map((mismatch) => ({ ...mismatch, action: mismatch.repair === "candidate-code" ? "fix-code" : "repair-harness" })) };
+    if (json) io.stdout(`${JSON.stringify(explanation)}\n`);
+    else if (result.mismatches.length === 0) io.stdout(`No differences. Candidate matches baseline ${result.baselineId} within the declared observation boundary.\n`);
+    else for (const mismatch of result.mismatches) io.stdout(`${explainMismatch(mismatch)}\n`);
+    return result.passed ? 0 : 1;
+  } catch (error) {
+    const code = checkFailureCode(error); const message = error instanceof Error && "code" in error && error.code === "EEXIST" ? "Output already exists; AIR will not overwrite an approved check artifact." : error instanceof Error ? error.message : String(error);
+    if (json) io.stderr(`${JSON.stringify({ ok: false, category: code === 2 ? "invalid-input" : "infrastructure-error", message })}\n`); else io.stderr(`${message}\n`);
+    return code;
+  }
+}
+
 async function verify(args: readonly string[], io: CliIo): Promise<number> {
   const [file, ...options] = args;
   let scenarioFile: string | undefined;
@@ -1856,6 +1962,7 @@ export async function runCli(args: readonly string[], io: CliIo = defaultIo): Pr
     return 0;
   }
 
+  if (command === "check") return checkCommand(args.slice(1), io);
   if (command === "compile") return compile(args.slice(1), io);
   if (command === "compose") return composeSystem(args.slice(1), io);
   if (command === "dev") return devSystem(args.slice(1), io);

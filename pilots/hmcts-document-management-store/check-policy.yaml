@@ -1,0 +1,9 @@
+apiVersion: air.dev/check-policy/v0.1
+kind: CheckPolicy
+metadata: { name: hmcts-release-proof }
+spec:
+  requiredScenarios: [complete-success, em-anno-failure, em-npa-failure, blob-failure]
+  requiredObservations: [database, outbound, ordering, failures, retryability]
+  allowedNormalizations: []
+  requireCleanBaseline: true
+  unmatchedEvidence: fail

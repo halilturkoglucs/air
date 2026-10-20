@@ -1,7 +1,7 @@
 {
   "name": "@halilturkoglucs/air",
   "version": "0.11.0",
-  "description": "Application Intermediate Representation compiler, verifier, and multi-target generator.",
+  "description": "Model-neutral verification for agent-written migrations, with compatible AIR discovery and compiler tools.",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -12,6 +12,9 @@
   "bugs": "https://github.com/halilturkoglucs/air/issues",
   "keywords": [
     "air",
+    "migration-verification",
+    "coding-agents",
+    "behavioral-equivalence",
     "compiler",
     "code-generation",
     "postgresql",

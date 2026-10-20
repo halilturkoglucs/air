@@ -1,6 +1,6 @@
 # Product roadmap
 
-AIR should earn trust as a semantic application compiler before optimizing runtime code. “Implemented” therefore means a capability has deterministic validation and tests; target compatibility requires additional build and integration evidence.
+AIR’s product promise is now: **AI writes the migration. AIR proves what changed.** Coding agents own code generation; AIR is the independent, model-neutral verification layer. The open engine proves equivalence only inside an explicit observation boundary. Existing IR and compiler work remains compatible but enters maintenance mode.
 
 ## 0. Foundation — complete
 
@@ -170,53 +170,42 @@ An external design-partner architecture-inventory pilot follows the release. It 
 
 The pinned [Buoy benchmark](../pilots/buoy/report.md) now provides a second clean public-corpus proof: 129 upstream tests passed, disposable PostgreSQL reached healthy, every one of 35 documented operations appeared exactly once, source/OpenRewrite identities and repeat scans were stable, and 116 workbench decisions closed every observable boundary. Its frozen ground truth exposed and drove fixes for programmatic Caffeine caches and transactional event listeners. It remains product evidence, not customer validation.
 
-## 12. Evidence and typed extraction — v0.12 in progress
-
-Implemented and hardened behind the experimental boundary:
-
-- redacted OTLP/JSONL/test evidence ingestion with explicit field allowlisting
-- Application v0.10 outbound ports, operation failures, ordered invocation metadata, and bounded transformations
-- System v0.2 foreign components
-- capability slicing from endpoint/listener/schedule entry points
-- extraction blockers for unreviewed inferred, opaque, or conflicting observable behavior
-- generated Application/System/verification/capability artifacts bound to repository and evidence hashes
-- exact canonical HTTP, JVM, PostgreSQL, messaging, and explicit identities; ambiguous and unmatched observations never promote confidence
-- closed `air.dev/evidence-capture/v0.1` profiles plus self-hosted PostgreSQL, outbound-HTTP, Kafka, and RabbitMQ adapters with credential-name indirection and privacy-safe records
-- DTO/entity/Feign/mapper metadata, SQL migration tables, real typed contracts/entities/ports/transformations/scenarios, source-attributed outbound ordering checks, and no placeholder imported types
-- extraction blockers for missing, reordered, ambiguous, or policy-incomplete observations; retry/failure defaults are never invented
-- pinned HMCTS document-deletion corpus, task/call-chain discovery, 43 passing targeted upstream tests, reviewed foreign boundaries, and a successful adapter-only rehearsal
-
-Remaining v0.12 release gate:
-
-- execute the real HMCTS capability through a controlled harness for success, EM-ANNO failure, EM-NPA failure, and blob failure
-- correlate each run with exact outbound failure/retryability, blob, and PostgreSQL observations and bind generated scenarios to those evidence hashes
-- require the final extraction to contain only proven contracts, ports, failures, transformations where present, state effects, and scenarios
-- rerun both pinned public corpora in clean CI checkouts, then and only then version and distribute 0.12.0
-
-The current [HMCTS pilot report](../pilots/hmcts-document-management-store/report.md) is explicitly blocked because the adapter rehearsal did not execute the capability and therefore cannot prove its failure contracts. v0.12.0 is not released on substitute evidence.
-
-## 13. Verified replacement — v0.13 next
+## 12. Agent verification preview — in progress
 
 Implemented foundation:
 
-- `air verify-import` legacy/candidate HTTP comparison with normalized JSON, status, and selected headers
-- verification result v0.3 evidence structure for HTTP, database, message, and outbound observations, persisted as privacy-safe hashes rather than raw values
-- typed foreign-component retention and evidence-bound `air adopt <capability>`
-- extraction ownership promotion only when blockers are empty and a matching evidence-bound differential result passes
+- closed `air.dev/check/v0.1`, `check-target/v0.1`, `check-policy/v0.1`, `check-baseline/v0.1`, and `check-result/v0.1` formats
+- `air check init|validate|baseline|run|explain`, stable machine JSON, and 0/1/2/3 pass/difference/input/infrastructure exits
+- direct checks that require no semantic Application IR, plus discovery-assisted review candidates
+- explicit argv or HTTP targets, repository-relative working directories, environment-name indirection, lifecycle reset/readiness, and no implicit shell
+- clean-tree, content-addressed, overwrite-protected legacy baselines; dirty packs are explicitly non-releasable
+- hashes binding repository, discovery, check, policy, normalization, target, and baseline content
+- structural Merkle-style type/size/SHA-256 observations with raw values absent by default
+- deterministic ignored pointers with reasons, UUID/timestamp tokens, same-side named correlation bindings, and keyed unordered arrays
+- fail-closed categories for candidate difference, stale baseline, missing observation, policy violation, and infrastructure failure
+- compatibility for the earlier discovery, extraction, `verify-import`, adoption, compiler, and provider interfaces
 
-v0.13 release work:
+Release gates still required before versioning or publishing 0.12.0:
 
-- complete a transactional Kafka capability pilot with database and message equivalence
-- add controlled staging replay, shadow comparison, and generated adapters around retained foreign operations
-- compare responses, errors, database changes, messages, and outbound invocations
-- permit adoption only when every required scenario passes against the same evidence hash
-- demonstrate one complete strangler-style replacement before making a supported modernization claim
+1. Run the AIR-owned Spring/TypeScript capability-replacement benchmark. Detect at least 15 response, write, rollback, outbound, message, failure, idempotency, and generated-correlation mutants; pass an equivalent agent-written candidate 20 consecutive times using only `air check --json`.
+2. Complete the pinned HMCTS document-deletion replacement against disposable PostgreSQL and local outbound/blob stubs. Prove success and EM-ANNO, EM-NPA, and blob failure ordering. Missing, ambiguous, reordered, and policy-incomplete evidence must fail closed.
+3. Reject baseline tampering and stale hashes; verify that secrets, values, rows, messages, and credentials remain absent by default.
+4. Pass build, typecheck, unit tests, CodeQL, clean npm installation, macOS/Linux checks, and all existing conformance.
+5. Version root, CLI, and plugin SDK together, then publish npm → GitHub Release → Homebrew.
 
-Later breadth follows repeatable pilots: deep Kotlin, more Java frameworks, multi-repository federation, collaboration/RBAC/audit/CI policies, then optional AI-assisted naming and grouping behind deterministic review.
+Public-corpus work is product evidence, not a customer ROI claim. AIR never claims that matching legacy behavior proves that behavior correct or that uncaptured behavior is equivalent.
 
-## 14. Advanced research
+## 13. Paid control-plane alpha — after the proof
 
-- profiler-guided transformations accepted only when verification passes and measurements improve
-- UI IR and evidence-backed service decomposition recommendations
-- formal equivalence for selected command subsets
-- LLVM, SIMD, or assembly lowering only after multiple high-level targets pass identical suites
+- keep execution local or on self-hosted runners; upload only approved metadata and privacy-safe evidence
+- organizations, projects, reusable policy templates, baseline approvals, RBAC/SSO, immutable audit, run history, and portfolio risk views
+- a guided capability/difference/approval UI; YAML remains an optional expert view
+- thin MCP and agent-skill wrappers over the stable CLI protocol
+- one real design-partner capability replacement before enterprise ROI or archaeology-time claims
+
+## 14. Customer-driven expansion
+
+- multi-repository capability checks and estate federation
+- signed organizational baselines and controlled exception workflows
+- additional databases, brokers, and deployment environments only when verification customers require them
+- no new compiler target or framework breadth without customer evidence

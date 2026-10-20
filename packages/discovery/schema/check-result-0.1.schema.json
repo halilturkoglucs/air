@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://air.dev/schema/check-result-0.1.schema.json",
+  "title": "AIR check result",
+  "type": "object", "additionalProperties": false,
+  "required": ["apiVersion", "kind", "generatedAt", "baselineId", "candidate", "passed", "policy", "scenarios", "mismatches"],
+  "properties": {
+    "apiVersion": { "const": "air.dev/check-result/v0.1" }, "kind": { "const": "CheckResult" },
+    "generatedAt": { "type": "string", "format": "date-time" }, "baselineId": { "$ref": "#/$defs/hash" },
+    "candidate": { "type": "object", "additionalProperties": false, "required": ["name", "targetHash"], "properties": { "name": { "type": "string" }, "targetHash": { "$ref": "#/$defs/hash" } } },
+    "passed": { "type": "boolean" },
+    "policy": { "type": "object", "additionalProperties": false, "required": ["passed", "violations"], "properties": { "passed": { "type": "boolean" }, "violations": { "type": "array", "items": { "type": "string" } } } },
+    "scenarios": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["id", "passed"], "properties": { "id": { "type": "string" }, "passed": { "type": "boolean" } } } },
+    "mismatches": { "type": "array", "items": { "$ref": "#/$defs/mismatch" } }
+  },
+  "$defs": {
+    "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "digest": { "type": "object", "additionalProperties": false, "required": ["type", "bytes", "sha256"], "properties": { "type": { "type": "string" }, "bytes": { "type": "integer" }, "sha256": { "$ref": "#/$defs/hash" }, "token": { "type": "string" } } },
+    "mismatch": {
+      "type": "object", "additionalProperties": false, "required": ["classification", "scenario", "category", "selector", "provenance", "repair"],
+      "properties": {
+        "classification": { "enum": ["candidate-difference", "baseline-stale", "missing-observation", "policy-violation", "infrastructure-error"] },
+        "scenario": { "type": "string" }, "category": { "type": "string" }, "selector": { "type": "string" },
+        "expected": { "$ref": "#/$defs/digest" }, "actual": { "$ref": "#/$defs/digest" },
+        "provenance": { "type": "string" }, "repair": { "enum": ["candidate-code", "harness"] }
+      }
+    }
+  }
+}

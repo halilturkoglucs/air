@@ -3,11 +3,15 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Conformance](https://github.com/halilturkoglucs/air/actions/workflows/conformance.yml/badge.svg)](https://github.com/halilturkoglucs/air/actions/workflows/conformance.yml)
 
-AIR is an experimental, language-neutral Application Intermediate Representation. Application semantics are the source of truth; Next.js, Rust, databases, and deployment platforms are replaceable compilation targets.
+> **AI writes the migration. AIR proves what changed.**
+
+AIR is an open, model-neutral verification layer for capability replacement. Freeze reviewed legacy behavior, let any coding agent write an ordinary replacement in any language, then compare HTTP results, database effects, messages, outbound calls, ordering, and failures independently. AIR proves equivalence only inside the observation boundary you declare—not general correctness.
+
+The v0.12 agent-verification workflow is under development. The current public CLI remains v0.11.0 until the benchmark and HMCTS release gates pass. AIR’s existing Application IR, compiler, providers, discovery, and import commands remain compatible, but they are no longer the primary product journey.
 
 For existing enterprise systems, AIR does **not** promise one-click repository-to-YAML conversion. It builds an evidence-backed architecture map, then helps teams review, verify, and replace one business capability at a time. Architecture inventory is the entry point; verified modernization is the outcome.
 
-AIR CLI v0.11 accepts application documents from v0.1 through v0.10 and System documents through v0.2. Discovery is the supported enterprise product boundary in this release; extraction, differential import verification, and adoption remain experimental:
+AIR CLI v0.11 accepts application documents from v0.1 through v0.10 and System documents through v0.2. Discovery is the supported enterprise product boundary in the current release; extraction, differential import verification, and adoption remain experimental:
 
 - entities, relationships, CRUD HTTP operations, contracts, principals, and declared errors
 - transactional create/update/delete commands, guards, preconditions, ownership, role/scope policies, and invariant expressions
@@ -55,6 +59,22 @@ Or work from source:
 ```bash
 pnpm install
 pnpm test
+
+# No AIR application YAML or generated replacement is required:
+pnpm air check validate examples/agent-verification/check.yaml \
+  --policy examples/agent-verification/policy.yaml --json
+pnpm air check baseline examples/agent-verification/check.yaml \
+  --target examples/agent-verification/legacy.target.yaml \
+  --policy examples/agent-verification/policy.yaml \
+  --output .air/check/baseline --json
+pnpm air check run examples/agent-verification/check.yaml \
+  --baseline .air/check/baseline \
+  --target examples/agent-verification/candidate.target.yaml \
+  --policy examples/agent-verification/policy.yaml \
+  --output .air/check/run --json
+pnpm air check explain .air/check/run/result.json --json
+
+# The earlier IR/compiler workflows remain supported:
 
 pnpm air validate examples/ledger/air.yaml
 pnpm air inspect examples/ledger/air.yaml
@@ -158,6 +178,8 @@ pnpm air verify-import capabilities/place-order \
   --legacy http://127.0.0.1:8080 \
   --candidate http://127.0.0.1:3000
 ```
+
+Read the [agent-verification trust model and CLI protocol](docs/agent-verification.md). The engine and formats are Apache-2.0. A future paid control plane will add collaboration, organizational policy, approvals, RBAC/SSO, immutable audit, and estate reporting while execution stays local or on self-hosted runners.
 
 External discovery calibration reports are available for the large archived [Netflix Conductor](docs/calibration-netflix-conductor.md) corpus and the actively maintained [claims-microservices](docs/calibration-claims-microservices.md) REST/JPA/GraphQL/Kafka service. The pinned [Buoy public-corpus benchmark](pilots/buoy/report.md) additionally runs clean source/OpenRewrite scans, workbench review, PostgreSQL runtime, and deterministic reporting. The [HMCTS typed-extraction rehearsal](pilots/hmcts-document-management-store/report.md) records the remaining evidence blockers rather than claiming a completed migration. These are product regression evidence, not customer adoption claims.
 

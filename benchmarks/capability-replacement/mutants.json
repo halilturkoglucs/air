@@ -1,0 +1,17 @@
+[
+  "response-status",
+  "response-field",
+  "missing-write",
+  "extra-write",
+  "rollback",
+  "outbound-omission",
+  "outbound-order",
+  "message-omission",
+  "message-duplication",
+  "failure-mapping",
+  "idempotency",
+  "id-correlation",
+  "timestamp-correlation",
+  "retryability",
+  "message-type"
+]

@@ -1,0 +1,19 @@
+apiVersion: air.dev/check/v0.1
+kind: Check
+metadata: { name: capability-replacement-benchmark }
+spec:
+  capability: { id: air-owned.documents.create }
+  observations: [http, database, messages, outbound, ordering, failures, retryability]
+  scenarios:
+    - id: create-success
+      request:
+        kind: command
+        input: { title: Benchmark, idempotencyKey: fixed-key }
+  normalization:
+    - { kind: typed-token, pointer: /http/body/id, format: uuid, binding: document-id }
+    - { kind: typed-token, pointer: /database/rows/0/id, format: uuid, binding: document-id }
+    - { kind: typed-token, pointer: /messages/0/id, format: uuid, binding: document-id }
+    - { kind: typed-token, pointer: /outbound/0/id, format: uuid, binding: document-id }
+    - { kind: typed-token, pointer: /http/body/createdAt, format: timestamp, binding: created-at }
+    - { kind: typed-token, pointer: /database/rows/0/createdAt, format: timestamp, binding: created-at }
+    - { kind: typed-token, pointer: /messages/0/createdAt, format: timestamp, binding: created-at }

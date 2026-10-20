@@ -1,0 +1,8 @@
+apiVersion: air.dev/check-target/v0.1
+kind: CheckTarget
+metadata: { name: air-owned-legacy }
+spec:
+  type: command
+  fixtureIsolation: process
+  workingDirectory: benchmarks/capability-replacement
+  command: { argv: [node, legacy.mjs] }

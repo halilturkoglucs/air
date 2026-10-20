@@ -4,6 +4,11 @@ All notable changes are recorded here. AIR follows the pre-1.0 policy in `docs/v
 
 ## Unreleased
 
+- Repositioned AIR around the model-neutral promise “AI writes the migration. AIR proves what changed,” while preserving every existing discovery, IR, compiler, provider, and import interface.
+- Added closed check, check-target, check-policy, check-baseline, and check-result v0.1 formats plus `air check init|validate|baseline|run|explain` with stable JSON output and documented 0/1/2/3 exits.
+- Added clean-tree, content-addressed, overwrite-protected legacy baselines; hash-bound policies and normalization; deterministic typed tokens, named bindings, and keyed unordered arrays; and fail-closed stale/tamper detection.
+- Added privacy-safe structural comparison for HTTP, database, messages, outbound calls, ordering, failures, and retryability without persisting raw values.
+- Added a five-minute agent-written TypeScript replacement example that requires no Application AIR YAML or generated code.
 - Added closed evidence-capture v0.1 profiles and privacy-safe PostgreSQL before/after, loopback outbound-HTTP, Kafka, and RabbitMQ capture adapters through `air evidence capture`.
 - Replaced heuristic evidence attachment with exact canonical HTTP, JVM, PostgreSQL, messaging, and explicit identities; ambiguous and unmatched evidence remains diagnostic.
 - Added typed discovery metadata for DTOs, JPA entities, Feign operations, pure mappings, Flyway tables, externally selected `Runnable` tasks, programmatic Caffeine caches, and transactional Spring-event listeners.

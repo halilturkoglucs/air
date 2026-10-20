@@ -1,5 +1,11 @@
 # HMCTS document-deletion typed-extraction pilot
 
+## v0.12 agent-verification reset
+
+The reviewed four-scenario check, strict policy, external-agent prompt/metadata, and ordinary replacement harness are now committed. The candidate models success plus EM-ANNO, EM-NPA, and blob failures without importing AIR.
+
+This is **not yet an equivalence proof**. A clean content-addressed baseline cannot be created until the pinned legacy capability is executed against disposable PostgreSQL and controlled IdAM/token/EM-ANNO/EM-NPA/blob stubs. AIR therefore remains at the preview boundary and 0.12.0 must not be published from this material alone.
+
 Status: implementation rehearsal complete; v0.12 release gate remains blocked.
 
 The corpus is pinned at `0b36d34a265bddc9e97ba39cc1201c95633babe4`. The frozen ground truth described `CaseDocumentsDeletionTask` as a Spring schedule. Source review showed that it is a `Runnable` selected through `TASK_NAME`; the scheduler/deployer binding is external to this repository. The ground-truth file remains immutable and this discrepancy is recorded as an adjudication, not silently rewritten.
