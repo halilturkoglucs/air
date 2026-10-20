@@ -11,16 +11,18 @@ air --help
 The current public release is `0.11.0`. For a reproducible installation, use
 `npm install --global @halilturkoglucs/air@0.11.0`.
 
-The `air check` workflow is the unreleased v0.12 preview. It uses stable JSON output and needs no hand-authored Application AIR YAML:
+The `air check` workflow is the unreleased v0.12 preview. It is available from the repository source build, uses stable JSON output, and needs no hand-authored Application AIR YAML. The published v0.11.0 package does not contain these commands yet:
 
 ```bash
-air check validate check.yaml --policy policy.yaml --json
-air check baseline check.yaml --target legacy.target.yaml --policy policy.yaml --output .air/check/baseline --json
-air check run check.yaml --baseline .air/check/baseline --target candidate.target.yaml --policy policy.yaml --output .air/check/run --json
-air check explain .air/check/run/result.json --json
+pnpm air check validate check.yaml --policy policy.yaml --json
+pnpm air check baseline check.yaml --target legacy.target.yaml --policy policy.yaml --output .air/check/baseline --json
+pnpm air check run check.yaml --baseline .air/check/baseline --target candidate.target.yaml --policy policy.yaml --output .air/check/run --json
+pnpm air check explain .air/check/run/result.json --json
 ```
 
 Candidate differences exit `1`, invalid or stale input exits `2`, and infrastructure failures exit `3`. Baselines are content-addressed and overwrite-protected; raw observed values and credentials are absent by default.
+
+See the [from-scratch tutorial](https://github.com/halilturkoglucs/air/blob/main/docs/getting-started-agent-verification.md) for installation, a passing example, a deliberately broken migration, command and HTTP targets, policies, normalization, and CI usage.
 
 Spring discovery requires Java 17 or newer. The npm package includes AIR's pinned OpenRewrite analyzer, so Maven and an AIR source checkout are not required:
 

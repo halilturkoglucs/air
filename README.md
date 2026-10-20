@@ -34,152 +34,99 @@ AIR CLI v0.11 accepts application documents from v0.1 through v0.10 and System d
 - pinned OpenRewrite Java/Spring analysis, redacted runtime evidence ingestion, capability slicing, legacy/candidate verification v0.3, and evidence-bound adoption
 - typed outbound ports, operation failures, bounded transformations, and foreign components that may remain outside AIR ownership
 
-## Quick start
+## Start here
 
-Install the CLI from npm:
-
-```bash
-npm install --global @halilturkoglucs/air
-air --help
-```
-
-Or install it from the project Homebrew tap:
+The verification workflow is currently a **source preview**. The published npm and Homebrew packages are v0.11.0 and do not yet contain `air check`. To try the preview, use Node.js 22 or newer and build this repository:
 
 ```bash
-brew install halilturkoglucs/tap/air-ir
-air --help
-```
-
-The formula is named `air-ir` because Homebrew core already uses `air` for an
-unrelated package. Both formulae install an `air` executable and therefore
-cannot be installed together.
-
-Or work from source:
-
-```bash
+git clone https://github.com/halilturkoglucs/air.git
+cd air
+corepack enable
 pnpm install
-pnpm test
+pnpm build
+pnpm air --version
+```
 
-# No AIR application YAML or generated replacement is required:
+Then run the included legacy-versus-candidate example:
+
+```bash
+# 1. Validate the reviewed scenarios and policy.
 pnpm air check validate examples/agent-verification/check.yaml \
   --policy examples/agent-verification/policy.yaml --json
+
+# 2. Execute only the legacy implementation and freeze its behavior.
 pnpm air check baseline examples/agent-verification/check.yaml \
   --target examples/agent-verification/legacy.target.yaml \
   --policy examples/agent-verification/policy.yaml \
-  --output .air/check/baseline --json
+  --output .air/check/tutorial-1/baseline --json
+
+# 3. Execute the same scenarios against an ordinary replacement.
 pnpm air check run examples/agent-verification/check.yaml \
-  --baseline .air/check/baseline \
+  --baseline .air/check/tutorial-1/baseline \
   --target examples/agent-verification/candidate.target.yaml \
   --policy examples/agent-verification/policy.yaml \
-  --output .air/check/run --json
-pnpm air check explain .air/check/run/result.json --json
+  --output .air/check/tutorial-1/run --json
 
-# The earlier IR/compiler workflows remain supported:
-
-pnpm air validate examples/ledger/air.yaml
-pnpm air inspect examples/ledger/air.yaml
-pnpm air verify examples/ledger/air.yaml \
-  --scenarios examples/ledger/verification.yaml \
-  --output ledger-evidence.json
-
-pnpm air compile examples/ledger/air.yaml \
-  --target nextjs \
-  --output dist/ledger-nextjs
-
-pnpm air compile examples/ledger/air.yaml \
-  --target rust \
-  --deployment container \
-  --output dist/ledger-rust
-
-pnpm air compile examples/ledger/air.yaml \
-  --target python \
-  --deployment container \
-  --output dist/ledger-python
-
-# With the generated target running against an isolated test database:
-AIR_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/air_conformance \
-AIR_AUTH_SECRET=replace-with-at-least-32-random-characters \
-pnpm air verify-live examples/ledger/air.yaml \
-  --scenarios examples/ledger/verification.yaml \
-  --base-url http://127.0.0.1:3000 \
-  --allow-database-reset
-
-# With all generated targets running against distinct disposable databases:
-AIR_AUTH_SECRET=replace-with-at-least-32-random-characters \
-pnpm air verify-differential examples/ledger/air.yaml \
-  --scenarios examples/ledger/verification.yaml \
-  --target nextjs=http://127.0.0.1:3001 \
-  --database-url nextjs=postgres://postgres:postgres@127.0.0.1:5432/air_nextjs \
-  --target rust=http://127.0.0.1:3000 \
-  --database-url rust=postgres://postgres:postgres@127.0.0.1:5432/air_rust \
-  --target python=http://127.0.0.1:3003 \
-  --database-url python=postgres://postgres:postgres@127.0.0.1:5432/air_python \
-  --allow-database-reset
-
-# Benchmark a validated, non-mutating idempotent replay path:
-AIR_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/air_rust \
-AIR_AUTH_SECRET=replace-with-at-least-32-random-characters \
-pnpm air benchmark-live examples/ledger/air.yaml \
-  --scenarios examples/ledger/verification.yaml \
-  --scenario transferReplaysIdempotentResult \
-  --base-url http://127.0.0.1:3000 \
-  --warmup 25 --requests 500 --concurrency 10 \
-  --allow-database-reset \
-  --output benchmark-evidence.json
-
-# Benchmark independent successful mutations with bounded retry handling:
-AIR_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/air_rust \
-AIR_AUTH_SECRET=replace-with-at-least-32-random-characters \
-pnpm air benchmark-live examples/ledger/air.yaml \
-  --scenarios examples/ledger/verification.yaml \
-  --scenario transferMovesFundsAtomically \
-  --workload mutation \
-  --base-url http://127.0.0.1:3000 \
-  --warmup 10 --requests 100 --concurrency 10 --client-retries 30 \
-  --allow-database-reset \
-  --output mutation-evidence.json
-
-# Assemble compatible artifacts and verify the pack has not been changed:
-pnpm air evidence-pack \
-  --artifact semantic=ledger-evidence.json \
-  --artifact mutation=mutation-evidence.json \
-  --output ledger-evidence-pack
-pnpm air evidence-verify ledger-evidence-pack
-
-# Check target feasibility before generating anything:
-pnpm air target-check examples/ledger/air.yaml \
-  --require domain.commands --prefer ui.web --json
-
-# Compose and verify the mixed Next.js/Rust/Python complex-service reference:
-pnpm air compose examples/complex-commerce/system.air.yaml \
-  --deployment examples/complex-commerce/deployment.compose.yaml \
-  --output dist/complex-commerce
-pnpm air verify-system examples/complex-commerce/system.air.yaml \
-  --scenarios examples/complex-commerce/verification.yaml \
-  --output complex-system-evidence.json
-pnpm air provider-check examples/complex-commerce/deployment.compose.yaml --live
-
-# Discover first; nothing found here becomes authoritative AIR automatically:
-# Deep Spring discovery requires Java 17+. The npm package includes the pinned analyzer JAR.
-pnpm air discover spring ../legacy-orders \
-  --output .air/discovery \
-  --analyzer openrewrite
-pnpm air evidence capture ./evidence-profile.yaml \
-  --output .air/evidence.jsonl -- ./gradlew integrationTest
-pnpm air evidence ingest ./staging-otlp.json --discovery .air/discovery
-pnpm air workbench .air/discovery --reviewer alice@example.com
-pnpm air discovery report .air/discovery --output .air/report
-
-# The remaining modernization commands are intentionally experimental in v0.11.
-pnpm air extract .air/discovery \
-  --capability endpoint:reviewed-id \
-  --output capabilities/place-order
-pnpm air verify-import capabilities/place-order \
-  --legacy http://127.0.0.1:8080 \
-  --candidate http://127.0.0.1:3000
+# 4. Turn the machine-readable result into an actionable explanation.
+pnpm air check explain .air/check/tutorial-1/run/result.json --json
 ```
 
-Read the [agent-verification trust model and CLI protocol](docs/agent-verification.md). The engine and formats are Apache-2.0. A future paid control plane will add collaboration, organizational policy, approvals, RBAC/SSO, immutable audit, and estate reporting while execution stays local or on self-hosted runners.
+The result should contain `"passed": true`. AIR does not overwrite baselines or results; use a new output name such as `tutorial-2` when repeating the walkthrough.
+
+Continue with the [from-scratch agent verification tutorial](docs/getting-started-agent-verification.md). It includes a deliberately broken migration, command and HTTP target examples, normalization, environment variables, CI behavior, troubleshooting, and guidance for adapting the workflow to your own service.
+
+## What can I use it for?
+
+| Use case | Observation boundary | Typical target setup |
+| --- | --- | --- |
+| Replace a Spring endpoint with TypeScript, Rust, or Python | HTTP response, PostgreSQL changes, emitted messages, vendor calls | Two HTTP targets with disposable fixtures |
+| Refactor a transactional workflow | Database writes, rollback, ordering, failure mapping | Command harness or HTTP observation adapter |
+| Move Kafka/Rabbit behavior to another broker or runtime | Messages, headers represented by the harness, duplication, ordering | Self-hosted evidence adapter |
+| Replace a scheduled job or worker | State changes, outbound calls, messages, retryability | Explicit command target |
+| Review an AI-generated migration in CI | Approved baseline versus candidate result | `air check run --json` with exit-code gating |
+| Map an unfamiliar Spring service before choosing a capability | Source-linked endpoints, persistence, messaging, schedules, opaque boundaries | `air discover spring`, workbench, then `air check init` |
+
+AIR is not a general correctness oracle, fuzzy similarity scorer, load tester, or one-click migration generator. A passing result means that the candidate matched the approved legacy baseline for the declared scenarios and observations.
+
+## Choose a workflow
+
+- **Prove an agent-written replacement:** follow [Getting started with agent verification](docs/getting-started-agent-verification.md).
+- **Understand the security and evidence model:** read [Agent verification](docs/agent-verification.md).
+- **Inventory an enterprise Spring service:** follow [Enterprise discovery and modernization](docs/enterprise-modernization.md).
+- **Use the existing AIR IR and code generators:** see the [AIR schema guide](docs/air-schema.md), [verification model](docs/verification.md), and the `examples/ledger` and `examples/complex-commerce` projects.
+- **Build a provider or deployment integration:** see [Target and plugin adapters](docs/target-adapters.md).
+
+## Current public CLI
+
+The released v0.11 discovery, AIR IR, compiler, and conformance workflows remain available from npm and Homebrew:
+
+```bash
+npm install --global @halilturkoglucs/air@0.11.0
+# or: brew install halilturkoglucs/tap/air-ir
+
+# Create an evidence-backed map of a Spring service (Java 17+).
+air discover spring ./legacy-service --output .air/discovery --analyzer openrewrite
+air workbench .air/discovery --reviewer alice@example.com
+air discovery report .air/discovery --output .air/report
+
+# Validate, verify, or generate from an existing AIR application document.
+air validate examples/ledger/air.yaml
+air verify examples/ledger/air.yaml \
+  --scenarios examples/ledger/verification.yaml \
+  --output ledger-evidence.json
+air compile examples/ledger/air.yaml --target rust --output dist/ledger-rust
+
+# Compose and deterministically verify a multi-service system.
+air compose examples/complex-commerce/system.air.yaml \
+  --deployment examples/complex-commerce/deployment.compose.yaml \
+  --output dist/complex-commerce
+air verify-system examples/complex-commerce/system.air.yaml \
+  --scenarios examples/complex-commerce/verification.yaml
+```
+
+The Homebrew formula is named `air-ir` because Homebrew core already uses `air` for an unrelated package. Both packages install an `air` executable and should not be installed together.
+
+The engine and formats are Apache-2.0. A future paid control plane will add collaboration, organizational policy, approvals, RBAC/SSO, immutable audit, and estate reporting while execution stays local or on self-hosted runners.
 
 External discovery calibration reports are available for the large archived [Netflix Conductor](docs/calibration-netflix-conductor.md) corpus and the actively maintained [claims-microservices](docs/calibration-claims-microservices.md) REST/JPA/GraphQL/Kafka service. The pinned [Buoy public-corpus benchmark](pilots/buoy/report.md) additionally runs clean source/OpenRewrite scans, workbench review, PostgreSQL runtime, and deterministic reporting. The [HMCTS typed-extraction rehearsal](pilots/hmcts-document-management-store/report.md) records the remaining evidence blockers rather than claiming a completed migration. These are product regression evidence, not customer adoption claims.
 
@@ -279,7 +226,7 @@ Managed regeneration may replace owned files and refuses to overwrite unowned fi
 - CI automation: [the conformance workflow](.github/workflows/conformance.yml) builds all targets, runs three-way differential verification plus replay/conflict benchmarks, verifies mixed-language generation and live providers, then uploads checksum-verified evidence packs
 - release operations: gated, checksummed release-candidate archives, dependency automation, version/security policy, and a structured three-path pilot protocol
 
-See [the architecture](docs/architecture.md), [enterprise discovery and modernization](docs/enterprise-modernization.md), [AIR schema guide](docs/air-schema.md), [verification model](docs/verification.md), [editor integration](docs/editor.md), [benchmarking methodology](docs/benchmarking.md), [pilot protocol](docs/pilots.md), [versioning policy](docs/versioning.md), and [product roadmap](docs/roadmap.md).
+See [getting started with agent verification](docs/getting-started-agent-verification.md), [the architecture](docs/architecture.md), [enterprise discovery and modernization](docs/enterprise-modernization.md), [AIR schema guide](docs/air-schema.md), [verification model](docs/verification.md), [editor integration](docs/editor.md), [benchmarking methodology](docs/benchmarking.md), [pilot protocol](docs/pilots.md), [versioning policy](docs/versioning.md), and [product roadmap](docs/roadmap.md).
 
 ## License and commercial use
 

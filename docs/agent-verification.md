@@ -4,6 +4,16 @@ AIR’s v0.12 product direction is simple: **AI writes the migration. AIR proves
 
 AIR does not decide that a replacement is generally correct. It checks equivalence only inside a reviewed observation boundary. Anything outside that boundary remains unproven.
 
+If this is your first time using AIR, begin with the [from-scratch tutorial](getting-started-agent-verification.md). It builds the source preview, creates a baseline, checks an equivalent replacement, and demonstrates a detected defect before introducing HTTP targets and CI.
+
+## Core objects
+
+- A **check** defines a capability, its scenarios, the observation boundary, and bounded normalization.
+- A **target** defines how AIR invokes either the legacy or candidate implementation. It contains explicit argv or an HTTP base URL reference, never an implicit shell command.
+- A **policy** states what evidence is mandatory and which normalization forms reviewers permit.
+- A **baseline** is an immutable, content-addressed digest of legacy observations.
+- A **result** compares candidate observations to that baseline and categorizes every mismatch.
+
 ## Trust model
 
 - A check declares scenarios, observable categories, and bounded normalization.
@@ -27,3 +37,9 @@ Every command supports stable JSON output. Exit codes are:
 `air check explain` labels each difference as `candidate-difference`, `baseline-stale`, `missing-observation`, `policy-violation`, or `infrastructure-error`, and says whether an agent should fix candidate code or repair the harness.
 
 See the [five-minute command-target example](../examples/agent-verification/README.md). Discovery is optional: `air check init` can prepare a review candidate from a discovered capability, while teams may author a check directly around an existing harness.
+
+## What a passing result means
+
+A pass means the candidate matched the approved baseline for every declared scenario and observation after the declared deterministic normalization. It does not prove that the legacy behavior is correct, that undiscovered scenarios behave the same, or that production infrastructure will have identical performance and availability.
+
+This is why AIR keeps the scenario set, observation boundary, policy, normalization, and baseline hashes together. Expanding or weakening any of them requires a new reviewed baseline rather than silently reusing old evidence.
