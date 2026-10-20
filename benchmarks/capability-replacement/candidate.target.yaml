@@ -1,0 +1,7 @@
+apiVersion: air.dev/check-target/v0.1
+kind: CheckTarget
+metadata: { name: agent-written-candidate }
+spec:
+  type: command
+  workingDirectory: benchmarks/capability-replacement
+  command: { argv: [node, candidate.mjs, equivalent] }

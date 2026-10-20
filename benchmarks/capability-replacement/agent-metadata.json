@@ -1,0 +1,8 @@
+{
+  "format": "air.dev/agent-authorship/v0.1",
+  "agent": "OpenAI Codex",
+  "model": "not-exposed-to-fixture",
+  "generatedAt": "2026-10-20T00:00:00.000Z",
+  "airGenerationUsed": false,
+  "notes": "Candidate is ordinary JavaScript compatible with the TypeScript replacement shape; it imports no AIR runtime."
+}

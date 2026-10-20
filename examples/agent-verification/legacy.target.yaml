@@ -1,0 +1,9 @@
+apiVersion: air.dev/check-target/v0.1
+kind: CheckTarget
+metadata:
+  name: legacy-document-service
+spec:
+  type: command
+  workingDirectory: examples/agent-verification
+  command:
+    argv: [node, legacy.mjs]

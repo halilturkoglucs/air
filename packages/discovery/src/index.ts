@@ -9,3 +9,4 @@ export * from "./workbench.js";
 export * from "./adapters.js";
 export * from "./report.js";
 export * from "./capture-profile.js";
+export * from "./check.js";

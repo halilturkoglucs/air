@@ -2,7 +2,7 @@
   "name": "air",
   "version": "0.11.0",
   "private": true,
-  "description": "A language-neutral application intermediate representation and compiler toolkit.",
+  "description": "A model-neutral verification layer for proving what changed in agent-written migrations.",
   "license": "Apache-2.0",
   "repository": "github:halilturkoglucs/air",
   "homepage": "https://github.com/halilturkoglucs/air#readme",

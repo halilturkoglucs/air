@@ -1,0 +1,10 @@
+apiVersion: air.dev/check-policy/v0.1
+kind: CheckPolicy
+metadata:
+  name: replacement-gate
+spec:
+  requiredScenarios: [creates-document]
+  requiredObservations: [http, database, messages, outbound, ordering, failures, retryability]
+  allowedNormalizations: [typed-token]
+  requireCleanBaseline: true
+  unmatchedEvidence: fail

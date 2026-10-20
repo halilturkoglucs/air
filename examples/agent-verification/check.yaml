@@ -1,0 +1,22 @@
+apiVersion: air.dev/check/v0.1
+kind: Check
+metadata:
+  name: create-document
+spec:
+  capability:
+    id: documents.create
+  observations: [http, database, messages, outbound, ordering, failures, retryability]
+  scenarios:
+    - id: creates-document
+      description: Create one document and observe every declared boundary.
+      request:
+        kind: command
+        input: { title: Example }
+  normalization:
+    - { kind: typed-token, pointer: /http/body/id, format: uuid, binding: document-id }
+    - { kind: typed-token, pointer: /database/rows/0/id, format: uuid, binding: document-id }
+    - { kind: typed-token, pointer: /messages/0/id, format: uuid, binding: document-id }
+    - { kind: typed-token, pointer: /outbound/0/id, format: uuid, binding: document-id }
+    - { kind: typed-token, pointer: /http/body/createdAt, format: timestamp, binding: created-at }
+    - { kind: typed-token, pointer: /database/rows/0/createdAt, format: timestamp, binding: created-at }
+    - { kind: typed-token, pointer: /messages/0/createdAt, format: timestamp, binding: created-at }

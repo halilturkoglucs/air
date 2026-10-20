@@ -25,13 +25,42 @@ describe("AIR CLI", () => {
 
     const help = captureIo();
     expect(await runCli(["--help"], help.io)).toBe(0);
-    expect(help.stdout()).toContain(`AIR compiler toolkit ${cliPackage.version}`);
+    expect(help.stdout()).toContain(`AIR verification and compiler toolkit ${cliPackage.version}`);
 
     const version = captureIo();
     expect(await runCli(["--version"], version.io)).toBe(0);
     expect(version.stdout()).toBe(`${cliPackage.version}\n`);
     expect(help.stdout()).toContain("air discovery report");
+    expect(help.stdout()).toContain("air check baseline");
     expect(help.stdout()).toContain("EXPERIMENTAL: extract");
+  });
+
+  it("reserves stable JSON output and 1/2/3 exits for air check", async () => {
+    const check = resolve("examples/agent-verification/check.yaml");
+    const policy = resolve("examples/agent-verification/policy.yaml");
+    const valid = captureIo();
+    expect(await runCli(["check", "validate", check, "--policy", policy, "--json"], valid.io)).toBe(0);
+    expect(JSON.parse(valid.stdout())).toMatchObject({ ok: true, violations: [] });
+    expect(valid.stderr()).toBe("");
+
+    const directory = await mkdtemp(resolve(tmpdir(), "air-check-cli-"));
+    const restrictivePolicy = resolve(directory, "policy.yaml");
+    await writeFile(restrictivePolicy, "apiVersion: air.dev/check-policy/v0.1\nkind: CheckPolicy\nmetadata: { name: restrictive }\nspec: { allowedNormalizations: [ignore] }\n", "utf8");
+    const difference = captureIo();
+    expect(await runCli(["check", "validate", check, "--policy", restrictivePolicy, "--json"], difference.io)).toBe(1);
+    expect(JSON.parse(difference.stdout())).toMatchObject({ ok: false });
+
+    const invalidPath = resolve(directory, "invalid.yaml");
+    await writeFile(invalidPath, "apiVersion: wrong\nkind: Check\n", "utf8");
+    const invalid = captureIo();
+    expect(await runCli(["check", "validate", invalidPath, "--json"], invalid.io)).toBe(2);
+    expect(JSON.parse(invalid.stderr())).toMatchObject({ ok: false, category: "invalid-input" });
+
+    const brokenTarget = resolve(directory, "broken.target.yaml");
+    await writeFile(brokenTarget, "apiVersion: air.dev/check-target/v0.1\nkind: CheckTarget\nmetadata: { name: unavailable }\nspec: { type: command, command: { argv: [air-command-that-does-not-exist] } }\n", "utf8");
+    const infrastructure = captureIo();
+    expect(await runCli(["check", "baseline", check, "--target", brokenTarget, "--output", resolve(directory, "baseline"), "--allow-dirty", "--json"], infrastructure.io)).toBe(3);
+    expect(JSON.parse(infrastructure.stderr())).toMatchObject({ ok: false, category: "infrastructure-error" });
   });
 
   it("validates a file", async () => {

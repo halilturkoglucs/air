@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://air.dev/schema/check-policy-0.1.schema.json",
+  "title": "AIR check policy",
+  "type": "object", "additionalProperties": false,
+  "required": ["apiVersion", "kind", "metadata", "spec"],
+  "properties": {
+    "apiVersion": { "const": "air.dev/check-policy/v0.1" },
+    "kind": { "const": "CheckPolicy" },
+    "metadata": { "type": "object", "additionalProperties": false, "required": ["name"], "properties": { "name": { "type": "string", "minLength": 1 } } },
+    "spec": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "requiredScenarios": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+        "requiredObservations": { "type": "array", "uniqueItems": true, "items": { "enum": ["http", "database", "messages", "outbound", "ordering", "failures", "retryability"] } },
+        "allowedNormalizations": { "type": "array", "uniqueItems": true, "items": { "enum": ["ignore", "typed-token", "unordered-array"] } },
+        "requireCleanBaseline": { "type": "boolean", "default": true },
+        "unmatchedEvidence": { "enum": ["fail", "report"], "default": "fail" }
+      }
+    }
+  }
+}
