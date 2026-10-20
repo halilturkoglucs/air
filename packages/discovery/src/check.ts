@@ -190,22 +190,28 @@ export function validateMigrationCheck(check: CheckDocument, policy: CheckPolicy
   return policyViolations(check, policy, true);
 }
 
-function decodePointer(pointer: string): string[] { return pointer === "" ? [] : pointer.slice(1).split("/").map((item) => item.replace(/~1/gu, "/").replace(/~0/gu, "~")); }
+const PROTOTYPE_KEYS = new Set(["__proto__", "prototype", "constructor"]);
+function decodePointer(pointer: string): string[] {
+  const parts = pointer === "" ? [] : pointer.slice(1).split("/").map((item) => item.replace(/~1/gu, "/").replace(/~0/gu, "~"));
+  if (parts.some((part) => PROTOTYPE_KEYS.has(part))) throw new CheckInputError(`Normalization pointer ${pointer} contains a protected prototype-chain segment.`);
+  return parts;
+}
 function getParent(root: unknown, pointer: string): { parent: Record<string, unknown> | unknown[]; key: string } {
   const parts = decodePointer(pointer); const key = parts.pop();
   if (key === undefined) throw new CheckInputError("Normalization cannot replace the observation root.");
   let current: unknown = root;
   for (const part of parts) {
     if (!current || typeof current !== "object") throw new CheckInputError(`Normalization pointer ${pointer} does not exist.`);
+    if (!Object.hasOwn(current, part)) throw new CheckInputError(`Normalization pointer ${pointer} does not exist.`);
     current = Array.isArray(current) ? current[Number(part)] : (current as Record<string, unknown>)[part];
   }
   if (!current || typeof current !== "object") throw new CheckInputError(`Normalization pointer ${pointer} does not exist.`);
   return { parent: current as Record<string, unknown> | unknown[], key };
 }
 
-function at(parent: Record<string, unknown> | unknown[], key: string): unknown { return Array.isArray(parent) ? parent[Number(key)] : parent[key]; }
-function setAt(parent: Record<string, unknown> | unknown[], key: string, value: unknown): void { if (Array.isArray(parent)) parent[Number(key)] = value; else parent[key] = value; }
-function deleteAt(parent: Record<string, unknown> | unknown[], key: string): void { if (Array.isArray(parent)) parent.splice(Number(key), 1); else delete parent[key]; }
+function at(parent: Record<string, unknown> | unknown[], key: string): unknown { return Array.isArray(parent) ? parent[Number(key)] : Object.hasOwn(parent, key) ? parent[key] : undefined; }
+function setAt(parent: Record<string, unknown> | unknown[], key: string, value: unknown): void { if (Array.isArray(parent)) parent[Number(key)] = value; else Object.defineProperty(parent, key, { value, enumerable: true, configurable: true, writable: true }); }
+function deleteAt(parent: Record<string, unknown> | unknown[], key: string): void { if (Array.isArray(parent)) parent.splice(Number(key), 1); else Reflect.deleteProperty(parent, key); }
 
 function applyNormalization(observation: unknown, rules: readonly NormalizationRule[]): unknown {
   const copy = JSON.parse(JSON.stringify(observation)) as unknown;

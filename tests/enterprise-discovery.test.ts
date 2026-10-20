@@ -605,6 +605,10 @@ spec:
     const stateful = parseCheckDocument("apiVersion: air.dev/check/v0.1\nkind: Check\nmetadata: { name: stateful }\nspec: { capability: { id: x }, observations: [database], scenarios: [{ id: one, request: { kind: command } }] }\n");
     const ambiguousFixture = parseCheckTarget(`apiVersion: air.dev/check-target/v0.1\nkind: CheckTarget\nmetadata: { name: ambiguous }\nspec: { type: command, command: { argv: [${JSON.stringify(process.execPath)}, -e, ${JSON.stringify("console.log('{\\\"database\\\":{}}')")}] } }\n`);
     await expect(createCheckBaseline({ check: stateful, target: ambiguousFixture, repositoryRoot: process.cwd(), repositoryHash: "a".repeat(64), clean: true })).rejects.toThrow("explicitly declare fixtureIsolation");
+    const prototypeCheck = parseCheckDocument("apiVersion: air.dev/check/v0.1\nkind: Check\nmetadata: { name: prototype-safe }\nspec: { capability: { id: x }, observations: [database], scenarios: [{ id: one, request: { kind: command } }], normalization: [{ kind: ignore, pointer: /__proto__/polluted, reason: adversarial }] }\n");
+    const isolated = parseCheckTarget(`apiVersion: air.dev/check-target/v0.1\nkind: CheckTarget\nmetadata: { name: isolated }\nspec: { type: command, fixtureIsolation: process, command: { argv: [${JSON.stringify(process.execPath)}, -e, ${JSON.stringify("console.log('{\\\"database\\\":{}}')")}] } }\n`);
+    await expect(createCheckBaseline({ check: prototypeCheck, target: isolated, repositoryRoot: process.cwd(), repositoryHash: "a".repeat(64), clean: true })).rejects.toThrow("protected prototype-chain segment");
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
   });
 
   it("detects all 15 capability-replacement mutants and passes 20 clean reruns", async () => {
