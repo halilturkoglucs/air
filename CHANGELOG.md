@@ -4,6 +4,8 @@ All notable changes are recorded here. AIR follows the pre-1.0 policy in `docs/v
 
 ## Unreleased
 
+## 0.12.0 - 2026-10-20
+
 - Repositioned AIR around the model-neutral promise “AI writes the migration. AIR proves what changed,” while preserving every existing discovery, IR, compiler, provider, and import interface.
 - Added closed check, check-target, check-policy, check-baseline, and check-result v0.1 formats plus `air check init|validate|baseline|run|explain` with stable JSON output and documented 0/1/2/3 exits.
 - Added clean-tree, content-addressed, overwrite-protected legacy baselines; hash-bound policies and normalization; deterministic typed tokens, named bindings, and keyed unordered arrays; and fail-closed stale/tamper detection.
@@ -15,7 +17,9 @@ All notable changes are recorded here. AIR follows the pre-1.0 policy in `docs/v
 - Hardened typed extraction to block missing or reordered outbound evidence and missing failure/retryability contracts instead of inventing defaults or placeholder types.
 - Removed a no-op polynomial route regular expression from Rust target rendering and added adversarial route-string coverage.
 - Updated the first-party AMQP and Redis clients and the dependency-review, Node setup, and artifact-upload GitHub Actions to their reviewed current major versions.
-- Added the completed pinned Buoy public-corpus discovery benchmark and the still-blocked HMCTS document-deletion extraction rehearsal with sanitized commands, metrics, and reports.
+- Added the completed pinned Buoy public-corpus discovery benchmark and a pinned HMCTS document-deletion equivalence proof that executes the real Java capability against PostgreSQL 16 and controlled foreign boundaries.
+- Added a live cross-language Spring/Java-to-TypeScript capability proof, with 20 clean equivalent reruns and detection of all 15 semantic mutants through the public JSON CLI protocol.
+- Documented a language-agnostic command and HTTP adapter contract that any coding agent can drive without an AIR runtime or required Application AIR YAML.
 
 ## 0.11.0 - 2026-10-18
 

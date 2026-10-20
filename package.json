@@ -1,6 +1,6 @@
 {
   "name": "air",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "private": true,
   "description": "A model-neutral verification layer for proving what changed in agent-written migrations.",
   "license": "Apache-2.0",
@@ -14,6 +14,7 @@
     "test": "pnpm build && vitest run",
     "test:watch": "pnpm build && vitest",
     "release:check": "pnpm typecheck && pnpm test",
+    "proof:v0.12-live": "node scripts/run-v012-live-proof.mjs",
     "release:artifacts": "node scripts/release-artifacts.mjs",
     "targets:sync": "node scripts/sync-target-manifests.mjs",
     "targets:check": "node scripts/sync-target-manifests.mjs --check",
@@ -39,6 +40,7 @@
     "@types/node": "^22.15.0",
     "tsup": "^8.5.0",
     "typescript": "^5.9.3",
+    "postgres": "^3.4.7",
     "vitest": "^5.0.3"
   },
   "engines": {

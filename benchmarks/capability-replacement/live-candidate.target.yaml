@@ -1,0 +1,10 @@
+apiVersion: air.dev/check-target/v0.1
+kind: CheckTarget
+metadata: { name: agent-written-typescript-postgres-candidate }
+spec:
+  type: command
+  fixtureIsolation: process
+  workingDirectory: benchmarks/capability-replacement
+  environment:
+    AIR_BENCHMARK_DATABASE_URL: { fromEnv: AIR_BENCHMARK_DATABASE_URL }
+  command: { argv: [node, candidate.mjs, equivalent] }

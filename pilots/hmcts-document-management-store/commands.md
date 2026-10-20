@@ -23,4 +23,15 @@ air evidence ingest "$PROOF/evidence.jsonl" --discovery "$PROOF/reviewed"
 air extract "$PROOF/reviewed" --capability operation:… --output "$PROOF/extracted"
 ```
 
+The coordinated v0.12 gate runs the real pinned capability and replacement with the public JSON CLI protocol:
+
+```bash
+export AIR_HMCTS_REPOSITORY="$CHECKOUT"
+docker run --name air-v012-postgres -e POSTGRES_PASSWORD=air-proof -p 55432:5432 -d postgres:16-alpine
+export AIR_PROOF_POSTGRES_URL=postgres://postgres:air-proof@127.0.0.1:55432/postgres
+pnpm proof:v0.12-live
+```
+
+The PostgreSQL URL is supplied through the environment and is never written to the check, target, baseline, result, metrics, or report.
+
 The final extraction command is expected to fail until the real capability harness supplies exact failure and retryability evidence. The disposable PostgreSQL container and loopback stubs were removed after the rehearsal.

@@ -16,26 +16,20 @@ AIR does not generate the candidate and neither implementation imports an AIR ru
 
 ## 1. Prerequisites
 
-The current `air check` implementation is a source preview. The published v0.11.0 npm and Homebrew packages do not contain it yet.
-
 You need:
 
 - Git;
 - Node.js 22 or newer;
-- Corepack, which is included with normal Node.js installations.
+- AIR v0.12.
 
-Clone and build AIR:
+Install AIR, then clone the repository for the tutorial fixtures:
 
 ```bash
+npm install --global @halilturkoglucs/air@0.12.0
 git clone https://github.com/halilturkoglucs/air.git
 cd air
-corepack enable
-pnpm install
-pnpm build
-pnpm air --version
+air --version
 ```
-
-The reported version remains `0.11.0` until the v0.12 release gates are complete.
 
 ## 2. Understand the four input files
 
@@ -53,7 +47,7 @@ The implementations are ordinary Node.js programs. Each receives scenario input 
 ## 3. Validate the check before executing code
 
 ```bash
-pnpm air check validate examples/agent-verification/check.yaml \
+air check validate examples/agent-verification/check.yaml \
   --policy examples/agent-verification/policy.yaml \
   --json
 ```
@@ -71,7 +65,7 @@ Validation checks the closed schemas and policy. Unknown keys, forbidden normali
 Baseline creation runs only the legacy target:
 
 ```bash
-pnpm air check baseline examples/agent-verification/check.yaml \
+air check baseline examples/agent-verification/check.yaml \
   --target examples/agent-verification/legacy.target.yaml \
   --policy examples/agent-verification/policy.yaml \
   --output .air/check/tutorial-1/baseline \
@@ -91,7 +85,7 @@ The pack contains structural observations, types, sizes, and SHA-256 leaf digest
 ## 5. Check an equivalent replacement
 
 ```bash
-pnpm air check run examples/agent-verification/check.yaml \
+air check run examples/agent-verification/check.yaml \
   --baseline .air/check/tutorial-1/baseline \
   --target examples/agent-verification/candidate.target.yaml \
   --policy examples/agent-verification/policy.yaml \
@@ -108,7 +102,7 @@ The result should contain:
 Ask AIR to explain it:
 
 ```bash
-pnpm air check explain .air/check/tutorial-1/run/result.json --json
+air check explain .air/check/tutorial-1/run/result.json --json
 ```
 
 Generated UUIDs and timestamps differ on every execution. The check uses typed tokens with named bindings, so AIR verifies that each value is valid and remains correlated across the response, database row, message, and outbound call without requiring the legacy and candidate to generate identical values.
@@ -128,7 +122,7 @@ perl -0pi.bak -e 's/equivalent/response-status/' \
 Create a matching benchmark baseline:
 
 ```bash
-pnpm air check baseline benchmarks/capability-replacement/check.yaml \
+air check baseline benchmarks/capability-replacement/check.yaml \
   --target benchmarks/capability-replacement/legacy.target.yaml \
   --policy benchmarks/capability-replacement/policy.yaml \
   --output .air/check/mutant-1/baseline \
@@ -138,7 +132,7 @@ pnpm air check baseline benchmarks/capability-replacement/check.yaml \
 Run the broken candidate:
 
 ```bash
-pnpm air check run benchmarks/capability-replacement/check.yaml \
+air check run benchmarks/capability-replacement/check.yaml \
   --baseline .air/check/mutant-1/baseline \
   --target .air/check/mutant-response-status.target.yaml \
   --policy benchmarks/capability-replacement/policy.yaml \
@@ -149,7 +143,7 @@ pnpm air check run benchmarks/capability-replacement/check.yaml \
 The command exits `1`, which is expected. Explain the failed result:
 
 ```bash
-pnpm air check explain .air/check/mutant-1/run/result.json --json
+air check explain .air/check/mutant-1/run/result.json --json
 ```
 
 The explanation identifies `/http/status` as a `candidate-difference` and recommends repairing candidate code. Other benchmark modes include `missing-write`, `rollback`, `outbound-order`, `message-duplication`, `failure-mapping`, `idempotency`, and `id-correlation`.
@@ -265,12 +259,12 @@ Run the same check twice with different target files:
 ```bash
 LEGACY_ORDERS_URL=http://127.0.0.1:8080 \
 LEGACY_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/legacy_fixture \
-pnpm air check baseline check.yaml --target legacy.target.yaml \
+air check baseline check.yaml --target legacy.target.yaml \
   --policy policy.yaml --output .air/check/orders-1/baseline --json
 
 CANDIDATE_ORDERS_URL=http://127.0.0.1:3000 \
 CANDIDATE_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/candidate_fixture \
-pnpm air check run check.yaml --baseline .air/check/orders-1/baseline \
+air check run check.yaml --baseline .air/check/orders-1/baseline \
   --target candidate.target.yaml --policy policy.yaml \
   --output .air/check/orders-1/run --json
 ```
@@ -301,7 +295,7 @@ All check commands support `--json`. Standard output is reserved for stable mach
 A CI step can therefore invoke the same command used locally:
 
 ```bash
-pnpm air check run checks/orders/check.yaml \
+air check run checks/orders/check.yaml \
   --baseline checks/orders/baseline \
   --target checks/orders/candidate.target.yaml \
   --policy checks/orders/policy.yaml \
@@ -316,11 +310,11 @@ Commit reviewed check and policy files. Store approved baselines according to yo
 Discovery is optional. If AIR has already mapped a service, it can prepare a review candidate for one capability:
 
 ```bash
-pnpm air discover spring ../legacy-orders \
+air discover spring ../legacy-orders \
   --output .air/discovery \
   --analyzer openrewrite
-pnpm air workbench .air/discovery --reviewer alice@example.com
-pnpm air check init .air/discovery \
+air workbench .air/discovery --reviewer alice@example.com
+air check init .air/discovery \
   --capability endpoint:reviewed-id \
   --output .air/check/orders
 ```

@@ -4,7 +4,7 @@ AIR’s v0.12 product direction is simple: **AI writes the migration. AIR proves
 
 AIR does not decide that a replacement is generally correct. It checks equivalence only inside a reviewed observation boundary. Anything outside that boundary remains unproven.
 
-If this is your first time using AIR, begin with the [from-scratch tutorial](getting-started-agent-verification.md). It builds the source preview, creates a baseline, checks an equivalent replacement, and demonstrates a detected defect before introducing HTTP targets and CI.
+If this is your first time using AIR, begin with the [from-scratch tutorial](getting-started-agent-verification.md). For Java, Python, Go, Rust, .NET, Node, or another backend runtime, use the [language-agnostic agent protocol](language-agnostic-agent-protocol.md).
 
 ## Core objects
 
