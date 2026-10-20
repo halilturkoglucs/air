@@ -1,0 +1,24 @@
+apiVersion: air.dev/evidence-capture/v0.1
+kind: EvidenceCapture
+metadata:
+  name: hmcts-document-deletion
+spec:
+  timeoutMs: 120000
+  sources:
+    - id: document-store
+      kind: postgres
+      connectionEnv: AIR_PILOT_POSTGRES_URL
+      schema: public
+      tables: [storeddocument, documentcontentversion]
+    - id: em-anno-api
+      kind: outbound-http
+      environment: EM_ANNO_API_URL
+      listen: { host: 127.0.0.1, port: 0 }
+      stubs:
+        - { method: DELETE, path: "/api/documents/{docId}/data", status: 204 }
+    - id: em-npa-api
+      kind: outbound-http
+      environment: EM_NPA_API_URL
+      listen: { host: 127.0.0.1, port: 0 }
+      stubs:
+        - { method: DELETE, path: "/api/markups/document/{documentId}", status: 204 }

@@ -155,6 +155,7 @@ Supported in v0.11:
 - incremental rescans that retain decisions only while evidence is unchanged
 - npm-packaged, pinned OpenRewrite 8.90.4 Java analyzer plus a conservative, review-required source fallback; clean installations need Java 17+ but not Maven
 - Java Spring inventory for modules, REST and GraphQL boundaries, annotated records/DTOs, JPA, repositories/queries/transactions, security, Kafka, RabbitMQ, Spring events, schedules, caches/Redis, outbound HTTP, configuration, profile-selected publisher adapters, and dynamic routing
+- programmatic Caffeine inventory, transactional Spring-event listeners, Flyway table discovery, externally selected `Runnable` tasks, and custom Gradle test-source exclusion hardened against public corpora
 - inventory-only Kotlin findings and explicit opaque diagnostics
 - loopback-only local architecture workbench with module/system/entry-point/capability views, reachable slices, filters, edge provenance, hash-verified source excerpts, reviewer identity, required rejection/opaque reasons, diagnostics, unmatched evidence, and review progress
 - deterministic, source-free `air.dev/discovery-report/v0.1` JSON and self-contained HTML reports
@@ -167,9 +168,11 @@ The release-gating [Spring Petclinic REST rehearsal](../pilots/petclinic-rest/re
 
 An external design-partner architecture-inventory pilot follows the release. It must measure human archaeology time, review effort, unexplained behavior, and willingness to repeat the workflow; the internal rehearsal is not independent enterprise validation.
 
-## 12. Evidence and typed extraction — v0.12 next
+The pinned [Buoy benchmark](../pilots/buoy/report.md) now provides a second clean public-corpus proof: 129 upstream tests passed, disposable PostgreSQL reached healthy, every one of 35 documented operations appeared exactly once, source/OpenRewrite identities and repeat scans were stable, and 116 workbench decisions closed every observable boundary. Its frozen ground truth exposed and drove fixes for programmatic Caffeine caches and transactional event listeners. It remains product evidence, not customer validation.
 
-Experimental foundation already present:
+## 12. Evidence and typed extraction — v0.12 in progress
+
+Implemented and hardened behind the experimental boundary:
 
 - redacted OTLP/JSONL/test evidence ingestion with explicit field allowlisting
 - Application v0.10 outbound ports, operation failures, ordered invocation metadata, and bounded transformations
@@ -177,13 +180,20 @@ Experimental foundation already present:
 - capability slicing from endpoint/listener/schedule entry points
 - extraction blockers for unreviewed inferred, opaque, or conflicting observable behavior
 - generated Application/System/verification/capability artifacts bound to repository and evidence hashes
+- exact canonical HTTP, JVM, PostgreSQL, messaging, and explicit identities; ambiguous and unmatched observations never promote confidence
+- closed `air.dev/evidence-capture/v0.1` profiles plus self-hosted PostgreSQL, outbound-HTTP, Kafka, and RabbitMQ adapters with credential-name indirection and privacy-safe records
+- DTO/entity/Feign/mapper metadata, SQL migration tables, real typed contracts/entities/ports/transformations/scenarios, source-attributed outbound ordering checks, and no placeholder imported types
+- extraction blockers for missing, reordered, ambiguous, or policy-incomplete observations; retry/failure defaults are never invented
+- pinned HMCTS document-deletion corpus, task/call-chain discovery, 43 passing targeted upstream tests, reviewed foreign boundaries, and a successful adapter-only rehearsal
 
-v0.12 release work:
+Remaining v0.12 release gate:
 
-- replace heuristic evidence matching with deterministic route/method, JVM symbol, database, messaging-destination, and trace-correlation identities
-- add self-hosted PostgreSQL before/after, Kafka/Rabbit message, and outbound HTTP observation adapters
-- generate real contracts, entities, ports, transformations, failures, and scenarios from reviewed evidence instead of placeholder imported contracts
-- complete one vendor-REST capability pilot; unresolved writes or outbound effects must block extraction
+- execute the real HMCTS capability through a controlled harness for success, EM-ANNO failure, EM-NPA failure, and blob failure
+- correlate each run with exact outbound failure/retryability, blob, and PostgreSQL observations and bind generated scenarios to those evidence hashes
+- require the final extraction to contain only proven contracts, ports, failures, transformations where present, state effects, and scenarios
+- rerun both pinned public corpora in clean CI checkouts, then and only then version and distribute 0.12.0
+
+The current [HMCTS pilot report](../pilots/hmcts-document-management-store/report.md) is explicitly blocked because the adapter rehearsal did not execute the capability and therefore cannot prove its failure contracts. v0.12.0 is not released on substitute evidence.
 
 ## 13. Verified replacement — v0.13 next
 

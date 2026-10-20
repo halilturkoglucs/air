@@ -144,6 +144,8 @@ pnpm air provider-check examples/complex-commerce/deployment.compose.yaml --live
 pnpm air discover spring ../legacy-orders \
   --output .air/discovery \
   --analyzer openrewrite
+pnpm air evidence capture ./evidence-profile.yaml \
+  --output .air/evidence.jsonl -- ./gradlew integrationTest
 pnpm air evidence ingest ./staging-otlp.json --discovery .air/discovery
 pnpm air workbench .air/discovery --reviewer alice@example.com
 pnpm air discovery report .air/discovery --output .air/report
@@ -157,7 +159,7 @@ pnpm air verify-import capabilities/place-order \
   --candidate http://127.0.0.1:3000
 ```
 
-External discovery calibration reports are available for the large archived [Netflix Conductor](docs/calibration-netflix-conductor.md) corpus and the actively maintained [claims-microservices](docs/calibration-claims-microservices.md) REST/JPA/GraphQL/Kafka service. They are regression evidence, not claims of automatic conversion or completed adoption pilots.
+External discovery calibration reports are available for the large archived [Netflix Conductor](docs/calibration-netflix-conductor.md) corpus and the actively maintained [claims-microservices](docs/calibration-claims-microservices.md) REST/JPA/GraphQL/Kafka service. The pinned [Buoy public-corpus benchmark](pilots/buoy/report.md) additionally runs clean source/OpenRewrite scans, workbench review, PostgreSQL runtime, and deterministic reporting. The [HMCTS typed-extraction rehearsal](pilots/hmcts-document-management-store/report.md) records the remaining evidence blockers rather than claiming a completed migration. These are product regression evidence, not customer adoption claims.
 
 ## Plugin SDK
 

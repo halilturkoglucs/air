@@ -1,0 +1,29 @@
+{
+  "corpusCommit": "138611efc00e27e33d03b37993a85c3db3dd3ca9",
+  "tests": { "passed": 129, "failed": 0, "skipped": 0, "durationSeconds": 50 },
+  "runtime": { "postgresVersion": "16.15", "health": "UP", "startupSeconds": 3.239 },
+  "discovery": {
+    "nodes": 185,
+    "edges": 346,
+    "documentedOperations": 35,
+    "operationsFoundExactlyOnce": 35,
+    "testTopologyFindings": 0,
+    "sourceRepeatStable": true,
+    "openRewriteRepeatStable": true,
+    "sourceOpenRewriteIdentityParity": true,
+    "scanMilliseconds": { "source1": 872, "source2": 904, "openRewrite1": 1970, "openRewrite2": 1901 }
+  },
+  "review": {
+    "reviewer": "public-corpus-reviewer",
+    "decisions": 116,
+    "rejected": 0,
+    "opaque": 0,
+    "unreviewedObservable": 0,
+    "unresolved": 0,
+    "automatedWorkbenchRehearsalMilliseconds": 1574
+  },
+  "reportSha256": {
+    "json": "3b6846eeec4a312d781838a8e38c73cd33c38d8fe9e9ea6d074beb2bf2ac10e2",
+    "html": "e6bd594eed54f8240b3cbc49bba591fd72bf65222ef8f3641830346044d86e81"
+  }
+}

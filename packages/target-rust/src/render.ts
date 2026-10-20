@@ -426,7 +426,7 @@ function renderCommand(name: string, command: CommandDefinition, air: AirDocumen
 function renderRouter(air: AirDocument): string {
   const groups = new Map<string, string[]>();
   for (const operation of air.spec.http?.operations ?? []) {
-    const path = operation.path.replace(/\{([^}]+)\}/g, "{$1}");
+    const path = operation.path;
     const handlers = groups.get(path) ?? [];
     const layer = operation.method === "GET" ? "get" : operation.method === "POST" ? "post" : operation.method === "DELETE" ? "delete" : "patch";
     const handler = "command" in operation ? `${rustIdentifier(operation.id)}_route` : rustIdentifier(operation.id);

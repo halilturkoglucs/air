@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://air.dev/schema/evidence-capture-0.1.schema.json",
+  "title": "AIR Evidence Capture Profile v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "metadata", "spec"],
+  "properties": {
+    "apiVersion": { "const": "air.dev/evidence-capture/v0.1" },
+    "kind": { "const": "EvidenceCapture" },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": { "name": { "$ref": "#/$defs/identifier" } }
+    },
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sources"],
+      "properties": {
+        "timeoutMs": { "type": "integer", "minimum": 1, "maximum": 3600000 },
+        "sources": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "oneOf": [
+              { "$ref": "#/$defs/postgres" },
+              { "$ref": "#/$defs/outboundHttp" },
+              { "$ref": "#/$defs/kafka" },
+              { "$ref": "#/$defs/rabbitmq" }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "identifier": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,62}$" },
+    "env": { "type": "string", "pattern": "^[A-Z_][A-Z0-9_]*$" },
+    "strings": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+    "base": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind"],
+      "properties": { "id": { "$ref": "#/$defs/identifier" }, "kind": { "type": "string" } }
+    },
+    "postgres": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "connectionEnv", "schema", "tables"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "kind": { "const": "postgres" },
+        "connectionEnv": { "$ref": "#/$defs/env" },
+        "schema": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" },
+        "tables": { "$ref": "#/$defs/strings" }
+      }
+    },
+    "stub": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "path", "status"],
+      "properties": {
+        "method": { "enum": ["GET", "POST", "PUT", "PATCH", "DELETE"] },
+        "path": { "type": "string", "pattern": "^/" },
+        "status": { "type": "integer", "minimum": 100, "maximum": 599 },
+        "headers": { "type": "object", "additionalProperties": { "type": "string" } },
+        "body": { "type": "string" }
+      }
+    },
+    "outboundHttp": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "environment", "listen", "stubs"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "kind": { "const": "outbound-http" },
+        "environment": { "$ref": "#/$defs/env" },
+        "listen": { "type": "object", "additionalProperties": false, "required": ["host", "port"], "properties": { "host": { "enum": ["127.0.0.1", "::1"] }, "port": { "type": "integer", "minimum": 0, "maximum": 65535 } } },
+        "stubs": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/stub" } }
+      }
+    },
+    "kafka": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "brokersEnv", "topics"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "kind": { "const": "kafka" },
+        "brokersEnv": { "$ref": "#/$defs/env" },
+        "topics": { "$ref": "#/$defs/strings" },
+        "groupId": { "type": "string", "minLength": 1 }
+      }
+    },
+    "rabbitmq": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "urlEnv", "queues"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "kind": { "const": "rabbitmq" },
+        "urlEnv": { "$ref": "#/$defs/env" },
+        "queues": { "$ref": "#/$defs/strings" }
+      }
+    }
+  }
+}

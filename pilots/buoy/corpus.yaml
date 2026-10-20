@@ -1,0 +1,8 @@
+repository: https://github.com/ForrestKnight/buoy
+commit: 138611efc00e27e33d03b37993a85c3db3dd3ca9
+license: Apache-2.0
+role: public-independent-discovery-benchmark
+airRelease: 0.11
+notes:
+  - The repository is an external regression corpus, not customer validation.
+  - The checkout and runtime data are never committed to AIR.

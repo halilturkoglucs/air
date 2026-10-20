@@ -43,6 +43,16 @@ describe("Rust target boundary", () => {
     expect(generated).toContain('Some("40001" | "40P01" | "23505")');
   });
 
+  it("preserves route strings without regular-expression normalization", async () => {
+    const air = await loadAirFile(resolve("examples/todo/air.yaml"));
+    const operation = air.spec.http!.operations[0]!;
+    const path = `/${"{|".repeat(4_000)}`;
+    const generated = planRust({ ...air, spec: { ...air.spec, http: { operations: [{ ...operation, path }] } } })
+      .find((file) => file.path === "src/generated.rs")?.content ?? "";
+
+    expect(generated).toContain(`.route(${JSON.stringify(path)},`);
+  });
+
   it("lowers v0.8 collections, CRUD authorization, and delete commands", async () => {
     const air = await loadAirFile(resolve("examples/library/air.yaml"));
     const generated = planRust(air).find((file) => file.path === "src/generated.rs")?.content ?? "";
