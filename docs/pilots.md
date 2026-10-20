@@ -4,6 +4,8 @@ AIR v0.11 is pilot-first: unfamiliar-service discovery and review is the support
 
 The internal [Spring Petclinic REST rehearsal](../pilots/petclinic-rest/report.md) pins an unseen corpus, freezes ground truth before scanning, exercises PostgreSQL 16, compares source and OpenRewrite scans, completes all review through the workbench, and records sanitized metrics. It is release-gating regression evidence, not independent customer validation.
 
+The independent [Buoy public-corpus benchmark](../pilots/buoy/report.md) is now complete. Its frozen ground truth caught missing programmatic Caffeine and transactional event-listener inventory; the repaired fresh run found all 35 operations exactly once with stable source/OpenRewrite identities and no test topology. The [HMCTS document-deletion pilot](../pilots/hmcts-document-management-store/report.md) exercises v0.12 typed-extraction infrastructure but intentionally remains blocked until the real capability—not a substitute command—produces exact failure, retryability, blob, and database evidence.
+
 The first pilots should test trust and adoption cost, not raw feature count. Use a bounded service with PostgreSQL 16, fewer than ten entities, one transactional command, and no regulated or production customer data.
 
 ## Recommended pilot sequence

@@ -1,0 +1,51 @@
+format: air.dev/pilot-ground-truth/v0.1
+frozenBeforeAirScan: true
+corpusCommit: 138611efc00e27e33d03b37993a85c3db3dd3ca9
+documentedOperations:
+  - DELETE /api/v1/projects/{projectKey}
+  - DELETE /api/v1/projects/{projectKey}/environments/{environmentKey}
+  - DELETE /api/v1/projects/{projectKey}/environments/{environmentKey}/api-keys/{keyId}
+  - DELETE /api/v1/projects/{projectKey}/flags/{flagKey}
+  - DELETE /api/v1/projects/{projectKey}/members/{username}
+  - DELETE /api/v1/projects/{projectKey}/segments/{segmentKey}
+  - DELETE /api/v1/users/{username}
+  - GET /api/v1/projects
+  - GET /api/v1/projects/{projectKey}
+  - GET /api/v1/projects/{projectKey}/audit
+  - GET /api/v1/projects/{projectKey}/environments
+  - GET /api/v1/projects/{projectKey}/environments/{environmentKey}
+  - GET /api/v1/projects/{projectKey}/environments/{environmentKey}/api-keys
+  - GET /api/v1/projects/{projectKey}/flags
+  - GET /api/v1/projects/{projectKey}/flags/{flagKey}
+  - GET /api/v1/projects/{projectKey}/flags/{flagKey}/config/{environmentKey}
+  - GET /api/v1/projects/{projectKey}/members
+  - GET /api/v1/projects/{projectKey}/segments
+  - GET /api/v1/projects/{projectKey}/segments/{segmentKey}
+  - GET /api/v1/users
+  - POST /api/v1/evaluate
+  - POST /api/v1/evaluate/{flagKey}
+  - POST /api/v1/projects
+  - POST /api/v1/projects/{projectKey}/environments
+  - POST /api/v1/projects/{projectKey}/environments/{environmentKey}/api-keys
+  - POST /api/v1/projects/{projectKey}/flags
+  - POST /api/v1/projects/{projectKey}/segments
+  - POST /api/v1/users
+  - POST /auth/login
+  - PUT /api/v1/projects/{projectKey}
+  - PUT /api/v1/projects/{projectKey}/environments/{environmentKey}
+  - PUT /api/v1/projects/{projectKey}/flags/{flagKey}
+  - PUT /api/v1/projects/{projectKey}/flags/{flagKey}/config/{environmentKey}
+  - PUT /api/v1/projects/{projectKey}/members/{username}
+  - PUT /api/v1/projects/{projectKey}/segments/{segmentKey}
+supportedInventory:
+  controllers: 10
+  entities: 9
+  persistence: PostgreSQL 16 with Flyway
+  security: Spring Security and method-level authorization
+  transactions: service and read-only transaction boundaries
+  caches: Caffeine-backed snapshots and API-key authentication
+  events: application events with transactional listeners
+unsupportedOrReviewRequired:
+  - Runtime cache key contents are not authoritative AIR state.
+  - Password hashing and token material remain opaque security boundaries.
+  - Property-selected runtime values require configuration evidence.

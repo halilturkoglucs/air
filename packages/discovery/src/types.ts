@@ -50,6 +50,22 @@ export interface RuntimeEvidence {
   readonly redacted: boolean;
 }
 
+export interface EvidenceCaptureProfile {
+  readonly apiVersion: "air.dev/evidence-capture/v0.1";
+  readonly kind: "EvidenceCapture";
+  readonly metadata: { readonly name: string };
+  readonly spec: {
+    readonly timeoutMs?: number;
+    readonly sources: readonly EvidenceCaptureSource[];
+  };
+}
+
+export type EvidenceCaptureSource =
+  | { readonly id: string; readonly kind: "postgres"; readonly connectionEnv: string; readonly schema: string; readonly tables: readonly string[] }
+  | { readonly id: string; readonly kind: "outbound-http"; readonly environment: string; readonly listen: { readonly host: "127.0.0.1" | "::1"; readonly port: number }; readonly stubs: readonly { readonly method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE"; readonly path: string; readonly status: number; readonly headers?: Readonly<Record<string, string>>; readonly body?: string }[] }
+  | { readonly id: string; readonly kind: "kafka"; readonly brokersEnv: string; readonly topics: readonly string[]; readonly groupId?: string }
+  | { readonly id: string; readonly kind: "rabbitmq"; readonly urlEnv: string; readonly queues: readonly string[] };
+
 export interface ReviewerDecision {
   readonly subjectId: string;
   readonly action: "approve" | "reject" | "rename" | "merge" | "mark-opaque";

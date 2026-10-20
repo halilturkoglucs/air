@@ -1,0 +1,8 @@
+repository: https://github.com/hmcts/document-management-store-app
+commit: 0b36d34a265bddc9e97ba39cc1201c95633babe4
+license: MIT
+role: public-v0.12-typed-extraction-pilot
+capability: scheduled-document-hard-deletion
+notes:
+  - External systems are replaced by controlled local stubs.
+  - The checkout, credentials, document contents, and raw runtime payloads are never committed.

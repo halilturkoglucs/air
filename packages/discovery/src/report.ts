@@ -63,8 +63,8 @@ function reachable(root: string, bundle: DiscoveryBundle): string[] {
 }
 
 export function createDiscoveryReport(bundle: DiscoveryBundle): DiscoveryReport {
-  const entries = bundle.nodes.filter((node) => ["endpoint", "listener", "schedule"].includes(node.kind));
-  const reviewScope = bundle.nodes.filter((node) => node.observable || ["endpoint", "listener", "schedule"].includes(node.kind));
+  const entries = bundle.nodes.filter((node) => ["endpoint", "listener", "schedule"].includes(node.kind) || (node.kind === "operation" && node.attributes.entryPoint === true));
+  const reviewScope = bundle.nodes.filter((node) => node.observable || ["endpoint", "listener", "schedule"].includes(node.kind) || (node.kind === "operation" && node.attributes.entryPoint === true));
   const unresolvedNodes = bundle.nodes.filter((node) => {
     const decision = activeDecision(node, bundle.decisions)?.action;
     if (decision === "approve" || decision === "reject") return false;

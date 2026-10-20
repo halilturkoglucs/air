@@ -2,6 +2,16 @@
 
 All notable changes are recorded here. AIR follows the pre-1.0 policy in `docs/versioning.md`.
 
+## Unreleased
+
+- Added closed evidence-capture v0.1 profiles and privacy-safe PostgreSQL before/after, loopback outbound-HTTP, Kafka, and RabbitMQ capture adapters through `air evidence capture`.
+- Replaced heuristic evidence attachment with exact canonical HTTP, JVM, PostgreSQL, messaging, and explicit identities; ambiguous and unmatched evidence remains diagnostic.
+- Added typed discovery metadata for DTOs, JPA entities, Feign operations, pure mappings, Flyway tables, externally selected `Runnable` tasks, programmatic Caffeine caches, and transactional Spring-event listeners.
+- Hardened typed extraction to block missing or reordered outbound evidence and missing failure/retryability contracts instead of inventing defaults or placeholder types.
+- Removed a no-op polynomial route regular expression from Rust target rendering and added adversarial route-string coverage.
+- Updated the first-party AMQP and Redis clients and the dependency-review, Node setup, and artifact-upload GitHub Actions to their reviewed current major versions.
+- Added the completed pinned Buoy public-corpus discovery benchmark and the still-blocked HMCTS document-deletion extraction rehearsal with sanitized commands, metrics, and reports.
+
 ## 0.11.0 - 2026-10-18
 
 - Added discovery v0.1 bundles with stable provenance, confidence, coverage, incremental review decisions, and a rebuildable local SQLite index.

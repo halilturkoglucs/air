@@ -1,0 +1,34 @@
+format: air.dev/pilot-ground-truth/v0.1
+frozenBeforeAirScan: true
+corpusCommit: 0b36d34a265bddc9e97ba39cc1201c95633babe4
+entryPoint:
+  kind: schedule
+  symbol: uk.gov.hmcts.dm.config.batch.BatchConfiguration.caseDocumentDeletionTask
+flow:
+  - CaseDocumentsDeletionTask queries candidate StoredDocument identifiers.
+  - StoredDocumentService.deleteDocumentsDetails starts a REQUIRES_NEW transaction for a batch.
+  - IDAM user and service tokens are acquired.
+  - EM-ANNO document data is deleted first.
+  - EM-NPA redactions are deleted only after EM-ANNO succeeds.
+  - Azure document binaries are deleted only after both metadata calls succeed.
+  - DocumentContentVersion rows and the StoredDocument row are deleted last.
+failureBehavior:
+  - EM-ANNO failure prevents EM-NPA, blob, and PostgreSQL deletion for that document.
+  - EM-NPA failure leaves the prior EM-ANNO effect visible and prevents local deletion.
+  - Blob failure prevents subsequent PostgreSQL deletion for that document.
+  - Per-document exceptions are caught so the batch can continue; prior external effects are not transactional.
+configuration:
+  - External metadata deletion is conditional on toggle.deletemetadatafordocument.
+  - Schedule and batch sizing are property-driven and require reviewed configuration evidence.
+foreignComponents:
+  - IDAM user-token service
+  - service-auth token generator
+  - EM-ANNO API
+  - EM-NPA API
+  - Azure Blob Storage
+persistence:
+  engine: PostgreSQL
+  migrations: Flyway
+  entities: 9
+knownSemanticBoundary:
+  - AIR v0.10 does not natively express this concurrent property-driven batch loop; retain it as a typed foreign operation while extracting its observable ports and effects.

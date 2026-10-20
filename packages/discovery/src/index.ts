@@ -8,3 +8,4 @@ export * from "./verify.js";
 export * from "./workbench.js";
 export * from "./adapters.js";
 export * from "./report.js";
+export * from "./capture-profile.js";

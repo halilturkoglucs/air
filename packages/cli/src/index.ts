@@ -41,6 +41,7 @@ import {
   verifySystemSuite,
 } from "@air/verifier";
 import { createPostgresHttpLiveAdapter } from "./live-verifier.js";
+import { captureEvidence } from "./evidence-capture.js";
 import packageJson from "../package.json" with { type: "json" };
 
 export interface CliIo {
@@ -69,6 +70,7 @@ Usage:
   air discover spring <repository> [options] Build an evidence-backed discovery bundle
   air discovery report <bundle> [options] Export a deterministic discovery report
   air evidence ingest <trace> [options]      Ingest redacted runtime/test evidence
+  air evidence capture <profile> [options]   Run a command with self-hosted evidence adapters
   air workbench <discovery> [options]        Start the local architecture workbench
   air extract <discovery> [options]          EXPERIMENTAL: extract one reviewed capability
   air verify-import <capability> [options]   EXPERIMENTAL: compare legacy and candidate behavior
@@ -988,8 +990,21 @@ async function discoverCommand(args: readonly string[], io: CliIo): Promise<numb
 
 async function evidenceCommand(args: readonly string[], io: CliIo): Promise<number> {
   const [action, input, ...options] = args;
-  const usage = "Usage: air evidence ingest <bundle-or-trace> --discovery <directory> [--allow-field <attribute> ...]\n";
-  if (action !== "ingest" || !input || input.startsWith("--")) { io.stderr(usage); return 2; }
+  const ingestUsage = "Usage: air evidence ingest <bundle-or-trace> --discovery <directory> [--allow-field <attribute> ...]\n";
+  const captureUsage = "Usage: air evidence capture <profile> --output <evidence.jsonl> -- <test-command> [args ...]\n";
+  if (!input || input.startsWith("--") || !["ingest", "capture"].includes(action ?? "")) { io.stderr(`${ingestUsage}${captureUsage}`); return 2; }
+  if (action === "capture") {
+    const separator = options.indexOf("--");
+    const captureOptions = separator >= 0 ? options.slice(0, separator) : options;
+    const command = separator >= 0 ? options.slice(separator + 1) : [];
+    if (captureOptions.length !== 2 || captureOptions[0] !== "--output" || !captureOptions[1] || command.length === 0) { io.stderr(captureUsage); return 2; }
+    try {
+      const result = await captureEvidence(resolve(input), resolve(captureOptions[1]), command);
+      io.stdout(`Evidence captured in ${result.output}\n  ${result.records} privacy-safe record(s); command exit code ${result.exitCode}\n`);
+      return result.exitCode;
+    } catch (error) { io.stderr(formatError(error)); return 1; }
+  }
+  const usage = ingestUsage;
   let discovery: string | undefined; const allowFields: string[] = [];
   for (let index = 0; index < options.length; index += 1) {
     const option = options[index]; const value = options[index + 1];
@@ -1000,7 +1015,7 @@ async function evidenceCommand(args: readonly string[], io: CliIo): Promise<numb
   if (!discovery) { io.stderr(usage); return 2; }
   try {
     const result = await ingestEvidence(resolve(input), resolve(discovery), { allowFields });
-    io.stdout(`Evidence ingested into ${resolve(discovery)}\n  ${result.ingested} record(s), ${result.unmatched} unmatched; sensitive values redacted unless explicitly allowlisted\n`);
+    io.stdout(`Evidence ingested into ${resolve(discovery)}\n  ${result.ingested} record(s), ${result.unmatched} unmatched, ${result.ambiguous} ambiguous; sensitive values redacted unless explicitly allowlisted\n`);
     return 0;
   } catch (error) { io.stderr(formatError(error)); return 1; }
 }

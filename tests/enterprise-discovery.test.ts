@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { adoptExtractedCapability, createDiscoveryReport, discoverSpring, evidenceHash, extractCapability, ingestEvidence, readDiscoveryBundle, saveDecision, startWorkbench, verifyImportedCapability, writeDiscoveryBundle, writeDiscoveryReport } from "@air/discovery";
+import { adoptExtractedCapability, canonicalEvidenceIdentities, createDiscoveryReport, discoverSpring, evidenceHash, extractCapability, ingestEvidence, parseEvidenceCaptureProfile, readDiscoveryBundle, saveDecision, startWorkbench, verifyImportedCapability, writeDiscoveryBundle, writeDiscoveryReport } from "@air/discovery";
 import { runCli, type CliIo } from "@halilturkoglucs/air";
 import { parseAir, parseSystem } from "@air/parser";
 
@@ -20,6 +20,8 @@ interface Routes { String API = "/api"; }
 class OrdersController {
   private final WebClient vendor;
   private final PricingService pricingService;
+  private final PaymentsClient paymentsClient;
+  private final InventoryClient inventoryClient;
   private final ApplicationEventPublisher publisher;
   @PostMapping(
     value = "/orders",
@@ -27,7 +29,7 @@ class OrdersController {
   )
   @Transactional
   @PreAuthorize("hasRole('BUYER')")
-  OrderResponse place(OrderRequest request) { pricingService.quote(request); publisher.publishEvent(request); return null; }
+  OrderResponse place(OrderRequest request) { pricingService.quote(request); VendorInput vendorInput = new VendorInput(request.sku()); paymentsClient.charge(vendorInput); inventoryClient.reserve(request.sku()); publisher.publishEvent(request); return null; }
   @KafkaListener(topics = "orders.placed") void consume(String message) {}
   @RabbitListener(queues = "billing.capture") void capture(String message) {}
   @Scheduled(cron = "0 * * * * *") void reconcile() {}
@@ -40,8 +42,20 @@ record OrderResponse(String id) {}
   @Query("select o from OrderEntity o") Object custom();
 }
 @Mapper interface OrderMapper {}
-@FeignClient(name = "payments", url = "\${PAYMENTS_URL}") interface PaymentsClient {}
+@FeignClient(name = "payments", url = "\${PAYMENTS_URL}") interface PaymentsClient {
+  @PostMapping("/charge") VendorOutput charge(VendorInput input);
+}
+record VendorInput(String sku) {}
+record VendorOutput(String approvalId) {}
+@FeignClient(name = "inventory", url = "\${INVENTORY_URL}") interface InventoryClient {
+  @PostMapping("/reserve/{sku}") void reserve(@PathVariable String sku);
+}
 @Service class PricingService { Object quote(Object request) { return null; } }
+@Service class SnapshotCache {
+  private final Cache<String, Object> cache = Caffeine.newBuilder().build();
+  @TransactionalEventListener void invalidate(OrderChangedEvent event) { cache.invalidate(event.id()); }
+}
+record OrderChangedEvent(String id) {}
 @Configuration class OrdersConfiguration {
   @Bean Object systemClock() { return new Object(); }
 }
@@ -129,6 +143,8 @@ spec:
     expect(result.bundle.edges.some((edge) => edge.kind === "calls" && edge.from === endpoint?.id && edge.to === pricing?.id)).toBe(true);
     expect(result.bundle.nodes.some((node) => node.kind === "configuration" && node.name === "OrdersConfiguration" && node.attributes.role === "configuration-class")).toBe(true);
     expect(result.bundle.nodes.some((node) => node.kind === "configuration" && node.name === "systemClock" && node.attributes.role === "bean")).toBe(true);
+    expect(result.bundle.nodes.find((node) => node.kind === "cache" && node.name === "SnapshotCache")?.attributes).toMatchObject({ provider: "caffeine", role: "programmatic-cache", invalidation: true });
+    expect(result.bundle.nodes.find((node) => node.kind === "listener" && node.name === "invalidate")?.attributes).toMatchObject({ transport: "spring-event", destination: "OrderChangedEvent", transactional: true, phase: "AFTER_COMMIT" });
     expect(result.bundle.nodes.every((node) => node.sources.length > 0 && node.sources.every((source) => source.contentHash.length === 64))).toBe(true);
     expect(result.bundle.nodes.filter((node) => node.kind === "dynamic-routing").every((node) => node.confidence === "opaque")).toBe(true);
   });
@@ -150,6 +166,28 @@ class AmbiguousController {
     expect(endpoint?.confidence).toBe("inferred");
     expect(endpoint?.attributes.path).toBeUndefined();
     expect(endpoint?.attributes.pathExpression).toBe('API + "/items"');
+  });
+
+  it("discovers externally selected Runnable tasks and excludes custom test source sets", async () => {
+    const root = await mkdtemp(resolve(tmpdir(), "air-runnable-task-"));
+    const main = resolve(root, "src", "main", "java", "example");
+    const functional = resolve(root, "src", "functionalTest", "java", "example");
+    await mkdir(main, { recursive: true }); await mkdir(functional, { recursive: true });
+    await writeFile(resolve(root, "build.gradle"), "group = 'example'\nversion = '1'\n", "utf8");
+    await writeFile(resolve(main, "DeletionTask.java"), `package example;
+@Service class DeletionTask implements Runnable {
+  private final StoredDocumentService storedDocumentService;
+  public void run() { storedDocumentService.deleteAll(); }
+}
+@Service class StoredDocumentService { void deleteAll() {} }
+`, "utf8");
+    await writeFile(resolve(functional, "TestOnlyController.java"), "package example; @RestController class TestOnlyController { @GetMapping(\"/test-only\") Object testOnly(){ return null; } }\n", "utf8");
+    const result = await discoverSpring(root, { analyzer: "source" });
+    const task = result.bundle.nodes.find((node) => node.kind === "operation" && node.name === "DeletionTask");
+    const service = result.bundle.nodes.find((node) => node.kind === "service" && node.name === "DeletionTask");
+    expect(task?.attributes).toMatchObject({ role: "runnable-task", entryPoint: true, selector: "deletionTask" });
+    expect(result.bundle.edges.some((edge) => edge.kind === "calls" && edge.from === task?.id && edge.to === service?.id)).toBe(true);
+    expect(result.bundle.nodes.some((node) => node.sources.some((source) => source.path.includes("functionalTest")))).toBe(false);
   });
 
   it("joins checked-in OpenAPI contracts to generated-interface implementations", async () => {
@@ -320,7 +358,11 @@ class LocalEventListenerTest {
     await writeDiscoveryBundle(directory, result.bundle);
     const endpoint = result.bundle.nodes.find((node) => node.kind === "endpoint")!;
     const evidencePath = resolve(directory, "trace.json");
-    await writeFile(evidencePath, JSON.stringify({ name: endpoint.name, traceId: "trace-1", spanId: "span-1", attributes: { "code.function.name": endpoint.name, "http.route": "/orders", "http.request.header.authorization": "Bearer secret", "request.payload": "personal", "db.statement": "select * from users where email='private@example.com'", "user.first_name": "Private" } }), "utf8");
+    await writeFile(evidencePath, JSON.stringify([
+      { name: endpoint.name, traceId: "trace-1", spanId: "span-1", attributes: { "code.function.name": endpoint.name, "http.route": "/orders", "http.request.header.authorization": "Bearer secret", "request.payload": "personal", "db.statement": "select * from users where email='private@example.com'", "user.first_name": "Private" } },
+      { name: "payments charge", kind: "outbound-call", attributes: { "air.identity": "outbound:payments:POST:/charge", "air.invocation.order": 1, "air.failure.name": "requestFailed", "air.failure.retryable": false, "air.failure.description": "Observed client exception on a rejected payment response." } },
+      { name: "inventory reserve", kind: "outbound-call", attributes: { "air.identity": "outbound:inventory:POST:/reserve/{sku}", "air.invocation.order": 2, "air.failure.name": "requestFailed", "air.failure.retryable": false, "air.failure.description": "Observed client exception on a rejected inventory response." } },
+    ]), "utf8");
     await ingestEvidence(evidencePath, directory);
     const loaded = await readDiscoveryBundle(directory);
     expect(JSON.stringify(loaded.evidence)).not.toContain("Bearer secret");
@@ -335,8 +377,106 @@ class LocalEventListenerTest {
     const extracted = await extractCapability(directory, endpoint.id, resolve(output, "accepted"));
     expect(extracted.blockers).toEqual([]);
     const extractedSource = await readFile(resolve(extracted.output, "air.yaml"), "utf8");
-    expect(parseAir(extractedSource).apiVersion).toBe("air.dev/v0.10");
+    const extractedAir = parseAir(extractedSource);
+    expect(extractedAir.apiVersion).toBe("air.dev/v0.10");
+    expect(extractedSource).not.toContain("ImportedInput");
+    expect(extractedSource).not.toContain("ImportedOutput");
+    expect(extractedSource).not.toContain("timeoutMs: 5000");
+    expect(extractedSource).not.toContain("maxAttempts: 3");
+    expect(extractedSource).not.toContain("The reviewed HTTP client operation failed");
+    expect(extractedAir.spec.ports?.payments?.operations.charge?.input).toBe("PaymentsClientChargeInput");
+    expect(extractedAir.spec.ports?.payments?.operations.charge?.failures.requestfailed?.retryable).toBe(false);
     expect(parseSystem(await readFile(resolve(extracted.output, "system.yaml"), "utf8")).apiVersion).toBe("air.dev/system/v0.2");
+  });
+
+  it("blocks extraction when exact outbound observations are reordered or lack failure evidence", async () => {
+    const root = await springFixture();
+    const directory = await mkdtemp(resolve(tmpdir(), "air-evidence-ordering-"));
+    const output = await mkdtemp(resolve(tmpdir(), "air-evidence-ordering-output-"));
+    const result = await discoverSpring(root, { analyzer: "source" });
+    await writeDiscoveryBundle(directory, result.bundle);
+    const endpoint = result.bundle.nodes.find((node) => node.kind === "endpoint" && node.name === "place")!;
+    for (const node of result.bundle.nodes) {
+      await saveDecision(directory, { subjectId: node.id, action: node.confidence === "opaque" ? "mark-opaque" : "approve", ...(node.confidence === "opaque" ? { reason: "Retain as a typed foreign boundary in this fixture." } : {}), evidenceHash: evidenceHash(node.sources), decidedAt: new Date().toISOString(), reviewer: "test-reviewer" });
+    }
+    const reordered = resolve(directory, "reordered.json");
+    await writeFile(reordered, JSON.stringify([
+      { name: "payments charge", kind: "outbound-call", attributes: { "air.identity": "outbound:payments:POST:/charge", "air.invocation.order": 2, "air.failure.name": "requestFailed", "air.failure.retryable": false } },
+      { name: "inventory reserve", kind: "outbound-call", attributes: { "air.identity": "outbound:inventory:POST:/reserve/{sku}", "air.invocation.order": 1 } },
+    ]), "utf8");
+    await ingestEvidence(reordered, directory);
+    const extraction = await extractCapability(directory, endpoint.id, resolve(output, "blocked"));
+    expect(extraction.blockers).toContain("inventory.reserve: exact failure behavior and retryability evidence are missing");
+    expect(extraction.blockers.some((blocker) => blocker.includes("observation order differs"))).toBe(true);
+  });
+
+  it("matches runtime evidence only through exact canonical identities", async () => {
+    const root = await springFixture();
+    const migrations = resolve(root, "orders", "src", "main", "resources", "db", "migration");
+    await mkdir(migrations, { recursive: true });
+    await writeFile(resolve(migrations, "V1__orders.sql"), "CREATE TABLE public.order_entity (id uuid primary key);\n", "utf8");
+    const directory = await mkdtemp(resolve(tmpdir(), "air-exact-evidence-"));
+    const result = await discoverSpring(root, { analyzer: "source" });
+    await writeDiscoveryBundle(directory, result.bundle);
+    const input = resolve(directory, "exact.jsonl");
+    await writeFile(input, `${JSON.stringify({ name: "exact", traceId: "t1", attributes: { "http.request.method": "POST", "http.route": "/api/orders" } })}\n${JSON.stringify({ name: "substring", traceId: "t2", attributes: { "http.request.method": "POST", "http.route": "/api/orders/archive" } })}\n${JSON.stringify({ name: "database", kind: "database-change", attributes: { "db.system": "postgresql", "db.namespace": "public", "db.sql.table": "order_entity", "db.operation.name": "*" } })}\n`, "utf8");
+    const ingested = await ingestEvidence(input, directory);
+    expect(ingested).toMatchObject({ ingested: 3, unmatched: 1, ambiguous: 0 });
+    const evidence = (await readDiscoveryBundle(directory)).evidence;
+    expect(evidence.find((item) => item.attributes["air.match.status"] === "matched")?.nodeIds).toHaveLength(1);
+    expect(evidence.find((item) => item.attributes["air.match.status"] === "unmatched")?.nodeIds).toEqual([]);
+    expect(evidence.find((item) => item.kind === "database-change")?.nodeIds).toHaveLength(1);
+    expect(canonicalEvidenceIdentities({ "http.request.method": "post", "http.route": "//api/orders/?ignored=true" })).toContain("http:POST:/api/orders");
+
+    const loaded = await readDiscoveryBundle(directory);
+    const endpoint = loaded.nodes.find((node) => node.kind === "endpoint" && node.attributes.path === "/api/orders")!;
+    await writeDiscoveryBundle(directory, { ...loaded, nodes: [...loaded.nodes, { ...endpoint, id: "endpoint:duplicate-canonical-identity" }] });
+    const ambiguousInput = resolve(directory, "ambiguous.json");
+    await writeFile(ambiguousInput, JSON.stringify({ name: "ambiguous", attributes: { "http.request.method": "POST", "http.route": "/api/orders" } }), "utf8");
+    const ambiguous = await ingestEvidence(ambiguousInput, directory);
+    expect(ambiguous).toMatchObject({ ambiguous: 1, unmatched: 0 });
+    expect(ambiguous.bundle.evidence.find((item) => item.source === "ambiguous.json")?.nodeIds).toEqual([]);
+  });
+
+  it("validates closed, secret-indirect evidence capture profiles", () => {
+    const profile = parseEvidenceCaptureProfile(`
+apiVersion: air.dev/evidence-capture/v0.1
+kind: EvidenceCapture
+metadata: { name: capture-test }
+spec:
+  sources:
+    - id: database
+      kind: postgres
+      connectionEnv: TEST_DATABASE_URL
+      schema: public
+      tables: [orders]
+    - id: payments
+      kind: outbound-http
+      environment: PAYMENTS_URL
+      listen: { host: 127.0.0.1, port: 0 }
+      stubs:
+        - { method: POST, path: "/charge/{id}", status: 204 }
+`);
+    expect(profile.spec.sources).toHaveLength(2);
+    expect(() => parseEvidenceCaptureProfile(`apiVersion: air.dev/evidence-capture/v0.1\nkind: EvidenceCapture\nmetadata: { name: invalid, secret: plaintext }\nspec: { sources: [] }\n`)).toThrow("additional properties");
+  });
+
+  it("captures privacy-safe outbound observations through the CLI", async () => {
+    const directory = await mkdtemp(resolve(tmpdir(), "air-evidence-capture-"));
+    const profile = resolve(directory, "profile.yaml"); const output = resolve(directory, "evidence.jsonl");
+    await writeFile(profile, `apiVersion: air.dev/evidence-capture/v0.1\nkind: EvidenceCapture\nmetadata: { name: capture-test }\nspec:\n  sources:\n    - id: payments\n      kind: outbound-http\n      environment: PAYMENTS_URL\n      listen: { host: 127.0.0.1, port: 0 }\n      stubs:\n        - { method: POST, path: "/charge/{id}", status: 204 }\n`, "utf8");
+    let stdout = ""; let stderr = ""; const io: CliIo = { stdout: (value) => { stdout += value; }, stderr: (value) => { stderr += value; } };
+    const script = "fetch(process.env.PAYMENTS_URL + '/charge/123', {method:'POST', body:'private-body'}).then(r=>{if(r.status!==204)process.exit(2)})";
+    expect(await runCli(["evidence", "capture", profile, "--output", output, "--", process.execPath, "-e", script], io)).toBe(0);
+    expect(stderr).toBe(""); expect(stdout).toContain("privacy-safe record");
+    const captured = await readFile(output, "utf8");
+    expect(captured).toContain("outbound:payments:POST:/charge/{id}");
+    expect(captured).not.toContain("private-body");
+    const marker = resolve(directory, "must-not-run"); stdout = ""; stderr = "";
+    const overwriteScript = `require('node:fs').writeFileSync(${JSON.stringify(marker)}, 'ran')`;
+    expect(await runCli(["evidence", "capture", profile, "--output", output, "--", process.execPath, "-e", overwriteScript], io)).toBe(1);
+    expect(stderr).toContain("refusing to run a side-effecting command");
+    expect(existsSync(marker)).toBe(false);
   });
 
   it("serves safe source excerpts and records attributable review decisions", async () => {

@@ -54,6 +54,18 @@ Ingest OTLP JSON, JSONL test evidence, database-change observations, broker obse
 air evidence ingest trace.json --discovery .air/discovery
 ```
 
+Or capture controlled evidence while running a test command:
+
+```bash
+air evidence capture evidence-profile.yaml \
+  --output .air/evidence.jsonl -- ./gradlew integrationTest
+air evidence ingest .air/evidence.jsonl --discovery .air/discovery
+```
+
+The closed `air.dev/evidence-capture/v0.1` profile names credential environment variables rather than values. Its self-hosted adapters snapshot selected PostgreSQL relations, serve loopback outbound-HTTP stubs, and observe configured Kafka topics or RabbitMQ queues. Persisted records contain canonical identities, counts, statuses, sizes, and hashes—not connection strings, headers, bodies, messages, rows, or payload values.
+
+Evidence matching is exact and unique. HTTP uses module/method/normalized route, JVM observations use build coordinate/qualified symbol/descriptor, PostgreSQL uses system/namespace/relation/operation, and messaging uses provider/destination/direction/schema. Trace and span IDs correlate observations but never replace semantic identity. Ambiguous and unmatched observations remain diagnostics. Extraction also checks source-attributed outbound order and requires explicit linked failure behavior and retryability evidence; missing policy is a blocker, never a generated default.
+
 Authorization, cookies, secrets, tokens, passwords, payloads, bodies, and common personal-data fields are redacted by default. Payload capture requires an explicit field allowlist such as `--allow-field order.status`. AIR is designed for controlled staging, replay, or test environments; production telemetry is not required.
 
 ## Review and extraction
@@ -71,7 +83,7 @@ The workbench binds to loopback only. It provides module, system, entry-point, a
 
 `air discovery report` writes deterministic `report.json` and self-contained `report.html`. The JSON validates against the closed `air.dev/discovery-report/v0.1` schema. Reports contain topology, coverage, confidence, unresolved boundaries, review state, analyzer versions, and provenance metadata, but never source excerpts or payload values.
 
-Extraction is experimental in v0.11. It follows outgoing evidence edges from one entry point and fails when an inferred, opaque, or conflicting observable effect has not been reviewed. Accepted pure mappers become bounded transformations; vendor dependencies become typed outbound ports; reviewed opaque behavior becomes a foreign System v0.2 component. The generated capability directory contains Application v0.10, System v0.2, verification v0.3, and an evidence-bound capability manifest.
+Extraction is experimental in v0.11. It follows outgoing evidence edges from one entry point—including externally selected `Runnable` tasks—and fails when an inferred, opaque, or conflicting observable effect has not been reviewed. Accepted pure mappers become bounded transformations; vendor dependencies become typed outbound ports only when their operations and failure policy are proven; reviewed opaque behavior becomes a foreign System v0.2 component. The generated capability directory contains Application v0.10, System v0.2, verification v0.3, and an evidence-bound capability manifest.
 
 ## Differential verification and adoption
 

@@ -1,0 +1,20 @@
+{
+  "corpusCommit": "0b36d34a265bddc9e97ba39cc1201c95633babe4",
+  "status": "blocked",
+  "discovery": { "nodes": 183, "edges": 278, "reviewDecisions": 12 },
+  "targetedTests": { "passed": 43, "failed": 0, "skipped": 0, "durationSeconds": 128 },
+  "adapterRehearsal": {
+    "records": 5,
+    "matchedOutbound": 2,
+    "matchedDatabase": 2,
+    "unmatchedCommandOutcome": 1,
+    "payloadValuesPersisted": false,
+    "capabilityExecuted": false
+  },
+  "releaseBlockers": [
+    "Exact observed EM-ANNO failure and retryability contract",
+    "Exact observed EM-NPA failure and retryability contract",
+    "Capability-level blob and PostgreSQL effect correlation",
+    "Required success and failure scenarios through the real capability"
+  ]
+}

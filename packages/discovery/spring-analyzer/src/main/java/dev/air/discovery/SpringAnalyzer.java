@@ -32,10 +32,19 @@ public final class SpringAnalyzer {
       Map.entry("PatchMapping", "endpoint"), Map.entry("DeleteMapping", "endpoint"), Map.entry("RequestMapping", "endpoint"),
       Map.entry("QueryMapping", "endpoint"), Map.entry("MutationMapping", "endpoint"), Map.entry("SubscriptionMapping", "endpoint"),
       Map.entry("KafkaListener", "listener"), Map.entry("RabbitListener", "listener"), Map.entry("EventListener", "listener"),
+      Map.entry("TransactionalEventListener", "listener"),
       Map.entry("Scheduled", "schedule"), Map.entry("Transactional", "transaction"), Map.entry("Query", "query"),
       Map.entry("Cacheable", "cache"), Map.entry("CachePut", "cache"), Map.entry("CacheEvict", "cache"),
       Map.entry("Bean", "configuration"),
       Map.entry("PreAuthorize", "security"), Map.entry("Secured", "security"), Map.entry("RolesAllowed", "security"));
+  private static final Pattern TEST_SOURCE = Pattern.compile("(^|.*/)src/(?:test|[^/]*test|it)(?:/|$)", Pattern.CASE_INSENSITIVE);
+
+  private static boolean hasAnnotation(J.ClassDeclaration declaration, String... names) {
+    for (var annotation : declaration.getLeadingAnnotations()) {
+      for (String name : names) if (annotation.getSimpleName().equals(name)) return true;
+    }
+    return false;
+  }
 
   private static String escape(String value) {
     return value.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r");
@@ -65,9 +74,11 @@ public final class SpringAnalyzer {
           return super.visitClassDeclaration(declaration, unused);
         }
         @Override public J.MethodDeclaration visitMethodDeclaration(J.MethodDeclaration declaration, Void unused) {
+          J.ClassDeclaration owner = getCursor().firstEnclosing(J.ClassDeclaration.class);
           declaration.getLeadingAnnotations().forEach(annotation -> {
             String simple = annotation.getSimpleName();
             String kind = METHOD_ANNOTATIONS.get(simple);
+            if ("endpoint".equals(kind) && (owner == null || !hasAnnotation(owner, "RestController", "Controller"))) return;
             if (kind != null) findings.add(new Finding(relative, annotationLine(source, annotation.printTrimmed(), simple, annotationOffsets), kind, declaration.getSimpleName(), "method", simple));
           });
           return super.visitMethodDeclaration(declaration, unused);
@@ -107,9 +118,7 @@ public final class SpringAnalyzer {
 
   private static boolean isTestSource(Path relative) {
     String path = relative.toString().replace('\\', '/');
-    return path.contains("/src/test/") || path.startsWith("src/test/")
-        || path.contains("/src/integrationTest/") || path.startsWith("src/integrationTest/")
-        || path.contains("/src/it/") || path.startsWith("src/it/");
+    return TEST_SOURCE.matcher(path).find();
   }
 
   private static String relative(Path root, Path path) { return root.relativize(path).toString().replace('\\', '/'); }
