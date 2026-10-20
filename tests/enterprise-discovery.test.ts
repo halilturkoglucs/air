@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { adoptExtractedCapability, canonicalEvidenceIdentities, createDiscoveryReport, discoverSpring, evidenceHash, extractCapability, ingestEvidence, parseEvidenceCaptureProfile, readDiscoveryBundle, saveDecision, startWorkbench, verifyImportedCapability, writeDiscoveryBundle, writeDiscoveryReport } from "@air/discovery";
+import { adoptExtractedCapability, canonicalEvidenceIdentities, createDiscoveryReport, discoverSpring, evidenceHash, extractCapability, ingestEvidence, normalizeHttpRoute, parseEvidenceCaptureProfile, readDiscoveryBundle, saveDecision, startWorkbench, verifyImportedCapability, writeDiscoveryBundle, writeDiscoveryReport } from "@air/discovery";
 import { runCli, type CliIo } from "@halilturkoglucs/air";
 import { parseAir, parseSystem } from "@air/parser";
 
@@ -69,6 +69,10 @@ class DynamicRouter { Object route(String type) { return context.getBean(type); 
 }
 
 describe("enterprise discovery and modernization", () => {
+  it("normalizes adversarial route strings in linear time", () => {
+    expect(normalizeHttpRoute(`${"/".repeat(20_000)}orders${"/".repeat(20_000)}?secret=value`)).toBe("/orders");
+  });
+
   it("validates v0.10 ports, failures, transformations, and ordered invocations", () => {
     const document = parseAir(`
 apiVersion: air.dev/v0.10

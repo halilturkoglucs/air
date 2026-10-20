@@ -208,6 +208,88 @@ function methodSignatureFollowingAnnotation(source: string, start: number): Java
   return { name, returnJavaType, returnType: airType(returnJavaType), parameters, descriptor: `(${parameters.map((parameter) => parameter.javaType).join(",")})->${returnJavaType}` };
 }
 
+function topLevelJavaStatements(source: string): readonly string[] {
+  const body = source.indexOf("{");
+  if (body < 0) return [];
+  const statements: string[] = [];
+  let depth = 1;
+  let start = body + 1;
+  let quote: string | undefined;
+  let escaped = false;
+  let lineComment = false;
+  let blockComment = false;
+  for (let index = body + 1; index < source.length; index += 1) {
+    const character = source[index]!;
+    const next = source[index + 1];
+    if (lineComment) { if (character === "\n") lineComment = false; continue; }
+    if (blockComment) { if (character === "*" && next === "/") { blockComment = false; index += 1; } continue; }
+    if (quote) {
+      if (escaped) escaped = false;
+      else if (character === "\\") escaped = true;
+      else if (character === quote) quote = undefined;
+      continue;
+    }
+    if (character === "/" && next === "/") { lineComment = true; index += 1; continue; }
+    if (character === "/" && next === "*") { blockComment = true; index += 1; continue; }
+    if (character === "\"" || character === "'") { quote = character; continue; }
+    if (character === "{") { depth += 1; continue; }
+    if (character === "}") {
+      depth -= 1;
+      if (depth === 0) break;
+      if (depth === 1) start = index + 1;
+      continue;
+    }
+    if (character === ";" && depth === 1) {
+      const statement = source.slice(start, index + 1).trim();
+      if (statement && statement.length <= 8192) statements.push(statement);
+      start = index + 1;
+    }
+  }
+  return statements;
+}
+
+function parseJavaField(statement: string): { readonly name: string; readonly javaType: string; readonly annotations: string } | undefined {
+  let cursor = 0;
+  const annotationSources: string[] = [];
+  while (cursor < statement.length) {
+    cursor = skipJavaTrivia(statement, cursor);
+    if (statement[cursor] !== "@") break;
+    const annotation = readJavaAnnotation(statement, cursor);
+    if (!annotation) break;
+    annotationSources.push(annotation.source);
+    cursor = annotation.end;
+  }
+  cursor = skipJavaTrivia(statement, cursor);
+  const visibility = ["public", "protected", "private"].find((modifier) => statement.startsWith(modifier, cursor) && !/[\w$]/u.test(statement[cursor + modifier.length] ?? ""));
+  if (!visibility) return undefined;
+  cursor += visibility.length;
+  for (;;) {
+    cursor = skipJavaTrivia(statement, cursor);
+    const modifier = ["static", "final", "transient", "volatile"].find((candidate) => statement.startsWith(candidate, cursor) && !/[\w$]/u.test(statement[cursor + candidate.length] ?? ""));
+    if (!modifier) break;
+    cursor += modifier.length;
+  }
+  let declaration = statement.slice(cursor, -1).trim();
+  let angleDepth = 0;
+  let squareDepth = 0;
+  for (let index = 0; index < declaration.length; index += 1) {
+    const character = declaration[index]!;
+    if (character === "<") angleDepth += 1;
+    else if (character === ">" && angleDepth > 0) angleDepth -= 1;
+    else if (character === "[") squareDepth += 1;
+    else if (character === "]" && squareDepth > 0) squareDepth -= 1;
+    else if (character === "=" && angleDepth === 0 && squareDepth === 0) { declaration = declaration.slice(0, index).trim(); break; }
+  }
+  let end = declaration.length;
+  while (end > 0 && /\s/u.test(declaration[end - 1]!)) end -= 1;
+  let nameStart = end;
+  while (nameStart > 0 && /[\w$]/u.test(declaration[nameStart - 1]!)) nameStart -= 1;
+  const name = declaration.slice(nameStart, end);
+  const javaType = declaration.slice(0, nameStart).trim();
+  if (!name || !javaType || javaType.includes("(") || javaType.includes("=")) return undefined;
+  return { name, javaType, annotations: annotationSources.join("\n") };
+}
+
 function javaFields(source: string, name: string, declarationKind: string, offset: number, declarationWindow: string): readonly Record<string, unknown>[] {
   const fields: Record<string, unknown>[] = [];
   const add = (fieldName: string, javaType: string, annotations: string): void => {
@@ -236,8 +318,10 @@ function javaFields(source: string, name: string, declarationKind: string, offse
       if (parsed) add(parsed[2]!, parsed[1]!, component);
     }
   } else {
-    const fieldPattern = /(?:^|\n)\s*((?:@(?:[\w.]+)(?:\s*\([^\n;]*\))?\s*)*)(?:public|protected|private)\s+(?:static\s+)?(?:final\s+)?([\w.$?<>,\[\]]+)\s+([A-Za-z_$][\w$]*)\s*(?:=[^;]*)?;/gu;
-    for (const field of declarationWindow.matchAll(fieldPattern)) add(field[3]!, field[2]!, field[1] ?? "");
+    for (const statement of topLevelJavaStatements(declarationWindow)) {
+      const field = parseJavaField(statement);
+      if (field) add(field.name, field.javaType, field.annotations);
+    }
   }
   return fields;
 }

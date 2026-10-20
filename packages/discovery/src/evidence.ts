@@ -47,9 +47,20 @@ function stringAttribute(attributes: Readonly<Record<string, unknown>>, ...keys:
 }
 
 export function normalizeHttpRoute(value: string): string {
-  const withoutQuery = value.split("?", 1)[0] ?? value;
-  const normalized = `/${withoutQuery.replace(/^\/+|\/+$/gu, "")}`.replace(/\/+/gu, "/");
-  return normalized === "/" ? normalized : normalized.replace(/\/$/u, "");
+  const query = value.indexOf("?");
+  const route = query < 0 ? value : value.slice(0, query);
+  let normalized = "/";
+  let previousSlash = true;
+  for (const character of route) {
+    if (character === "/") {
+      if (!previousSlash) normalized += character;
+      previousSlash = true;
+    } else {
+      normalized += character;
+      previousSlash = false;
+    }
+  }
+  return normalized.length > 1 && normalized.endsWith("/") ? normalized.slice(0, -1) : normalized;
 }
 
 function scopedIdentity(kind: string, module: string | undefined, parts: readonly string[]): string[] {
