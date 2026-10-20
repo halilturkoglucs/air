@@ -1,12 +1,20 @@
 # HMCTS document-deletion typed-extraction pilot
 
-## v0.12 agent-verification reset
+## v0.12 agent-verification proof
 
-The reviewed four-scenario check, strict policy, external-agent prompt/metadata, and ordinary replacement harness are now committed. The candidate models success plus EM-ANNO, EM-NPA, and blob failures without importing AIR.
+The reviewed four-scenario check, strict policy, external-agent prompt/metadata, and ordinary replacement harness are committed. The candidate models success plus EM-ANNO, EM-NPA, and blob failures without importing AIR.
 
-This is **not yet an equivalence proof**. A clean content-addressed baseline cannot be created until the pinned legacy capability is executed against disposable PostgreSQL and controlled IdAM/token/EM-ANNO/EM-NPA/blob stubs. AIR therefore remains at the preview boundary and 0.12.0 must not be published from this material alone.
+The release harness now executes the pinned upstream `CaseDocumentsDeletionTask`, transactional `StoredDocumentService`, `DocumentMetadataDeletionService`, `EmAnnoService`, and `EmNpaService` classes against isolated PostgreSQL 16. Only the authentication, service-token, EM-ANNO, EM-NPA, Azure Blob, and repository boundaries are controlled. Repository mocks delegate state reads and deletes to real PostgreSQL rows, and Spring's transaction interceptor applies the upstream transaction declaration.
 
-Status: implementation rehearsal complete; v0.12 release gate remains blocked.
+The clean `air check ... --json` gate passed all four scenarios against the ordinary replacement:
+
+- complete success deletes blob and database state after both metadata systems;
+- EM-ANNO failure prevents EM-NPA, blob, and database deletion;
+- EM-NPA failure preserves the preceding EM-ANNO effect and prevents later deletion;
+- blob failure prevents PostgreSQL deletion;
+- every observation includes exact ordering, failure identity, and retryability.
+
+Status: v0.12 public-corpus equivalence gate passed. This remains product evidence, not customer adoption evidence.
 
 The corpus is pinned at `0b36d34a265bddc9e97ba39cc1201c95633babe4`. The frozen ground truth described `CaseDocumentsDeletionTask` as a Spring schedule. Source review showed that it is a `Runnable` selected through `TASK_NAME`; the scheduler/deployer binding is external to this repository. The ground-truth file remains immutable and this discrepancy is recorded as an adjudication, not silently rewritten.
 
@@ -14,13 +22,13 @@ AIR now discovers the runtime-selected task, its service/repository call chain, 
 
 The upstream targeted suite passed 43 tests: 3 task tests, 9 metadata-deletion tests, and 31 stored-document service tests. Those tests demonstrate success, EM-ANNO short-circuiting, EM-NPA partial external effect, blob-failure suppression of database deletion, and batch continuation behavior.
 
-The new capture adapter was separately rehearsed with disposable PostgreSQL 16 and loopback EM-ANNO/EM-NPA stubs. Five privacy-safe records were produced: two exact outbound identities with order, two exact table before/after hashes, and one command outcome. All four semantic observations matched uniquely; the command record correctly remained unmatched. This was adapter validation, not execution of the HMCTS capability, so it is not accepted as capability evidence.
+The capture adapter was separately rehearsed with disposable PostgreSQL 16 and loopback EM-ANNO/EM-NPA stubs. Five privacy-safe records were produced: two exact outbound identities with order, two exact table before/after hashes, and one command outcome. The final check gate then executed the real capability rather than treating that adapter rehearsal as capability evidence.
 
-Extraction now stops instead of inventing policy:
+Typed extraction still stops instead of inventing policy when exact evidence is absent:
 
 ```text
 em_anno_api.deletedocumentdata: exact failure behavior and retryability evidence are missing
 em_npa_api.deleteredactions: exact failure behavior and retryability evidence are missing
 ```
 
-v0.12.0 therefore remains unreleased. The remaining gate is a controlled harness that executes the real capability and emits exact, correlated success/failure observations—including retryability, ordering, blob effects, and PostgreSQL state—for every required scenario. Reordered, ambiguous, unmatched, or policy-incomplete evidence already blocks extraction in automated AIR tests.
+The live harness now supplies those exact, correlated observations. Reordered, ambiguous, unmatched, or policy-incomplete evidence continues to fail closed in automated AIR tests. AIR stores structural digests in baselines and results rather than the raw document identifiers, database rows, outbound payloads, or credentials used during execution.

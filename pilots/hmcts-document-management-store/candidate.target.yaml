@@ -5,4 +5,6 @@ spec:
   type: command
   fixtureIsolation: process
   workingDirectory: pilots/hmcts-document-management-store
+  environment:
+    AIR_PILOT_POSTGRES_URL: { fromEnv: AIR_PILOT_POSTGRES_URL }
   command: { argv: [node, candidate.mjs] }

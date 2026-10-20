@@ -1,0 +1,11 @@
+apiVersion: air.dev/check-target/v0.1
+kind: CheckTarget
+metadata: { name: pinned-hmcts-document-deletion }
+spec:
+  type: command
+  fixtureIsolation: process
+  workingDirectory: pilots/hmcts-document-management-store
+  environment:
+    HMCTS_REPOSITORY: { fromEnv: AIR_HMCTS_REPOSITORY }
+    AIR_PILOT_POSTGRES_URL: { fromEnv: AIR_PILOT_POSTGRES_URL }
+  command: { argv: [node, run-legacy-harness.mjs] }

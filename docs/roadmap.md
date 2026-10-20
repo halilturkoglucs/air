@@ -170,9 +170,9 @@ An external design-partner architecture-inventory pilot follows the release. It 
 
 The pinned [Buoy benchmark](../pilots/buoy/report.md) now provides a second clean public-corpus proof: 129 upstream tests passed, disposable PostgreSQL reached healthy, every one of 35 documented operations appeared exactly once, source/OpenRewrite identities and repeat scans were stable, and 116 workbench decisions closed every observable boundary. Its frozen ground truth exposed and drove fixes for programmatic Caffeine caches and transactional event listeners. It remains product evidence, not customer validation.
 
-## 12. Agent verification preview — in progress
+## 12. Agent verification — AIR v0.12 complete
 
-Implemented foundation:
+Delivered in v0.12:
 
 - closed `air.dev/check/v0.1`, `check-target/v0.1`, `check-policy/v0.1`, `check-baseline/v0.1`, and `check-result/v0.1` formats
 - `air check init|validate|baseline|run|explain`, stable machine JSON, and 0/1/2/3 pass/difference/input/infrastructure exits
@@ -184,14 +184,12 @@ Implemented foundation:
 - deterministic ignored pointers with reasons, UUID/timestamp tokens, same-side named correlation bindings, and keyed unordered arrays
 - fail-closed categories for candidate difference, stale baseline, missing observation, policy violation, and infrastructure failure
 - compatibility for the earlier discovery, extraction, `verify-import`, adoption, compiler, and provider interfaces
+- a language-agnostic argv/JSON and HTTP adapter protocol that Codex, Claude, local models, CI, and other agents can use without an AIR runtime or Application AIR document
+- an AIR-owned live Spring/Java/PostgreSQL baseline matched by an external-agent TypeScript replacement for 20 clean reruns, with all 15 semantic mutants detected
+- a pinned HMCTS Java capability baseline matched for complete success plus EM-ANNO, EM-NPA, and blob failure ordering against isolated PostgreSQL 16
+- tamper/stale-hash, privacy, compatibility, build, typecheck, package, and conformance gates
 
-Release gates still required before versioning or publishing 0.12.0:
-
-1. Run the AIR-owned Spring/TypeScript capability-replacement benchmark. Detect at least 15 response, write, rollback, outbound, message, failure, idempotency, and generated-correlation mutants; pass an equivalent agent-written candidate 20 consecutive times using only `air check --json`.
-2. Complete the pinned HMCTS document-deletion replacement against disposable PostgreSQL and local outbound/blob stubs. Prove success and EM-ANNO, EM-NPA, and blob failure ordering. Missing, ambiguous, reordered, and policy-incomplete evidence must fail closed.
-3. Reject baseline tampering and stale hashes; verify that secrets, values, rows, messages, and credentials remain absent by default.
-4. Pass build, typecheck, unit tests, CodeQL, clean npm installation, macOS/Linux checks, and all existing conformance.
-5. Version root, CLI, and plugin SDK together, then publish npm → GitHub Release → Homebrew.
+The root workspace, CLI, and plugin SDK are versioned together and distributed in npm → GitHub Release → Homebrew order.
 
 Public-corpus work is product evidence, not a customer ROI claim. AIR never claims that matching legacy behavior proves that behavior correct or that uncaptured behavior is equivalent.
 

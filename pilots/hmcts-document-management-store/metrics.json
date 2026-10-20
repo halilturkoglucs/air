@@ -1,6 +1,6 @@
 {
   "corpusCommit": "0b36d34a265bddc9e97ba39cc1201c95633babe4",
-  "status": "blocked",
+  "status": "passed",
   "discovery": { "nodes": 183, "edges": 278, "reviewDecisions": 12 },
   "targetedTests": { "passed": 43, "failed": 0, "skipped": 0, "durationSeconds": 128 },
   "adapterRehearsal": {
@@ -9,12 +9,15 @@
     "matchedDatabase": 2,
     "unmatchedCommandOutcome": 1,
     "payloadValuesPersisted": false,
-    "capabilityExecuted": false
+    "capabilityExecuted": true
   },
-  "releaseBlockers": [
-    "Exact observed EM-ANNO failure and retryability contract",
-    "Exact observed EM-NPA failure and retryability contract",
-    "Capability-level blob and PostgreSQL effect correlation",
-    "Required success and failure scenarios through the real capability"
-  ]
+  "liveVerification": {
+    "legacyLanguage": "Java",
+    "candidateLanguage": "JavaScript",
+    "database": "PostgreSQL 16",
+    "scenariosPassed": 4,
+    "scenariosFailed": 0,
+    "rawValuesPersisted": false
+  },
+  "releaseBlockers": []
 }

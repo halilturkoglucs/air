@@ -1,0 +1,21 @@
+def harnessRoot = System.getenv('AIR_HMCTS_HARNESS_SOURCE')
+if (harnessRoot == null || harnessRoot.isBlank()) {
+    throw new GradleException('AIR_HMCTS_HARNESS_SOURCE is required')
+}
+
+allprojects {
+    afterEvaluate { configured ->
+        if (configured == rootProject) {
+            configured.sourceSets.test.java.srcDir(new File(harnessRoot, 'src/main/java'))
+            configured.tasks.register('airHmctsHarness', JavaExec) {
+                dependsOn configured.tasks.named('testClasses')
+                classpath = configured.sourceSets.test.runtimeClasspath
+                mainClass = 'uk.gov.hmcts.dm.air.AirHmctsDeletionHarness'
+                args(
+                    System.getenv('AIR_HMCTS_SCENARIO') ?: 'success',
+                    System.getenv('AIR_HMCTS_DOCUMENT_ID') ?: '00000000-0000-4000-8000-000000000012'
+                )
+            }
+        }
+    }
+}

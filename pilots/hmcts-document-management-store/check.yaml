@@ -5,7 +5,7 @@ spec:
   capability: { id: schedule:uk.gov.hmcts.dm.task.CaseDocumentsDeletionTask }
   observations: [database, outbound, ordering, failures, retryability]
   scenarios:
-    - { id: complete-success, request: { kind: command, arguments: [success], input: { documentId: fixed-document } } }
-    - { id: em-anno-failure, request: { kind: command, arguments: [em-anno-failure], input: { documentId: fixed-document } } }
-    - { id: em-npa-failure, request: { kind: command, arguments: [em-npa-failure], input: { documentId: fixed-document } } }
-    - { id: blob-failure, request: { kind: command, arguments: [blob-failure], input: { documentId: fixed-document } } }
+    - { id: complete-success, request: { kind: command, arguments: [success], input: { documentId: 00000000-0000-4000-8000-000000000012 } } }
+    - { id: em-anno-failure, request: { kind: command, arguments: [em-anno-failure], input: { documentId: 00000000-0000-4000-8000-000000000012 } } }
+    - { id: em-npa-failure, request: { kind: command, arguments: [em-npa-failure], input: { documentId: 00000000-0000-4000-8000-000000000012 } } }
+    - { id: blob-failure, request: { kind: command, arguments: [blob-failure], input: { documentId: 00000000-0000-4000-8000-000000000012 } } }

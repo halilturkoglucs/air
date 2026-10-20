@@ -1,6 +1,6 @@
 {
   "name": "@halilturkoglucs/air",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "description": "Model-neutral verification for agent-written migrations, with compatible AIR discovery and compiler tools.",
   "license": "Apache-2.0",
   "repository": {

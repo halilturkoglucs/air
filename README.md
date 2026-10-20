@@ -7,11 +7,11 @@
 
 AIR is an open, model-neutral verification layer for capability replacement. Freeze reviewed legacy behavior, let any coding agent write an ordinary replacement in any language, then compare HTTP results, database effects, messages, outbound calls, ordering, and failures independently. AIR proves equivalence only inside the observation boundary you declare—not general correctness.
 
-The v0.12 agent-verification workflow is under development. The current public CLI remains v0.11.0 until the benchmark and HMCTS release gates pass. AIR’s existing Application IR, compiler, providers, discovery, and import commands remain compatible, but they are no longer the primary product journey.
+AIR v0.12 makes agent verification the primary product journey. AIR’s existing Application IR, compiler, providers, discovery, and import commands remain compatible, but coding agents no longer need AIR-generated code or an Application AIR document to verify a replacement.
 
 For existing enterprise systems, AIR does **not** promise one-click repository-to-YAML conversion. It builds an evidence-backed architecture map, then helps teams review, verify, and replace one business capability at a time. Architecture inventory is the entry point; verified modernization is the outcome.
 
-AIR CLI v0.11 accepts application documents from v0.1 through v0.10 and System documents through v0.2. Discovery is the supported enterprise product boundary in the current release; extraction, differential import verification, and adoption remain experimental:
+AIR CLI v0.12 accepts application documents from v0.1 through v0.10 and System documents through v0.2. Discovery and agent verification are supported product boundaries; extraction, differential import verification, and adoption remain experimental:
 
 - entities, relationships, CRUD HTTP operations, contracts, principals, and declared errors
 - transactional create/update/delete commands, guards, preconditions, ownership, role/scope policies, and invariant expressions
@@ -36,39 +36,37 @@ AIR CLI v0.11 accepts application documents from v0.1 through v0.10 and System d
 
 ## Start here
 
-The verification workflow is currently a **source preview**. The published npm and Homebrew packages are v0.11.0 and do not yet contain `air check`. To try the preview, use Node.js 22 or newer and build this repository:
+Install AIR v0.12 with Node.js 22 or newer, then clone the repository for the included example files:
 
 ```bash
+npm install --global @halilturkoglucs/air@0.12.0
 git clone https://github.com/halilturkoglucs/air.git
 cd air
-corepack enable
-pnpm install
-pnpm build
-pnpm air --version
+air --version
 ```
 
 Then run the included legacy-versus-candidate example:
 
 ```bash
 # 1. Validate the reviewed scenarios and policy.
-pnpm air check validate examples/agent-verification/check.yaml \
+air check validate examples/agent-verification/check.yaml \
   --policy examples/agent-verification/policy.yaml --json
 
 # 2. Execute only the legacy implementation and freeze its behavior.
-pnpm air check baseline examples/agent-verification/check.yaml \
+air check baseline examples/agent-verification/check.yaml \
   --target examples/agent-verification/legacy.target.yaml \
   --policy examples/agent-verification/policy.yaml \
   --output .air/check/tutorial-1/baseline --json
 
 # 3. Execute the same scenarios against an ordinary replacement.
-pnpm air check run examples/agent-verification/check.yaml \
+air check run examples/agent-verification/check.yaml \
   --baseline .air/check/tutorial-1/baseline \
   --target examples/agent-verification/candidate.target.yaml \
   --policy examples/agent-verification/policy.yaml \
   --output .air/check/tutorial-1/run --json
 
 # 4. Turn the machine-readable result into an actionable explanation.
-pnpm air check explain .air/check/tutorial-1/run/result.json --json
+air check explain .air/check/tutorial-1/run/result.json --json
 ```
 
 The result should contain `"passed": true`. AIR does not overwrite baselines or results; use a new output name such as `tutorial-2` when repeating the walkthrough.
@@ -92,16 +90,17 @@ AIR is not a general correctness oracle, fuzzy similarity scorer, load tester, o
 
 - **Prove an agent-written replacement:** follow [Getting started with agent verification](docs/getting-started-agent-verification.md).
 - **Understand the security and evidence model:** read [Agent verification](docs/agent-verification.md).
+- **Connect any backend or coding agent:** use the [language-agnostic agent protocol](docs/language-agnostic-agent-protocol.md).
 - **Inventory an enterprise Spring service:** follow [Enterprise discovery and modernization](docs/enterprise-modernization.md).
 - **Use the existing AIR IR and code generators:** see the [AIR schema guide](docs/air-schema.md), [verification model](docs/verification.md), and the `examples/ledger` and `examples/complex-commerce` projects.
 - **Build a provider or deployment integration:** see [Target and plugin adapters](docs/target-adapters.md).
 
-## Current public CLI
+## CLI, discovery, and generation
 
-The released v0.11 discovery, AIR IR, compiler, and conformance workflows remain available from npm and Homebrew:
+The v0.12 package also preserves the discovery, AIR IR, compiler, and conformance workflows:
 
 ```bash
-npm install --global @halilturkoglucs/air@0.11.0
+npm install --global @halilturkoglucs/air@0.12.0
 # or: brew install halilturkoglucs/tap/air-ir
 
 # Create an evidence-backed map of a Spring service (Java 17+).
@@ -128,14 +127,14 @@ The Homebrew formula is named `air-ir` because Homebrew core already uses `air` 
 
 The engine and formats are Apache-2.0. A future paid control plane will add collaboration, organizational policy, approvals, RBAC/SSO, immutable audit, and estate reporting while execution stays local or on self-hosted runners.
 
-External discovery calibration reports are available for the large archived [Netflix Conductor](docs/calibration-netflix-conductor.md) corpus and the actively maintained [claims-microservices](docs/calibration-claims-microservices.md) REST/JPA/GraphQL/Kafka service. The pinned [Buoy public-corpus benchmark](pilots/buoy/report.md) additionally runs clean source/OpenRewrite scans, workbench review, PostgreSQL runtime, and deterministic reporting. The [HMCTS typed-extraction rehearsal](pilots/hmcts-document-management-store/report.md) records the remaining evidence blockers rather than claiming a completed migration. These are product regression evidence, not customer adoption claims.
+External discovery calibration reports are available for the large archived [Netflix Conductor](docs/calibration-netflix-conductor.md) corpus and the actively maintained [claims-microservices](docs/calibration-claims-microservices.md) REST/JPA/GraphQL/Kafka service. The pinned [Buoy public-corpus benchmark](pilots/buoy/report.md) additionally runs clean source/OpenRewrite scans, workbench review, PostgreSQL runtime, and deterministic reporting. The [HMCTS document-deletion proof](pilots/hmcts-document-management-store/report.md) executes the real pinned Java capability and four ordered success/failure scenarios against PostgreSQL 16 and controlled foreign boundaries. These are product regression evidence, not customer adoption claims.
 
 ## Plugin SDK
 
 Provider and deployment integrations use the public, versioned SDK:
 
 ```bash
-npm install @halilturkoglucs/air-plugin-sdk@0.11.0
+npm install @halilturkoglucs/air-plugin-sdk@0.12.0
 ```
 
 Implement `AirProviderPlugin` for brokers, caches, or databases, or `AirDeployerPlugin` for deployment profiles. Export the implementation through an `AirPluginModule`, set `apiVersion` to `AIR_PLUGIN_API_VERSION`, and declare an immutable plugin `id` and `version`. Deployment documents must name the plugin explicitly and lock that version; AIR does not discover or execute arbitrary installed packages.
@@ -145,37 +144,37 @@ Provider entry points include capability declaration, plan analysis, artifact re
 Import an existing PostgreSQL schema:
 
 ```bash
-pnpm air import-postgres \
+air import-postgres \
   --url postgres://postgres:postgres@127.0.0.1:5432/app \
   --schema public \
   --name imported-app \
   --output imported.air.yaml \
   --discovery .air/discovery
 
-pnpm air validate imported.air.yaml
+air validate imported.air.yaml
 
-pnpm air import-openapi \
+air import-openapi \
   --input openapi.yaml \
   --name imported-api \
   --output imported-api.air.yaml \
   --discovery .air/discovery
 
-pnpm air import-nextjs \
+air import-nextjs \
   --input existing-next-app \
   --output imported-next.air.yaml \
   --report imported-next.report.json \
   --discovery .air/discovery
 
-pnpm air import-spring \
+air import-spring \
   --input existing-spring-service \
   --output imported-spring.air.yaml \
   --report imported-spring.report.json
 
-pnpm air diff before.air.yaml after.air.yaml --output semantic-diff.json
-pnpm air plan-migration before.air.yaml after.air.yaml --output migration-plan.json
+air diff before.air.yaml after.air.yaml --output semantic-diff.json
+air plan-migration before.air.yaml after.air.yaml --output migration-plan.json
 
 # Start a standard Language Server Protocol process for an editor client:
-pnpm air lsp
+air lsp
 ```
 
 The PostgreSQL importer reads catalog metadata only. Legacy `import-*` commands remain compatible and produce review candidates. Enterprise imports should use the discovery workflow: findings remain separate from AIR, preserve provenance and confidence, and cannot be adopted while important side effects are unresolved. See [enterprise discovery and modernization](docs/enterprise-modernization.md).
