@@ -57,7 +57,7 @@ describe("AIR CLI", () => {
     expect(JSON.parse(invalid.stderr())).toMatchObject({ ok: false, category: "invalid-input" });
 
     const brokenTarget = resolve(directory, "broken.target.yaml");
-    await writeFile(brokenTarget, "apiVersion: air.dev/check-target/v0.1\nkind: CheckTarget\nmetadata: { name: unavailable }\nspec: { type: command, command: { argv: [air-command-that-does-not-exist] } }\n", "utf8");
+    await writeFile(brokenTarget, "apiVersion: air.dev/check-target/v0.1\nkind: CheckTarget\nmetadata: { name: unavailable }\nspec: { type: command, fixtureIsolation: process, command: { argv: [air-command-that-does-not-exist] } }\n", "utf8");
     const infrastructure = captureIo();
     expect(await runCli(["check", "baseline", check, "--target", brokenTarget, "--output", resolve(directory, "baseline"), "--allow-dirty", "--json"], infrastructure.io)).toBe(3);
     expect(JSON.parse(infrastructure.stderr())).toMatchObject({ ok: false, category: "infrastructure-error" });

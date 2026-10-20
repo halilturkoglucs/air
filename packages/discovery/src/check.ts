@@ -41,6 +41,7 @@ export interface CheckTarget {
   readonly metadata: { readonly name: string };
   readonly spec: {
     readonly type: "http" | "command";
+    readonly fixtureIsolation?: "process" | "reset-command";
     readonly workingDirectory?: string;
     readonly environment?: EnvironmentReferences;
     readonly baseUrl?: string;
@@ -153,12 +154,14 @@ export function parseCheckTarget(source: string): CheckTarget {
 }
 
 export function parseCheckPolicy(source: string): CheckPolicy { return parseDocument<CheckPolicy>(source, "Check policy", validatePolicy); }
+function isUtcTimestamp(value: string): boolean { return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z$/u.test(value) && !Number.isNaN(Date.parse(value)); }
 export function parseCheckBaseline(source: string): CheckBaseline {
   const baseline = parseDocument<CheckBaseline>(source, "Check baseline", validateBaseline);
+  if (!isUtcTimestamp(baseline.createdAt)) throw new CheckInputError("Check baseline createdAt must be a valid UTC timestamp.");
   if (baseline.baselineId !== baselineIdentity(baseline)) throw new CheckInputError("Check baseline content does not match baselineId; the pack may be stale or tampered with.");
   return baseline;
 }
-export function parseCheckResult(source: string): CheckResult { return parseDocument<CheckResult>(source, "Check result", validateResult); }
+export function parseCheckResult(source: string): CheckResult { const result = parseDocument<CheckResult>(source, "Check result", validateResult); if (!isUtcTimestamp(result.generatedAt)) throw new CheckInputError("Check result generatedAt must be a valid UTC timestamp."); return result; }
 export function defaultCheckPolicy(): CheckPolicy { return DEFAULT_POLICY; }
 
 function canonical(value: unknown): string {
@@ -214,10 +217,12 @@ function applyNormalization(observation: unknown, rules: readonly NormalizationR
     if (rule.kind === "ignore") { deleteAt(parent, key); continue; }
     if (rule.kind === "unordered-array") {
       if (!Array.isArray(value) || value.some((item) => !item || typeof item !== "object" || Array.isArray(item) || (item as Record<string, unknown>)[rule.key] === undefined)) throw new CheckInputError(`Unordered array ${rule.pointer} must contain objects with key ${rule.key}.`);
+      const keys = value.map((item) => canonical((item as Record<string, unknown>)[rule.key]));
+      if (new Set(keys).size !== keys.length) throw new CheckInputError(`Unordered array ${rule.pointer} contains duplicate ${rule.key} values.`);
       setAt(parent, key, [...value].sort((left, right) => canonical((left as Record<string, unknown>)[rule.key]).localeCompare(canonical((right as Record<string, unknown>)[rule.key]))));
       continue;
     }
-    if (typeof value !== "string" || (rule.format === "uuid" ? !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(value) : Number.isNaN(Date.parse(value)))) throw new CheckInputError(`Value at ${rule.pointer} is not a valid ${rule.format}.`);
+    if (typeof value !== "string" || (rule.format === "uuid" ? !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(value) : !isUtcTimestamp(value))) throw new CheckInputError(`Value at ${rule.pointer} is not a valid ${rule.format}.`);
     if (rule.binding) {
       const encoded = canonical(value); const existing = bindings.get(rule.binding);
       if (existing !== undefined && existing !== encoded) throw new CheckInputError(`Named binding ${rule.binding} is inconsistent within this observation.`);
@@ -382,6 +387,10 @@ interface CheckExecution { readonly scenarios: readonly { readonly id: string; r
 async function executeScenarios(check: CheckDocument, target: CheckTarget, repositoryRoot: string): Promise<CheckExecution> {
   let started: ReturnType<typeof spawn> | undefined;
   try {
+    const observesEffects = check.spec.observations.some((category) => category !== "http");
+    if (observesEffects && !target.spec.fixtureIsolation) throw new CheckInputError(`Target ${target.metadata.name} must explicitly declare fixtureIsolation for observable side effects.`);
+    if (target.spec.fixtureIsolation === "process" && target.spec.type !== "command") throw new CheckInputError("Process fixture isolation is valid only for command targets that start a fresh process per scenario.");
+    if (target.spec.fixtureIsolation === "reset-command" && !target.spec.lifecycle?.reset) throw new CheckInputError("reset-command fixture isolation requires an explicit lifecycle.reset argv command.");
     if (target.spec.lifecycle?.start) {
       const definition = target.spec.lifecycle.start; const [program, ...arguments_] = definition.argv;
       if (!program) throw new CheckInputError("Start command argv cannot be empty.");

@@ -3,5 +3,6 @@ kind: CheckTarget
 metadata: { name: agent-written-candidate }
 spec:
   type: command
+  fixtureIsolation: process
   workingDirectory: benchmarks/capability-replacement
   command: { argv: [node, candidate.mjs, equivalent] }

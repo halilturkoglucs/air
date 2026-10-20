@@ -580,7 +580,7 @@ spec:
     - { kind: typed-token, pointer: /database/rows/0/createdAt, format: timestamp, binding: created-at }
     - { kind: typed-token, pointer: /messages/0/createdAt, format: timestamp, binding: created-at }
 `);
-    const target = (script: string, name: string) => parseCheckTarget(`apiVersion: air.dev/check-target/v0.1\nkind: CheckTarget\nmetadata: { name: ${name} }\nspec:\n  type: command\n  command:\n    argv: [${JSON.stringify(process.execPath)}, ${script}]\n`);
+    const target = (script: string, name: string) => parseCheckTarget(`apiVersion: air.dev/check-target/v0.1\nkind: CheckTarget\nmetadata: { name: ${name} }\nspec:\n  type: command\n  fixtureIsolation: process\n  command:\n    argv: [${JSON.stringify(process.execPath)}, ${script}]\n`);
     const baseline = await createCheckBaseline({ check, target: target("legacy.mjs", "legacy"), repositoryRoot: root, repositoryHash: "a".repeat(64), clean: true });
     expect(baseline.releasable).toBe(true);
     expect(JSON.stringify(baseline)).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/iu);
@@ -602,6 +602,9 @@ spec:
     const policy = parseCheckPolicy("apiVersion: air.dev/check-policy/v0.1\nkind: CheckPolicy\nmetadata: { name: strict }\nspec: { allowedNormalizations: [typed-token], requireCleanBaseline: true }\n");
     expect(validateMigrationCheck(check, policy)).toContain("Normalization ignore at /http/body/noise is not allowed by policy.");
     expect(() => parseCheckDocument("apiVersion: air.dev/check/v0.1\nkind: Check\nmetadata: { name: scripts }\nspec: { capability: { id: x }, observations: [http], scenarios: [{ id: one, request: { kind: http, method: GET, path: / } }], normalization: [{ kind: script, pointer: /http }] }\n")).toThrow();
+    const stateful = parseCheckDocument("apiVersion: air.dev/check/v0.1\nkind: Check\nmetadata: { name: stateful }\nspec: { capability: { id: x }, observations: [database], scenarios: [{ id: one, request: { kind: command } }] }\n");
+    const ambiguousFixture = parseCheckTarget(`apiVersion: air.dev/check-target/v0.1\nkind: CheckTarget\nmetadata: { name: ambiguous }\nspec: { type: command, command: { argv: [${JSON.stringify(process.execPath)}, -e, ${JSON.stringify("console.log('{\\\"database\\\":{}}')")}] } }\n`);
+    await expect(createCheckBaseline({ check: stateful, target: ambiguousFixture, repositoryRoot: process.cwd(), repositoryHash: "a".repeat(64), clean: true })).rejects.toThrow("explicitly declare fixtureIsolation");
   });
 
   it("detects all 15 capability-replacement mutants and passes 20 clean reruns", async () => {

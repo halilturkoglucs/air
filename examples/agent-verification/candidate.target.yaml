@@ -4,6 +4,7 @@ metadata:
   name: agent-written-typescript
 spec:
   type: command
+  fixtureIsolation: process
   workingDirectory: examples/agent-verification
   command:
     argv: [node, candidate.mjs]

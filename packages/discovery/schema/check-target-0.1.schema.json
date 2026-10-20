@@ -12,6 +12,7 @@
       "type": "object", "additionalProperties": false, "required": ["type"],
       "properties": {
         "type": { "enum": ["http", "command"] },
+        "fixtureIsolation": { "enum": ["process", "reset-command"] },
         "workingDirectory": { "$ref": "#/$defs/relativePath" },
         "environment": { "$ref": "#/$defs/environment" },
         "baseUrl": { "type": "string", "format": "uri", "pattern": "^https?://" },

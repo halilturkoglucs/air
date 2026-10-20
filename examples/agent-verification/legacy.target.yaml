@@ -4,6 +4,7 @@ metadata:
   name: legacy-document-service
 spec:
   type: command
+  fixtureIsolation: process
   workingDirectory: examples/agent-verification
   command:
     argv: [node, legacy.mjs]

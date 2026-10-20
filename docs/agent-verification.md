@@ -7,7 +7,7 @@ AIR does not decide that a replacement is generally correct. It checks equivalen
 ## Trust model
 
 - A check declares scenarios, observable categories, and bounded normalization.
-- A target declares reviewed argv commands or an HTTP endpoint. AIR never invokes an implicit shell and target files contain environment-variable references rather than credential values.
+- A target declares reviewed argv commands or an HTTP endpoint, plus explicit per-scenario process or reset-command fixture isolation for observable effects. AIR never invokes an implicit shell and target files contain environment-variable references rather than credential values.
 - `air check baseline` executes only the legacy target and writes a content-addressed, overwrite-protected pack. Clean tracked trees are required by default.
 - `air check run` executes the same scenarios against the candidate without modifying the baseline.
 - Baseline, check, policy, normalization, discovery, and repository hashes make stale or tampered evidence fail closed.

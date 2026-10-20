@@ -61,7 +61,7 @@ const HELP = `AIR verification and compiler toolkit ${VERSION}
 Usage:
   air check init <discovery> --capability <id> --output <directory>
   air check validate <check.yaml> [--policy <file>] [--json]
-  air check baseline <check.yaml> --target <file> --output <directory> [--allow-dirty] [--json]
+  air check baseline <check.yaml> --target <file> --output <directory> [--policy <file>] [--allow-dirty] [--json]
   air check run <check.yaml> --baseline <directory> --target <file> --output <directory> [--policy <file>] [--json]
   air check explain <result.json> [--json]
   air validate <file>                         Parse and validate AIR YAML
