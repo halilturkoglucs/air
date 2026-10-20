@@ -1113,7 +1113,7 @@ function gitRepositoryState(): { readonly root: string; readonly hash: string; r
   if (rootResult.status !== 0 || hashResult.status !== 0) throw new CheckInputError("air check baseline and run must execute inside a tracked Git repository.");
   const status = spawnSync("git", ["status", "--porcelain", "--untracked-files=no"], { cwd: process.cwd(), encoding: "utf8", shell: false });
   if (status.status !== 0) throw new CheckInfrastructureError("Could not inspect the Git working tree.");
-  return { root: rootResult.stdout.trim(), hash: hashResult.stdout.trim(), clean: status.stdout.trim().length === 0 };
+  return { root: rootResult.stdout.trim(), hash: createHash("sha256").update(hashResult.stdout.trim()).digest("hex"), clean: status.stdout.trim().length === 0 };
 }
 
 function explainMismatch(mismatch: CheckMismatch): string {
