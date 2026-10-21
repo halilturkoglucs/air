@@ -16,6 +16,7 @@
     "release:check": "pnpm typecheck && pnpm test",
     "proof:v0.12-live": "node scripts/run-v012-live-proof.mjs",
     "benchmark:llm": "node scripts/run-llm-benchmark.mjs",
+    "benchmark:merge": "node scripts/merge-llm-benchmark.mjs",
     "benchmark:verify": "node scripts/verify-llm-benchmark.mjs",
     "benchmark:render": "node scripts/render-llm-benchmark.mjs",
     "release:artifacts": "node scripts/release-artifacts.mjs",

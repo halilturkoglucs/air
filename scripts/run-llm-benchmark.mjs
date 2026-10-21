@@ -25,6 +25,7 @@ const suite = await loadSuite();
 const selectedArm = option("--arm");
 const selectedSlice = option("--slice");
 const selectedTrial = option("--trial") ? Number(option("--trial")) : undefined;
+const batch = option("--batch");
 const model = option("--model") ?? suite.model.id;
 const reasoning = option("--reasoning") ?? suite.model.reasoning;
 if (model !== suite.model.id || reasoning !== suite.model.reasoning) throw new Error(`Published suite is pinned to ${suite.model.id} with ${suite.model.reasoning} reasoning.`);
@@ -34,7 +35,9 @@ if (selectedTrial !== undefined && (!Number.isInteger(selectedTrial) || selected
 
 const sourceCommit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).trim();
 const agentVersion = execFileSync("codex", ["--version"], { encoding: "utf8" }).trim().replace(/^codex-cli\s+/u, "");
-const evidencePath = resolve(benchmarkRoot, "results/evidence.json");
+if (batch && !/^[a-z0-9-]+$/u.test(batch)) throw new Error("Batch name must contain lowercase letters, numbers, and hyphens only.");
+const resultRoot = resolve(benchmarkRoot, batch ? `results-batches/${batch}` : "results");
+const evidencePath = resolve(resultRoot, "evidence.json");
 let existingRuns = [];
 try {
   const existing = JSON.parse(await readFile(evidencePath, "utf8"));
@@ -103,7 +106,7 @@ for (const target of targets) {
 
   const transcript = scrubTranscript(`${transcriptParts.join("\n")}\n`);
   const patch = execFileSync("git", ["diff", "--binary", "HEAD"], { cwd: workspace, encoding: "utf8", maxBuffer: 16 * 1024 * 1024 });
-  const resultDirectory = await ensureDirectory(resolve(benchmarkRoot, "results", target.id));
+  const resultDirectory = await ensureDirectory(resolve(resultRoot, target.id));
   const patchPath = resolve(resultDirectory, "candidate.patch");
   const transcriptPath = resolve(resultDirectory, "transcript.jsonl");
   const resultPath = resolve(resultDirectory, "result.json");
@@ -141,11 +144,11 @@ for (const target of targets) {
     budget: suite.budget,
     runs: existingRuns,
   };
-  await ensureDirectory(resolve(benchmarkRoot, "results"));
+  await ensureDirectory(resultRoot);
   await writeFile(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`, "utf8");
   console.log(`\n[${target.id}] ${hiddenResult.passed ? "PASS" : "FAIL"} after ${roundsUsed} round(s)`);
 }
 
 const finalEvidence = JSON.parse(await readFile(evidencePath, "utf8"));
-await validateEvidence(finalEvidence, { requireComplete: selectedArm === undefined && selectedSlice === undefined && selectedTrial === undefined });
+await validateEvidence(finalEvidence, { requireComplete: !batch && selectedArm === undefined && selectedSlice === undefined && selectedTrial === undefined });
 console.log(`Evidence: ${relative(root, evidencePath)} (${finalEvidence.runs.length}/18 runs)`);

@@ -13,6 +13,8 @@ pnpm benchmark:verify
 pnpm benchmark:render -- --check
 ```
 
+For concurrent local execution, run one `--slice` per process with a distinct `--batch`, then use `pnpm benchmark:merge`. Batch evidence must share the same source, model, and budget metadata.
+
 `benchmark:llm` is the only paid/networked step. Normal CI runs only deterministic evidence verification and rendering checks. Each run starts in a temporary isolated Git repository containing the public task, starter candidate, and ordinary tests. Oracle files and hidden scenarios remain outside that workspace.
 
 ## Measurements

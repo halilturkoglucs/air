@@ -8,7 +8,7 @@ await validateEvidence(evidence);
 
 for (const run of evidence.runs) {
   const slice = suite.slices.find((item) => item.id === run.slice);
-  const candidate = resolve(benchmarkRoot, "results", run.id, "candidate.mjs");
+  const candidate = resolve(benchmarkRoot, run.artifacts.patch.path, "../candidate.mjs");
   const rescored = await evaluateCandidate(slice, candidate, "evaluation");
   const committed = JSON.parse(await readFile(resolve(benchmarkRoot, run.artifacts.result.path), "utf8"));
   const comparable = (result) => ({
