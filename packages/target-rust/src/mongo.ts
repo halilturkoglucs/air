@@ -90,7 +90,7 @@ function renderEntity(entityName: string, entity: EntityDefinition, operations: 
       if (operation.collection) {
         chunks.push(renderStruct(queryName, [
           ...(operation.collection.pagination ? [["limit", "Option<i64>"], ["offset", "Option<u64>"]] as [string, string][] : []),
-          ...filters.map((filter) => [filter.parameter, `Option<${baseType(entity.fields[filter.field]!).replace("String", "String")}>`] as [string, string]),
+          ...filters.map((filter) => [filter.parameter, `Option<${baseType(entity.fields[filter.field]!)}>`] as [string, string]),
         ], "Debug, Deserialize"));
       }
       const filterCode = filters.map((filter) => `    if let Some(value) = &query.${rustIdentifier(filter.parameter)} { filter.insert(${JSON.stringify(filter.field)}, bson::to_bson(value).map_err(|error| AppError::Serialization(error.to_string()))?); }`).join("\n");
