@@ -76,7 +76,7 @@ for (const target of targets) {
     const prompt = round === 1 ? basePrompt : `${basePrompt}\nThis is repair round ${round} of ${suite.budget.repairRounds}. The current files contain your previous attempt.\n\nPrevious verification feedback:\n${previousFeedback}\n`;
     const run = await runProcess("codex", [
       "exec", "--ephemeral", "--ignore-user-config", "--ignore-rules", "--approve-for-me",
-      "--sandbox", "workspace-write", "--model", model,
+      "--model", model,
       "--config", `model_reasoning_effort=\"${reasoning}\"`, "--cd", workspace,
       "--json", prompt,
     ], {
@@ -85,6 +85,7 @@ for (const target of targets) {
       onStderr: (chunk) => process.stderr.write(chunk),
     });
     transcriptParts.push(JSON.stringify({ kind: "round", round, exitCode: run.code }), run.stdout, run.stderr);
+    if (run.code !== 0) throw new Error(`Codex failed for ${target.id} round ${round} with exit ${run.code}: ${run.stderr.trim() || run.stdout.trim()}`);
     const ordinary = await runProcess("npm", ["test"], { cwd: workspace });
     if (ordinary.code !== 0) buildFailures += 1;
     hiddenResult = await evaluateCandidate(target.slice, resolve(workspace, "candidate.mjs"), "evaluation");
