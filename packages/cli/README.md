@@ -2,6 +2,12 @@
 
 **AI writes the migration. AIR proves what changed.** The AIR CLI freezes reviewed legacy behavior and independently checks an agent-written replacement. It also preserves the earlier discovery, Application IR, compiler, provider, and conformance workflows.
 
+<!-- AIR_LLM_BENCHMARK:START -->
+## Does AIR improve an LLM migration?
+
+The reproducible paired benchmark is ready. Results publish only after all 18 pinned GPT-6 Astra runs and deterministic rescoring complete.
+<!-- AIR_LLM_BENCHMARK:END -->
+
 ```bash
 npm install --global @halilturkoglucs/air
 air --version

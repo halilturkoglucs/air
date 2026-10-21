@@ -1,0 +1,7 @@
+apiVersion: air.dev/check-policy/v0.1
+kind: CheckPolicy
+metadata: { name: library-access-benchmark }
+spec:
+  requiredObservations: [http, database, failures]
+  requireCleanBaseline: true
+  unmatchedEvidence: fail

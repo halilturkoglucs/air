@@ -1,0 +1,30 @@
+apiVersion: air.dev/check/v0.1
+kind: Check
+metadata: { name: library-access-feedback }
+spec:
+  capability: { id: library.access }
+  observations: [http, database, failures]
+  scenarios:
+    - id: lists-owned-books
+      request:
+        kind: command
+        input:
+          operation: list
+          principal: { id: user-1, role: student }
+          genre: science-fiction
+          offset: 0
+          limit: 2
+          books:
+            - { id: b1, ownerId: user-1, title: Dune, genre: science-fiction }
+            - { id: b2, ownerId: user-2, title: Foundation, genre: science-fiction }
+            - { id: b3, ownerId: user-1, title: Kindred, genre: science-fiction }
+    - id: forbids-foreign-delete
+      request:
+        kind: command
+        input:
+          operation: delete
+          principal: { id: user-1, role: student }
+          bookId: b2
+          books:
+            - { id: b1, ownerId: user-1, title: Dune, genre: science-fiction }
+            - { id: b2, ownerId: user-2, title: Foundation, genre: science-fiction }

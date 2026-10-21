@@ -1,0 +1,15 @@
+apiVersion: air.dev/check/v0.1
+kind: Check
+metadata: { name: ledger-transfer-feedback }
+spec:
+  capability: { id: ledger.transfer }
+  observations: [http, database, messages, ordering, failures, retryability]
+  scenarios:
+    - id: moves-funds-atomically
+      request:
+        kind: command
+        input: { transferId: transfer-1, idempotencyKey: key-1, fromId: alice, toId: bob, fromBalance: 100, toBalance: 20, amount: 30, fromVersion: 4, toVersion: 2 }
+    - id: rolls-back-insufficient-funds
+      request:
+        kind: command
+        input: { transferId: transfer-2, idempotencyKey: key-2, fromId: alice, toId: bob, fromBalance: 10, toBalance: 20, amount: 30, fromVersion: 4, toVersion: 2 }

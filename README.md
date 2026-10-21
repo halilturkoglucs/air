@@ -9,6 +9,12 @@ AIR is an open, model-neutral verification layer for capability replacement. Fre
 
 AIR v0.12 makes agent verification the primary product journey. AIR’s existing Application IR, compiler, providers, discovery, and import commands remain compatible, but coding agents no longer need AIR-generated code or an Application AIR document to verify a replacement.
 
+<!-- AIR_LLM_BENCHMARK:START -->
+## Does AIR improve an LLM migration?
+
+The reproducible paired benchmark is ready. Results publish only after all 18 pinned GPT-6 Astra runs and deterministic rescoring complete.
+<!-- AIR_LLM_BENCHMARK:END -->
+
 For existing enterprise systems, AIR does **not** promise one-click repository-to-YAML conversion. It builds an evidence-backed architecture map, then helps teams review, verify, and replace one business capability at a time. Architecture inventory is the entry point; verified modernization is the outcome.
 
 AIR CLI v0.12 accepts application documents from v0.1 through v0.10, System documents through v0.2, Deployment v0.1, and framework-neutral UI v0.1 documents. Discovery and agent verification are supported product boundaries; extraction, differential import verification, and adoption remain experimental:

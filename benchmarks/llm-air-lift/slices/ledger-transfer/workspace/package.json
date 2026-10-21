@@ -1,0 +1,6 @@
+{
+  "name": "air-benchmark-ledger-transfer",
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "node --test ordinary.test.mjs" }
+}

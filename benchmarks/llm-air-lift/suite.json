@@ -1,0 +1,51 @@
+{
+  "format": "air.dev/llm-benchmark-suite/v0.1",
+  "version": "1.0.0",
+  "model": {
+    "id": "gpt-6-astra",
+    "reasoning": "high",
+    "agent": "codex-cli"
+  },
+  "budget": {
+    "repairRounds": 3
+  },
+  "trialsPerArm": 3,
+  "arms": ["control", "air"],
+  "slices": [
+    {
+      "id": "document-create",
+      "label": "Document creation",
+      "feedbackCheck": "slices/document-create/oracle/feedback.check.yaml",
+      "evaluationCheck": "slices/document-create/oracle/evaluation.check.yaml",
+      "scenarioCategories": {
+        "creates-document": ["http", "database", "messages", "outbound", "ordering"],
+        "maps-vendor-failure": ["http", "database", "outbound", "failures", "retryability"],
+        "replays-idempotently": ["http", "database", "messages", "idempotency"]
+      }
+    },
+    {
+      "id": "ledger-transfer",
+      "label": "Ledger transfer",
+      "feedbackCheck": "slices/ledger-transfer/oracle/feedback.check.yaml",
+      "evaluationCheck": "slices/ledger-transfer/oracle/evaluation.check.yaml",
+      "scenarioCategories": {
+        "moves-funds-atomically": ["http", "database", "messages", "ordering"],
+        "rolls-back-insufficient-funds": ["http", "database", "failures", "rollback"],
+        "replays-transfer": ["http", "database", "messages", "idempotency"],
+        "rejects-version-conflict": ["http", "database", "failures", "retryability"]
+      }
+    },
+    {
+      "id": "library-access",
+      "label": "Library access",
+      "feedbackCheck": "slices/library-access/oracle/feedback.check.yaml",
+      "evaluationCheck": "slices/library-access/oracle/evaluation.check.yaml",
+      "scenarioCategories": {
+        "lists-owned-books": ["http", "database", "authorization", "filtering"],
+        "forbids-foreign-delete": ["http", "database", "authorization", "failures"],
+        "returns-ordered-page": ["http", "database", "pagination", "filtering", "ordering"],
+        "allows-owner-delete": ["http", "database", "authorization"]
+      }
+    }
+  ]
+}
