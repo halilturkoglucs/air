@@ -45,6 +45,7 @@ function isCrudOperation(operation: HttpOperation): operation is CrudHttpOperati
 }
 
 function renderPackageJson(air: AirDocument, options: ResolvedNextjsOptions): string {
+  const postgres = options.database === "postgres";
   return `${JSON.stringify(
     {
       name: air.metadata.name,
@@ -57,18 +58,19 @@ function renderPackageJson(air: AirDocument, options: ResolvedNextjsOptions): st
         start: "next start",
         test: "vitest run",
         typecheck: "tsc --noEmit",
-        "db:generate": "drizzle-kit generate",
-        "db:migrate": "drizzle-kit migrate && tsx src/air/migrate.ts",
-        "air:worker": "tsx src/air/runtime.ts worker",
-        "air:scheduler": "tsx src/air/runtime.ts scheduler",
-        "air:orchestrator": "tsx src/air/runtime.ts orchestrator",
-        "air:realtime": "tsx src/air/runtime.ts realtime",
+        ...(postgres ? {
+          "db:generate": "drizzle-kit generate",
+          "db:migrate": "drizzle-kit migrate && tsx src/air/migrate.ts",
+          "air:worker": "tsx src/air/runtime.ts worker",
+          "air:scheduler": "tsx src/air/runtime.ts scheduler",
+          "air:orchestrator": "tsx src/air/runtime.ts orchestrator",
+          "air:realtime": "tsx src/air/runtime.ts realtime",
+        } : {}),
       },
       dependencies: {
-        "drizzle-orm": "^0.44.0",
+        ...(postgres ? { "drizzle-orm": "^0.44.0", postgres: "^3.4.0" } : { mongodb: "^6.20.0" }),
         ...(Object.keys(air.spec.principals ?? {}).length > 0 ? { jose: "^6.0.0" } : {}),
         next: `^${options.frameworkVersion}`,
-        postgres: "^3.4.0",
         "@opentelemetry/api": "^1.9.0",
         ws: "^8.18.0",
         react: "^19.2.0",
@@ -78,7 +80,7 @@ function renderPackageJson(air: AirDocument, options: ResolvedNextjsOptions): st
         "@types/node": "^22.15.0",
         "@types/react": "^19.2.0",
         "@types/react-dom": "^19.2.0",
-        "drizzle-kit": "^0.31.0",
+        ...(postgres ? { "drizzle-kit": "^0.31.0" } : {}),
         typescript: "^5.9.0",
         vitest: "^3.2.0",
         tsx: "^4.20.0",
@@ -429,7 +431,7 @@ export function parse${names.pascal}Create(value: unknown): New${names.pascal} {
   const input = asRecord(value, ${json(entityName)});
   const result: Record<string, unknown> = {};
 ${assignments}
-  return result as New${names.pascal};
+  return result as unknown as New${names.pascal};
 }
 
 export function parse${names.pascal}Update(value: unknown): ${names.pascal}UpdateInput {
@@ -1691,10 +1693,182 @@ ${cases}
 });`;
 }
 
+function mongoTypescriptType(field: FieldDefinition): string {
+  const primitive = {
+    string: "string",
+    integer: "number",
+    number: "number",
+    boolean: "boolean",
+    uuid: "string",
+    date: "string",
+    datetime: "string",
+    json: "unknown",
+  }[field.type];
+  return field.nullable ? `${primitive} | null` : primitive;
+}
+
+function renderMongoSchema(air: AirDocument): string {
+  return Object.entries(air.spec.entities).map(([entityName, entity]) => {
+    const names = entityNames(entityName);
+    const stored = Object.entries(entity.fields).map(([fieldName, field]) => {
+      const optional = !field.required && field.generated === undefined && field.default === undefined;
+      return `  readonly ${fieldName}${optional ? "?" : ""}: ${mongoTypescriptType(field)};`;
+    }).join("\n");
+    const input = Object.entries(entity.fields)
+      .filter(([, field]) => field.generated === undefined)
+      .map(([fieldName, field]) => `  readonly ${fieldName}${field.required && field.default === undefined ? "" : "?"}: ${mongoTypescriptType(field)};`)
+      .join("\n");
+    return `export interface ${names.pascal} {\n${stored}\n}\n\nexport interface New${names.pascal} {\n${input}\n}`;
+  }).join("\n\n");
+}
+
+function renderMongoClient(air: AirDocument): string {
+  const indexes = Object.entries(air.spec.entities).flatMap(([entityName, entity]) => {
+    const collection = entityNames(entityName).table;
+    return Object.entries(entity.fields).flatMap(([fieldName, field]) => {
+      if (!field.primaryKey && !field.unique) return [];
+      return [`    database.collection(${json(collection)}).createIndex({ ${fieldName}: 1 }, { unique: true, name: ${json(`air_${fieldName}_unique`)} })`];
+    });
+  });
+  return `import { Db, MongoClient } from "mongodb";
+
+let clientPromise: Promise<MongoClient> | undefined;
+
+function connection(): Promise<MongoClient> {
+  const url = process.env.DATABASE_URL;
+  if (!url) throw new Error("DATABASE_URL is required before accessing MongoDB.");
+  clientPromise ??= new MongoClient(url).connect();
+  return clientPromise;
+}
+
+export async function getDb(): Promise<Db> {
+  const client = await connection();
+  return client.db(process.env.MONGODB_DATABASE ?? "air");
+}
+
+export async function checkDatabaseReady(): Promise<void> {
+  const database = await getDb();
+  await database.command({ ping: 1 });
+${indexes.length > 0 ? `  await Promise.all([\n${indexes.join(",\n")}\n  ]);` : ""}
+}`;
+}
+
+function renderMongoRepository(
+  entityName: string,
+  entity: EntityDefinition,
+  operations: readonly CrudHttpOperation[],
+): string {
+  const names = entityNames(entityName);
+  const primaryName = primaryField(entity)?.[0] ?? "id";
+  const pluralPascal = upperFirst(names.pluralCamel);
+  const actions = new Set(operations.map((operation) => operation.action));
+  const listOperation = operations.find((operation) => operation.action === "list");
+  const collection = listOperation?.collection;
+  const blocks: string[] = [];
+
+  if (actions.has("list")) {
+    const filters = collection?.filters ?? [];
+    const queryFields = [
+      ...(collection?.pagination ? ["  readonly limit: number;", "  readonly offset: number;"] : []),
+      ...filters.map((filter) => `  readonly ${filter.parameter}?: ${names.pascal}[${json(filter.field)}];`),
+    ];
+    const queryType = collection ? `export interface ${names.pascal}ListQuery {\n${queryFields.join("\n")}\n}\n\n` : "";
+    const filterLines = filters.map((filter) => `  if (query.${filter.parameter} !== undefined) filter.${filter.field} = query.${filter.parameter};`).join("\n");
+    const sort = (collection?.orderBy?.length ?? 0) > 0
+      ? `  cursor = cursor.sort(${JSON.stringify(Object.fromEntries(collection!.orderBy!.map((item) => [item.field, item.direction === "asc" ? 1 : -1])))});`
+      : "";
+    const pagination = collection?.pagination ? "  cursor = cursor.skip(query.offset).limit(query.limit);" : "";
+    blocks.push(`${queryType}export async function list${pluralPascal}(${collection ? `query: ${names.pascal}ListQuery` : ""}): Promise<${names.pascal}[]> {
+  const filter: Record<string, unknown> = {};
+${filterLines}
+  let cursor = (await getDb()).collection<${names.pascal}>(${json(names.table)}).find(filter as Filter<${names.pascal}>, { projection: { _id: 0 } });
+${sort}
+${pagination}
+  return cursor.toArray();
+}`);
+  }
+  if (actions.has("read")) {
+    blocks.push(`export async function get${names.pascal}(id: ${names.pascal}[${json(primaryName)}]): Promise<${names.pascal} | undefined> {
+  return (await (await getDb()).collection<${names.pascal}>(${json(names.table)}).findOne({ ${primaryName}: id } as Filter<${names.pascal}>, { projection: { _id: 0 } })) ?? undefined;
+}`);
+  }
+  if (actions.has("create")) {
+    const values = Object.entries(entity.fields).map(([fieldName, field]) => {
+      if (field.generated === "uuid") return `    ${fieldName}: randomUUID(),`;
+      if (field.generated === "created-at" || field.generated === "updated-at") return `    ${fieldName}: new Date().toISOString(),`;
+      if (field.default !== undefined) return `    ${fieldName}: ${json(field.default)},`;
+      if (field.required) return `    ${fieldName}: data.${fieldName},`;
+      return `    ...(${json(fieldName)} in data ? { ${fieldName}: data.${fieldName} } : {}),`;
+    }).join("\n");
+    blocks.push(`export async function create${names.pascal}(data: New${names.pascal}): Promise<${names.pascal}> {
+  const row: ${names.pascal} = {
+${values}
+  };
+  await (await getDb()).collection<${names.pascal}>(${json(names.table)}).insertOne({ ...row });
+  return row;
+}`);
+  }
+  if (actions.has("update")) {
+    const updatedAt = Object.entries(entity.fields).find(([, field]) => field.generated === "updated-at")?.[0];
+    blocks.push(`export async function update${names.pascal}(id: ${names.pascal}[${json(primaryName)}], data: ${names.pascal}UpdateInput): Promise<${names.pascal} | undefined> {
+  const changes = { ...data${updatedAt ? `, ${updatedAt}: new Date().toISOString()` : ""} };
+  return (await (await getDb()).collection<${names.pascal}>(${json(names.table)}).findOneAndUpdate(
+    { ${primaryName}: id } as Filter<${names.pascal}>,
+    { $set: changes },
+    { returnDocument: "after", projection: { _id: 0 } },
+  )) ?? undefined;
+}`);
+  }
+  if (actions.has("delete")) {
+    blocks.push(`export async function delete${names.pascal}(id: ${names.pascal}[${json(primaryName)}]): Promise<boolean> {
+  const result = await (await getDb()).collection<${names.pascal}>(${json(names.table)}).deleteOne({ ${primaryName}: id } as Filter<${names.pascal}>);
+  return result.deletedCount > 0;
+}`);
+  }
+
+  return `import { randomUUID } from "node:crypto";
+import type { Filter } from "mongodb";
+import { getDb } from "@/db/client";
+import type { ${names.pascal}, New${names.pascal} } from "@/db/schema";
+import type { ${names.pascal}UpdateInput } from "@/domain/${names.kebab}";
+
+${blocks.join("\n\n")}`;
+}
+
+function renderMongoNextjsFiles(air: AirDocument, options: ResolvedNextjsOptions): readonly PlannedNextjsFile[] {
+  const operations = air.spec.http?.operations ?? [];
+  const replacements = new Map<string, string>([
+    ["package.json", renderPackageJson(air, options)],
+    [".env.example", `DATABASE_URL=mongodb://localhost:27017\nMONGODB_DATABASE=air${Object.keys(air.spec.principals ?? {}).length > 0 ? "\nAIR_AUTH_SECRET=replace-with-at-least-32-random-characters" : ""}\n`],
+    ["src/db/client.ts", renderMongoClient(air)],
+    ["src/db/schema.ts", renderMongoSchema(air)],
+    ["README.md", `# ${air.metadata.displayName ?? air.metadata.name}\n\nGenerated from AIR ${air.apiVersion} by the Next.js target using MongoDB.\n\n## Run\n\n${options.deployment === "node" ? `\`\`\`bash\ndocker compose up --build\n\`\`\`\n\nOr run Node locally:` : ""}\n\n1. Copy \`.env.example\` to \`.env.local\`.\n2. Start MongoDB and set \`DATABASE_URL\` plus optional \`MONGODB_DATABASE\`.\n3. Run \`${options.packageManager} install\`.\n4. Run \`${options.packageManager} run dev\`.\n\nMongoDB mode supports entity CRUD and collection queries. Advanced transactional AIR runtimes remain PostgreSQL-only.\n`],
+  ]);
+  for (const [entityName, entity] of Object.entries(air.spec.entities)) {
+    const names = entityNames(entityName);
+    const entityOperations = operations.filter(isCrudOperation).filter((operation) => operation.entity === entityName);
+    replacements.set(`src/repositories/${names.kebab}.ts`, renderMongoRepository(entityName, entity, entityOperations));
+  }
+  const omitted = new Set(["drizzle.config.ts", "drizzle/0000_air_async_runtime.sql", "src/air/migrate.ts", "src/air/runtime.ts"]);
+  const files = renderNextjsFiles(air, { ...options, database: "postgres" })
+    .filter((file) => !omitted.has(file.path) && !file.path.startsWith("src/commands/"))
+    .map((file) => replacements.has(file.path) ? { ...file, content: withNewline(replacements.get(file.path)!) } : file);
+  if (options.deployment === "node") {
+    files.push({
+      path: "compose.yaml",
+      kind: "configuration",
+      airNodes: ["/metadata", "/spec/entities"],
+      content: `services:\n  database:\n    image: mongo:8\n    healthcheck:\n      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]\n      interval: 2s\n      timeout: 3s\n      retries: 20\n    volumes:\n      - air-mongodb:/data/db\n  application:\n    build: .\n    depends_on:\n      database:\n        condition: service_healthy\n    environment:\n      DATABASE_URL: mongodb://database:27017\n      MONGODB_DATABASE: air\n    ports:\n      - "\${AIR_PORT:-3000}:3000"\n\nvolumes:\n  air-mongodb:\n`,
+    });
+  }
+  return files.sort((left, right) => left.path.localeCompare(right.path));
+}
+
 export function renderNextjsFiles(
   air: AirDocument,
   options: ResolvedNextjsOptions,
 ): readonly PlannedNextjsFile[] {
+  if (options.database === "mongodb") return renderMongoNextjsFiles(air, options);
   const dataContracts = {
     ...(air.spec.contracts ?? {}),
     ...(air.spec.principals ?? {}),

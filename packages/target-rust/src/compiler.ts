@@ -52,6 +52,15 @@ function diagnostic(code: string, message: string, airPath?: string, help?: stri
 
 export function validateRustTarget(context: CompilationContext<RustTargetOptions>): readonly CompilationDiagnostic[] {
   const diagnostics: CompilationDiagnostic[] = [];
+  const database = context.options.database ?? "postgres";
+  if (database === "mongodb") {
+    const unsupportedSections = ["commands", "events", "tasks", "consumers", "schedules", "cachedReads", "realtime"] as const;
+    for (const section of unsupportedSections) {
+      if (Object.keys(context.air.spec[section] ?? {}).length > 0) {
+        diagnostics.push(diagnostic("RUST_MONGODB_ADVANCED_RUNTIME_UNSUPPORTED", `MongoDB mode cannot lower AIR ${section} yet; its transactional runtime is currently PostgreSQL-only.`, `/spec/${section}`, "Use --database postgres or compile a CRUD-only AIR application to MongoDB."));
+      }
+    }
+  }
   if (Object.keys(context.air.spec.ports ?? {}).length > 0) {
     diagnostics.push(diagnostic("RUST_OUTBOUND_PORTS_UNSUPPORTED", "The Rust target cannot lower AIR outbound ports yet.", "/spec/ports", "Keep the port behind a foreign component or select a target with outbound-port support."));
   }
@@ -74,6 +83,11 @@ export function validateRustTarget(context: CompilationContext<RustTargetOptions
   for (const [entityName, entity] of Object.entries(context.air.spec.entities)) {
     const primary = Object.entries(entity.fields).filter(([, field]) => field.primaryKey === true);
     if (primary.length > 1) diagnostics.push(diagnostic("RUST_COMPOSITE_PRIMARY_KEY_UNSUPPORTED", `Entity ${entityName} uses a composite primary key.`, `/spec/entities/${entityName}/fields`));
+    if (database === "mongodb") {
+      for (const [fieldName, field] of Object.entries(entity.fields)) {
+        if (field.generated === "auto-increment") diagnostics.push(diagnostic("RUST_MONGODB_AUTO_INCREMENT_UNSUPPORTED", `MongoDB mode cannot generate auto-increment field ${entityName}.${fieldName}.`, `/spec/entities/${entityName}/fields/${fieldName}/generated`, "Use a UUID-generated identifier for portable MongoDB output."));
+      }
+    }
     for (const [relationshipName, relationship] of Object.entries(entity.relationships ?? {})) {
       if (relationship.cardinality === "many-to-many") diagnostics.push(diagnostic("RUST_MANY_TO_MANY_REQUIRES_JOIN_ENTITY", `Relationship ${entityName}.${relationshipName} requires an explicit join entity.`, `/spec/entities/${entityName}/relationships/${relationshipName}`));
     }
@@ -155,7 +169,9 @@ export async function compileRust(context: CompilationContext<RustTargetOptions>
         source: { apiVersion: context.air.apiVersion, hash: sourceHash },
         compiler: { version: COMPILER_VERSION },
         target: { id: TARGET_ID, version: TARGET_VERSION, options: resolved },
-        dependencies: { axum: "0.8", sqlx: "0.8", tokio: "1", rustEdition: resolved.rustEdition, rustVersion: resolved.rustVersion },
+        dependencies: resolved.database === "mongodb"
+          ? { axum: "0.8", mongodb: "3", tokio: "1", rustEdition: resolved.rustEdition, rustVersion: resolved.rustVersion }
+          : { axum: "0.8", sqlx: "0.8", tokio: "1", rustEdition: resolved.rustEdition, rustVersion: resolved.rustVersion },
         artifacts: artifacts.map((item) => ({ path: item.path, checksum: item.checksum })),
       }, null, 2)}\n`;
       await writeAtomic(join(context.outputDirectory, LOCK_PATH), lockContent);

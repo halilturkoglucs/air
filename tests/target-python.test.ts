@@ -39,6 +39,28 @@ describe("Python target boundary", () => {
     expect(runtime).not.toMatch(/(?:if|elif|else) [^\n]*: (?:await|raise)/);
   });
 
+  it("plans MongoDB CRUD and container output without PostgreSQL artifacts", async () => {
+    const air = await loadAirFile(resolve("examples/todo/air.yaml"));
+    const files = planPython(air, { database: "mongodb" });
+    const application = files.find((file) => file.path === "app.py")?.content ?? "";
+
+    expect(files.find((file) => file.path === "requirements.txt")?.content).toContain("pymongo==");
+    expect(files.find((file) => file.path === "requirements.txt")?.content).not.toContain("psycopg");
+    expect(application).toContain("MongoClient");
+    expect(application).toContain("insert_one");
+    expect(files.find((file) => file.path === "compose.yaml")?.content).toContain("mongo:8");
+    expect(files.some((file) => file.path.startsWith("migrations/"))).toBe(false);
+  });
+
+  it("rejects advanced transactional AIR runtime features in MongoDB mode", async () => {
+    const air = await loadAirFile(resolve("examples/ledger/air.yaml"));
+    const directory = await mkdtemp(resolve(tmpdir(), "air-python-mongo-reject-"));
+    const result = await new PythonTargetAdapter().compile({ air, outputDirectory: directory, mode: "managed", options: { database: "mongodb" } });
+
+    expect(result.status).toBe("failed");
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({ code: "PYTHON_MONGODB_ADVANCED_RUNTIME_UNSUPPORTED" }));
+  });
+
   it("writes managed provenance and a reproducibility lock", async () => {
     const air = await loadAirFile(resolve("examples/todo/air.yaml"));
     const directory = await mkdtemp(resolve(tmpdir(), "air-python-test-"));

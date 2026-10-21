@@ -12,7 +12,7 @@ export interface NextjsTargetOptions {
   readonly frameworkVersion?: string;
   readonly packageManager?: "npm" | "pnpm" | "yarn" | "bun";
   readonly deployment?: "vercel" | "node";
-  readonly database?: "postgres";
+  readonly database?: "postgres" | "mongodb";
 }
 
 export const nextjsCapabilityManifest = {
@@ -37,6 +37,7 @@ export const nextjsCapabilityManifest = {
       constraints: [
         { kind: "air-version", minimum: "air.dev/v0.3", maximum: "air.dev/v0.9" },
         { kind: "primary-effect-in", values: ["create", "update", "delete"] },
+        { kind: "option-in", option: "database", values: ["postgres"] },
       ],
       notes: "Commands lower to explicit App Router handlers and transactional domain functions with conflict errors.",
     },
@@ -74,8 +75,9 @@ export const nextjsCapabilityManifest = {
     "domain.delete": { support: "supported" },
     "persistence.relational": {
       support: "conditional",
-      conditions: ["PostgreSQL is the only persistence provider in the current target."],
-      constraints: [{ kind: "option-in", option: "database", values: ["postgres"] }],
+      conditions: ["PostgreSQL supports the complete target surface.", "MongoDB supports entity CRUD and collection queries without relational foreign-key enforcement."],
+      constraints: [{ kind: "option-in", option: "database", values: ["postgres", "mongodb"] }],
+      notes: "MongoDB mode rejects commands, messaging, schedules, sagas, cached reads, and realtime features until their transactional semantics are implemented.",
     },
     "messaging.publish": { support: "supported", notes: "Transactional PostgreSQL outbox with provider-neutral envelopes." },
     "messaging.consume": { support: "supported", notes: "Durable inbox deduplication, bounded retry, and dead letters." },

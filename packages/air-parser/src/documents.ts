@@ -6,9 +6,12 @@ import {
   SYSTEM_SCHEMA_V0_1,
   SYSTEM_SCHEMA_V0_2,
   DEPLOYMENT_SCHEMA_V0_1,
+  UI_SCHEMA_V0_1,
   type AirSystemDocument,
   type AirDeploymentDocument,
   type AirDocument,
+  type AirUiDocument,
+  type UiNodeDefinition,
 } from "@air/schema";
 import { AirParseError, AirValidationError, parseAir } from "./parser.js";
 import type { ValidationIssue } from "./validation.js";
@@ -19,12 +22,16 @@ export type SystemValidationResult =
 export type DeploymentValidationResult =
   | { readonly valid: true; readonly document: AirDeploymentDocument; readonly issues: readonly [] }
   | { readonly valid: false; readonly issues: readonly ValidationIssue[] };
+export type UiValidationResult =
+  | { readonly valid: true; readonly document: AirUiDocument; readonly issues: readonly [] }
+  | { readonly valid: false; readonly issues: readonly ValidationIssue[] };
 
 const ajv = new Ajv2020({ allErrors: true, strict: true });
 ajv.addSchema(AIR_SCHEMA_V0_4);
 const validateSystemSchema = ajv.compile<AirSystemDocument>(SYSTEM_SCHEMA_V0_1);
 const validateSystemSchemaV0_2 = ajv.compile<AirSystemDocument>(SYSTEM_SCHEMA_V0_2);
 const validateDeploymentSchema = ajv.compile<AirDeploymentDocument>(DEPLOYMENT_SCHEMA_V0_1);
+const validateUiSchema = ajv.compile<AirUiDocument>(UI_SCHEMA_V0_1);
 
 function schemaIssue(error: ErrorObject): ValidationIssue {
   const property = error.keyword === "additionalProperties" && typeof error.params.additionalProperty === "string"
@@ -103,6 +110,36 @@ export function validateDeployment(value: unknown): DeploymentValidationResult {
   return issues.length > 0 ? { valid: false, issues } : { valid: true, document: value, issues: [] };
 }
 
+function validateUiNode(node: UiNodeDefinition, path: string, ids: Set<string>, issues: ValidationIssue[]): void {
+  if (ids.has(node.id)) issues.push(semanticIssue(`${path}/id`, "ui.duplicate_node_id", `UI node ID ${node.id} is duplicated in this screen.`));
+  ids.add(node.id);
+  const requiredProperty = { element: "element", component: "component", text: "text", slot: "slot" } as const;
+  if (node.kind !== "fragment" && node[requiredProperty[node.kind]] === undefined) {
+    issues.push(semanticIssue(path, "ui.node_kind_payload", `UI node kind ${node.kind} requires ${requiredProperty[node.kind]}.`));
+  }
+  for (const [index, child] of (node.children ?? []).entries()) validateUiNode(child, `${path}/children/${index}`, ids, issues);
+  for (const [slot, children] of Object.entries(node.slots ?? {})) {
+    for (const [index, child] of children.entries()) validateUiNode(child, `${path}/slots/${slot}/${index}`, ids, issues);
+  }
+}
+
+export function validateUi(value: unknown): UiValidationResult {
+  if (!validateUiSchema(value)) return { valid: false, issues: (validateUiSchema.errors ?? []).map(schemaIssue) };
+  const issues: ValidationIssue[] = [];
+  const dataSources = new Set(Object.keys(value.spec.dataSources ?? {}));
+  for (const [screenName, screen] of Object.entries(value.spec.screens)) {
+    for (const [index, source] of (screen.load ?? []).entries()) {
+      if (!dataSources.has(source)) issues.push(semanticIssue(`/spec/screens/${screenName}/load/${index}`, "ui.unknown_data_source", `UI data source ${source} is not declared.`));
+    }
+    validateUiNode(screen.root, `/spec/screens/${screenName}/root`, new Set(), issues);
+  }
+  const localization = value.spec.localization;
+  if (localization && !localization.locales.includes(localization.defaultLocale)) {
+    issues.push(semanticIssue("/spec/localization/defaultLocale", "ui.default_locale_missing", "defaultLocale must appear in locales."));
+  }
+  return issues.length > 0 ? { valid: false, issues } : { valid: true, document: value, issues: [] };
+}
+
 function parseYaml(source: string, sourceName: string): unknown {
   try {
     return parse(source, { uniqueKeys: true });
@@ -123,6 +160,12 @@ export function parseDeployment(source: string, sourceName = "<input>"): AirDepl
   return result.document;
 }
 
+export function parseUi(source: string, sourceName = "<input>"): AirUiDocument {
+  const result = validateUi(parseYaml(source, sourceName));
+  if (!result.valid) throw new AirValidationError(sourceName, result.issues);
+  return result.document;
+}
+
 export async function loadSystemFile(filePath: string): Promise<AirSystemDocument> {
   return parseSystem(await readFile(filePath, "utf8"), filePath);
 }
@@ -131,7 +174,11 @@ export async function loadDeploymentFile(filePath: string): Promise<AirDeploymen
   return parseDeployment(await readFile(filePath, "utf8"), filePath);
 }
 
-export type AirSourceDocument = AirDocument | AirSystemDocument | AirDeploymentDocument;
+export async function loadUiFile(filePath: string): Promise<AirUiDocument> {
+  return parseUi(await readFile(filePath, "utf8"), filePath);
+}
+
+export type AirSourceDocument = AirDocument | AirSystemDocument | AirDeploymentDocument | AirUiDocument;
 
 export async function loadAirSourceFile(filePath: string): Promise<AirSourceDocument> {
   const source = await readFile(filePath, "utf8");
@@ -141,5 +188,6 @@ export async function loadAirSourceFile(filePath: string): Promise<AirSourceDocu
     : undefined;
   if (apiVersion === "air.dev/system/v0.1" || apiVersion === "air.dev/system/v0.2") return parseSystem(source, filePath);
   if (apiVersion === "air.dev/deployment/v0.1") return parseDeployment(source, filePath);
+  if (apiVersion === "air.dev/ui/v0.1") return parseUi(source, filePath);
   return parseAir(source, filePath);
 }

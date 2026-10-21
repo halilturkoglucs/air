@@ -11,7 +11,7 @@ AIR v0.12 makes agent verification the primary product journey. AIR’s existing
 
 For existing enterprise systems, AIR does **not** promise one-click repository-to-YAML conversion. It builds an evidence-backed architecture map, then helps teams review, verify, and replace one business capability at a time. Architecture inventory is the entry point; verified modernization is the outcome.
 
-AIR CLI v0.12 accepts application documents from v0.1 through v0.10 and System documents through v0.2. Discovery and agent verification are supported product boundaries; extraction, differential import verification, and adoption remain experimental:
+AIR CLI v0.12 accepts application documents from v0.1 through v0.10, System documents through v0.2, Deployment v0.1, and framework-neutral UI v0.1 documents. Discovery and agent verification are supported product boundaries; extraction, differential import verification, and adoption remain experimental:
 
 - entities, relationships, CRUD HTTP operations, contracts, principals, and declared errors
 - transactional create/update/delete commands, guards, preconditions, ownership, role/scope policies, and invariant expressions
@@ -93,6 +93,7 @@ AIR is not a general correctness oracle, fuzzy similarity scorer, load tester, o
 - **Connect any backend or coding agent:** use the [language-agnostic agent protocol](docs/language-agnostic-agent-protocol.md).
 - **Inventory an enterprise Spring service:** follow [Enterprise discovery and modernization](docs/enterprise-modernization.md).
 - **Use the existing AIR IR and code generators:** see the [AIR schema guide](docs/air-schema.md), [verification model](docs/verification.md), and the `examples/ledger` and `examples/complex-commerce` projects.
+- **Preserve UI intent across frameworks:** use the framework-neutral [AIR UI schema](docs/ui-schema.md) for static, server-rendered, client, or hybrid interfaces.
 - **Build a provider or deployment integration:** see [Target and plugin adapters](docs/target-adapters.md).
 
 ## CLI, discovery, and generation

@@ -15,6 +15,8 @@ export const SYSTEM_API_VERSION_V0_2 = "air.dev/system/v0.2" as const;
 export const SYSTEM_KIND = "System" as const;
 export const DEPLOYMENT_API_VERSION = "air.dev/deployment/v0.1" as const;
 export const DEPLOYMENT_KIND = "Deployment" as const;
+export const UI_API_VERSION = "air.dev/ui/v0.1" as const;
+export const UI_KIND = "UI" as const;
 
 export type AirApiVersion =
   | typeof AIR_API_VERSION_V0_1
@@ -479,6 +481,116 @@ export interface ApplicationMetadata {
   readonly displayName?: string;
   readonly description?: string;
   readonly version?: string;
+}
+
+export type UiJsonValue = string | number | boolean | null | readonly UiJsonValue[] | { readonly [key: string]: UiJsonValue };
+export type UiRenderingMode = "static" | "server" | "client" | "hybrid";
+export type UiNodeKind = "element" | "component" | "text" | "fragment" | "slot";
+export type UiValue =
+  | { readonly literal: UiJsonValue }
+  | { readonly expression: string }
+  | { readonly translation: string; readonly parameters?: Readonly<Record<string, UiValue>> };
+
+export interface UiImplementationDefinition {
+  readonly rendering: UiRenderingMode;
+  readonly technology: string;
+  readonly language?: string;
+  readonly framework?: string;
+  readonly templateEngine?: string;
+  readonly entry?: string;
+  readonly hints?: Readonly<Record<string, UiJsonValue>>;
+}
+
+export interface UiActionDefinition {
+  readonly on: string;
+  readonly kind: "navigate" | "submit" | "invoke" | "mutate" | "set-state" | "toggle" | "emit" | "custom";
+  readonly target?: string;
+  readonly operation?: string;
+  readonly input?: Readonly<Record<string, UiValue>>;
+  readonly when?: string;
+  readonly confirm?: UiValue;
+  readonly implementation?: Readonly<Record<string, UiJsonValue>>;
+}
+
+export interface UiNodeDefinition {
+  readonly id: string;
+  readonly kind: UiNodeKind;
+  readonly element?: string;
+  readonly component?: string;
+  readonly text?: UiValue;
+  readonly slot?: string;
+  readonly properties?: Readonly<Record<string, UiValue>>;
+  readonly attributes?: Readonly<Record<string, UiValue>>;
+  readonly styles?: Readonly<Record<string, UiValue>>;
+  readonly styleRefs?: readonly string[];
+  readonly visibleWhen?: string;
+  readonly repeat?: { readonly source: string; readonly item: string; readonly index?: string; readonly key?: string };
+  readonly actions?: readonly UiActionDefinition[];
+  readonly accessibility?: Readonly<Record<string, UiValue>>;
+  readonly children?: readonly UiNodeDefinition[];
+  readonly slots?: Readonly<Record<string, readonly UiNodeDefinition[]>>;
+  readonly implementation?: Readonly<Record<string, UiJsonValue>>;
+}
+
+export interface UiScreenDefinition {
+  readonly path?: string;
+  readonly title?: string;
+  readonly description?: string;
+  readonly layout?: string;
+  readonly head?: Readonly<Record<string, UiValue>>;
+  readonly load?: readonly string[];
+  readonly root: UiNodeDefinition;
+  readonly extensions?: Readonly<Record<string, UiJsonValue>>;
+}
+
+export interface AirUiDocument {
+  readonly apiVersion: typeof UI_API_VERSION;
+  readonly kind: typeof UI_KIND;
+  readonly metadata: ApplicationMetadata;
+  readonly spec: {
+    readonly application?: string;
+    readonly implementation: UiImplementationDefinition;
+    readonly design?: {
+      readonly tokens?: Readonly<Record<string, UiJsonValue>>;
+      readonly themes?: Readonly<Record<string, Readonly<Record<string, UiJsonValue>>>>;
+      readonly styleSheets?: readonly string[];
+      readonly breakpoints?: Readonly<Record<string, string | number>>;
+    };
+    readonly assets?: Readonly<Record<string, {
+      readonly kind: "image" | "font" | "icon" | "style" | "script" | "document" | "other";
+      readonly source: string;
+      readonly mediaType?: string;
+      readonly integrity?: string;
+      readonly attributes?: Readonly<Record<string, UiJsonValue>>;
+    }>>;
+    readonly dataSources?: Readonly<Record<string, {
+      readonly kind: "static" | "http" | "application" | "server" | "custom";
+      readonly operation?: string;
+      readonly method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS";
+      readonly path?: string;
+      readonly value?: UiJsonValue;
+      readonly parameters?: Readonly<Record<string, UiValue>>;
+      readonly implementation?: Readonly<Record<string, UiJsonValue>>;
+    }>>;
+    readonly screens: Readonly<Record<string, UiScreenDefinition>>;
+    readonly localization?: {
+      readonly defaultLocale: string;
+      readonly locales: readonly string[];
+      readonly direction?: Readonly<Record<string, "ltr" | "rtl" | "auto">>;
+      readonly catalogs?: Readonly<Record<string, string>>;
+    };
+    readonly provenance?: {
+      readonly mode?: "authored" | "imported" | "extracted" | "generated";
+      readonly sources?: readonly {
+        readonly reference: string;
+        readonly kind?: "file" | "url" | "image" | "document" | "runtime" | "other";
+        readonly extracts?: readonly string[];
+        readonly contentHash?: string;
+      }[];
+      readonly restrictions?: readonly string[];
+    };
+    readonly extensions?: Readonly<Record<string, UiJsonValue>>;
+  };
 }
 
 export interface ApplicationSpec {

@@ -38,6 +38,13 @@
             "update",
             "delete"
           ]
+        },
+        {
+          "kind": "option-in",
+          "option": "database",
+          "values": [
+            "postgres"
+          ]
         }
       ],
       "notes": "Commands lower to explicit App Router handlers and transactional domain functions with conflict errors."
@@ -81,17 +88,20 @@
     "persistence.relational": {
       "support": "conditional",
       "conditions": [
-        "PostgreSQL is the only persistence provider in the current target."
+        "PostgreSQL supports the complete target surface.",
+        "MongoDB supports entity CRUD and collection queries without relational foreign-key enforcement."
       ],
       "constraints": [
         {
           "kind": "option-in",
           "option": "database",
           "values": [
-            "postgres"
+            "postgres",
+            "mongodb"
           ]
         }
-      ]
+      ],
+      "notes": "MongoDB mode rejects commands, messaging, schedules, sagas, cached reads, and realtime features until their transactional semantics are implemented."
     },
     "messaging.publish": {
       "support": "supported",

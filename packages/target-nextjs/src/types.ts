@@ -11,5 +11,5 @@ export interface ResolvedNextjsOptions {
   readonly frameworkVersion: string;
   readonly packageManager: "npm" | "pnpm" | "yarn" | "bun";
   readonly deployment: "vercel" | "node";
-  readonly database: "postgres";
+  readonly database: "postgres" | "mongodb";
 }

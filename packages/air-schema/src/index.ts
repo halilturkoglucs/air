@@ -11,6 +11,7 @@ import airSchemaV0_10 from "../schema/air-0.10.schema.json" with { type: "json" 
 import systemSchemaV0_1 from "../schema/system-0.1.schema.json" with { type: "json" };
 import systemSchemaV0_2 from "../schema/system-0.2.schema.json" with { type: "json" };
 import deploymentSchemaV0_1 from "../schema/deployment-0.1.schema.json" with { type: "json" };
+import uiSchemaV0_1 from "../schema/ui-0.1.schema.json" with { type: "json" };
 
 export * from "./types.js";
 
@@ -27,6 +28,7 @@ export const AIR_SCHEMA_V0_10 = airSchemaV0_10;
 export const SYSTEM_SCHEMA_V0_1 = systemSchemaV0_1;
 export const SYSTEM_SCHEMA_V0_2 = systemSchemaV0_2;
 export const DEPLOYMENT_SCHEMA_V0_1 = deploymentSchemaV0_1;
+export const UI_SCHEMA_V0_1 = uiSchemaV0_1;
 export type AirJsonSchema = typeof airSchema;
 export type AirJsonSchemaV0_2 = typeof airSchemaV0_2;
 export type AirJsonSchemaV0_3 = typeof airSchemaV0_3;
@@ -40,3 +42,4 @@ export type AirJsonSchemaV0_10 = typeof airSchemaV0_10;
 export type SystemJsonSchemaV0_1 = typeof systemSchemaV0_1;
 export type SystemJsonSchemaV0_2 = typeof systemSchemaV0_2;
 export type DeploymentJsonSchemaV0_1 = typeof deploymentSchemaV0_1;
+export type UiJsonSchemaV0_1 = typeof uiSchemaV0_1;

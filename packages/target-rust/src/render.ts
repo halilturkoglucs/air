@@ -13,6 +13,7 @@ import type {
   InvariantOperand,
 } from "@air/schema";
 import { pascalCase, rustIdentifier, snakeCase, tableName } from "./naming.js";
+import { renderMongoRustFiles } from "./mongo.js";
 import type { PlannedRustFile, ResolvedRustTargetOptions } from "./types.js";
 
 function rustBaseType(field: Pick<FieldDefinition, "type">): string {
@@ -117,6 +118,48 @@ function createInputFields(entity: EntityDefinition): Record<string, FieldDefini
 
 function updateInputFields(entity: EntityDefinition): Record<string, FieldDefinition> {
   return Object.fromEntries(Object.entries(entity.fields).filter(([, field]) => !field.primaryKey && !field.generated).map(([name, field]) => [name, { ...field, nullable: true }]));
+}
+
+function uiExampleValue(fieldName: string, field: FieldDefinition): unknown {
+  if (field.validation?.enum?.[0] !== undefined) return field.validation.enum[0];
+  switch (field.type) {
+    case "string": return fieldName;
+    case "integer": return Math.max(1, Math.ceil(field.validation?.minimum ?? 1));
+    case "number": return Math.max(1, field.validation?.minimum ?? 1);
+    case "boolean": return false;
+    case "uuid": return "00000000-0000-4000-8000-000000000001";
+    case "date": return "2026-01-01";
+    case "datetime": return "2026-01-01T00:00:00.000Z";
+    case "json": return {};
+  }
+}
+
+function escapeStaticHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function rustUiResources(air: AirDocument) {
+  return Object.entries(air.spec.entities).flatMap(([entityName, entity]) => {
+    const operations = (air.spec.http?.operations ?? []).filter(
+      (operation): operation is CrudHttpOperation => "entity" in operation && operation.entity === entityName,
+    );
+    const list = operations.find((operation) => operation.action === "list");
+    if (!list || list.authorization) return [];
+    const create = operations.find((operation) => operation.action === "create" && !operation.authorization);
+    const createFields = createInputFields(entity);
+    const supportsCreate = create !== undefined && Object.keys(createFields).length > 0;
+    const example = Object.fromEntries(
+      Object.entries(createFields)
+        .filter(([, field]) => field.required)
+        .map(([fieldName, field]) => [fieldName, uiExampleValue(fieldName, field)]),
+    );
+    return [{ entityName, entity, list, create: supportsCreate ? create : undefined, example }];
+  });
 }
 
 function bindExpression(reference: { readonly input: string } | { readonly literal: ConstraintValue }, input = "input"): string {
@@ -423,6 +466,67 @@ function renderCommand(name: string, command: CommandDefinition, air: AirDocumen
   return lines.join("\n\n");
 }
 
+function renderUi(air: AirDocument): string {
+  const resources = rustUiResources(air);
+  const createForm = resources.some((resource) => resource.create)
+    ? `#[derive(Debug, Deserialize)]
+pub struct UiCreateForm {
+    pub payload: String,
+}`
+    : "";
+  const panels = resources.map(({ entityName, entity, create, example }) => {
+    const rustName = pascalCase(entityName);
+    const variable = rustIdentifier(entityName);
+    const safeEntityName = escapeStaticHtml(entityName);
+    const resourceHeading = `<section class="panel"><div class="panel-heading"><div><p class="eyebrow">Generated resource</p><h2>${safeEntityName}</h2></div><span class="count">`;
+    const createFormHtml = create
+      ? `    html.push_str(${JSON.stringify(`<form method="post" action="/air-runtime/ui/${snakeCase(entityName)}" class="composer"><label for="payload-${snakeCase(entityName)}">Create payload</label><textarea id="payload-${snakeCase(entityName)}" name="payload" spellcheck="false">`)});
+    html.push_str(&escape_html(${JSON.stringify(JSON.stringify(example, null, 2))}));
+    html.push_str(${JSON.stringify(`</textarea><button type="submit">Create ${safeEntityName}</button></form>`)});`
+      : `    html.push_str(${JSON.stringify('<p class="message">This resource is read-only in the generated console.</p>')});`;
+    return `    let rows_${variable} = sqlx::query_as::<_, ${rustName}>("SELECT ${columnList(entity)} FROM ${tableName(entityName)} LIMIT 100")
+        .fetch_all(&state.pool).await?;
+    let json_${variable} = serde_json::to_string_pretty(&rows_${variable}).map_err(|error| AppError::Ui(error.to_string()))?;
+    html.push_str(${JSON.stringify(resourceHeading)});
+    html.push_str(&rows_${variable}.len().to_string());
+    html.push_str(${JSON.stringify(" records</span></div>")});
+${createFormHtml}
+    html.push_str(${JSON.stringify('<div class="results"><pre>')});
+    html.push_str(&escape_html(&json_${variable}));
+    html.push_str(${JSON.stringify("</pre></div></section>")});`;
+  }).join("\n");
+  const handlers = resources.flatMap(({ entityName, create }) => {
+    if (!create) return [];
+    const rustName = pascalCase(entityName);
+    return [`pub async fn ui_create_${rustIdentifier(entityName)}(State(state): State<AppState>, Form(form): Form<UiCreateForm>) -> Result<Redirect, AppError> {
+    let input = serde_json::from_str::<Create${rustName}Input>(&form.payload)
+        .map_err(|error| AppError::Ui(format!("Invalid ${entityName} payload: {error}")))?;
+    let _ = ${rustIdentifier(create.id)}(State(state), Json(input)).await?;
+    Ok(Redirect::to("/air-runtime/ui"))
+}`];
+  }).join("\n\n");
+  const empty = resources.length === 0
+    ? `    html.push_str(${JSON.stringify('<section class="panel"><h2>No public CRUD resources</h2><p class="message">The generated UI never bypasses AIR authorization rules. Use the JSON API for authenticated resources.</p></section>')});`
+    : "";
+  const displayName = escapeStaticHtml(air.metadata.displayName ?? air.metadata.name);
+  const description = escapeStaticHtml(air.metadata.description ?? "A generated Rust application with an Axum backend and server-rendered UI.");
+  return `${createForm}
+
+fn escape_html(value: &str) -> String {
+    value.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;").replace("'", "&#39;")
+}
+
+pub async fn air_ui(State(state): State<AppState>) -> Result<Html<String>, AppError> {
+    let mut html = String::from(${JSON.stringify(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${displayName}</title><style>:root{color-scheme:dark;font-family:Inter,ui-sans-serif,system-ui,sans-serif;background:#09090b;color:#fafafa}*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at top,#27272a 0,#09090b 42%);min-height:100vh}main{width:min(1100px,calc(100% - 32px));margin:0 auto;padding:64px 0}.hero{margin-bottom:32px}.hero h1{font-size:clamp(2.5rem,7vw,5rem);line-height:.95;margin:.25rem 0 1rem;letter-spacing:-.06em}.hero p{max-width:720px;color:#a1a1aa}.eyebrow{text-transform:uppercase;letter-spacing:.16em;font-size:.72rem;font-weight:700;color:#a78bfa}.grid{display:grid;gap:20px}.panel{background:rgba(24,24,27,.88);border:1px solid #3f3f46;border-radius:20px;padding:24px;box-shadow:0 24px 80px rgba(0,0,0,.25)}.panel-heading{display:flex;align-items:start;justify-content:space-between;gap:16px}.panel h2{margin:.2rem 0 1.25rem}.count{color:#a1a1aa;font-size:.85rem}.composer{display:grid;gap:10px;margin:0 0 18px}.composer label{font-weight:700}.composer textarea{min-height:140px;width:100%;resize:vertical;border:1px solid #52525b;border-radius:12px;background:#09090b;color:#e4e4e7;padding:14px;font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace}.composer button{justify-self:start;border:0;border-radius:999px;background:#8b5cf6;color:white;padding:10px 18px;font-weight:800;cursor:pointer}.composer button:hover{background:#7c3aed}.results pre{overflow:auto;background:#09090b;border:1px solid #27272a;border-radius:12px;padding:16px;color:#d4d4d8;font-size:12px;line-height:1.55}.message{color:#a1a1aa}</style></head><body><main><header class="hero"><p class="eyebrow">Compiled from AIR to Rust</p><h1>${displayName}</h1><p>${description}</p><p><a href="/air-runtime/health" style="color:#c4b5fd">Health</a> · <a href="/air-runtime/ready" style="color:#c4b5fd">Readiness</a></p></header><div class="grid">`)});
+${panels}
+${empty}
+    html.push_str(${JSON.stringify("</div></main></body></html>")});
+    Ok(Html(html))
+}
+
+${handlers}`.trim();
+}
+
 function renderRouter(air: AirDocument): string {
   const groups = new Map<string, string[]>();
   for (const operation of air.spec.http?.operations ?? []) {
@@ -434,6 +538,9 @@ function renderRouter(air: AirDocument): string {
     groups.set(path, handlers);
   }
   const routes = [...groups.entries()].map(([path, handlers]) => `        .route(${JSON.stringify(path)}, ${handlers.join(".")})`).join("\n");
+  const uiRoutes = rustUiResources(air).flatMap(({ entityName, create }) =>
+    create ? [`        .route("/air-runtime/ui/${snakeCase(entityName)}", post(ui_create_${rustIdentifier(entityName)}))`] : [],
+  ).join("\n");
   return `pub async fn air_health() -> Json<serde_json::Value> {
     Json(json!({ "status": "ok" }))
 }
@@ -455,6 +562,8 @@ pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/air-runtime/health", get(air_health))
         .route("/air-runtime/ready", get(air_ready))
+        .route("/air-runtime/ui", get(air_ui))
+${uiRoutes}
 ${routes}
         .with_state(state)
 }`;
@@ -462,6 +571,8 @@ ${routes}
 
 function renderGenerated(air: AirDocument): string {
   const operations = air.spec.http?.operations ?? [];
+  const uiResources = rustUiResources(air);
+  const hasUiCreate = uiResources.some((resource) => resource.create);
   const contracts = Object.entries(air.spec.contracts ?? {}).map(([name, contract]) => renderStruct(name, contract.fields, "Debug, Clone, Deserialize"));
   const principals = Object.entries(air.spec.principals ?? {}).map(([name, principal]) => renderStruct(name, principal.fields, "Debug, Clone, Deserialize"));
   const entities = Object.entries(air.spec.entities).map(([name, entity]) => renderEntityCrud(name, entity, operations));
@@ -477,7 +588,10 @@ function renderGenerated(air: AirDocument): string {
   const hasPath = operations.some((operation) => "entity" in operation && ["read", "update", "delete"].includes(operation.action));
   const hasQuery = operations.some((operation) => "entity" in operation && operation.action === "list" && operation.collection !== undefined);
   const hasMessages = Object.values(air.spec.commands ?? {}).some((command) => (command.emits?.length ?? 0) > 0 || (command.enqueues?.length ?? 0) > 0);
-  const routingFunctions = [...new Set(["get", ...operations.map((operation) => operation.method === "GET" ? "get" : operation.method === "POST" ? "post" : operation.method === "DELETE" ? "delete" : "patch")])].sort();
+  const firstOperationsByPath = operations.filter(
+    (operation, index) => operations.findIndex((candidate) => candidate.path === operation.path) === index,
+  );
+  const routingFunctions = [...new Set(["get", ...(hasUiCreate ? ["post"] : []), ...firstOperationsByPath.map((operation) => operation.method === "GET" ? "get" : operation.method === "POST" ? "post" : operation.method === "DELETE" ? "delete" : "patch")])].sort();
   const chronoTypes = [
     ...(allFields.some((field) => field.type === "datetime") ? ["DateTime", "Utc"] : hasMessages ? ["Utc"] : []),
     ...(allFields.some((field) => field.type === "date") ? ["NaiveDate"] : []),
@@ -499,7 +613,7 @@ fn authenticate<T: DeserializeOwned, F: Fn() -> AppError>(headers: &HeaderMap, u
 ` : "";
   const imports = [
     hasAuthentication ? "use std::collections::HashMap;" : "",
-    `use axum::{\n    extract::{${[...(hasPath ? ["Path"] : []), ...(hasQuery ? ["Query"] : []), "State"].join(", ")}},\n    http::{${hasAuthentication ? "HeaderMap, " : ""}StatusCode},\n    response::{IntoResponse, Response},\n${routingFunctions.length > 0 ? `    routing::{${routingFunctions.join(", ")}},\n` : ""}    Json, Router,\n};`,
+    `use axum::{\n    extract::{${[...(hasUiCreate ? ["Form"] : []), ...(hasPath ? ["Path"] : []), ...(hasQuery ? ["Query"] : []), "State"].join(", ")}},\n    http::{${hasAuthentication ? "HeaderMap, " : ""}StatusCode},\n    response::{Html, IntoResponse, ${hasUiCreate ? "Redirect, " : ""}Response},\n${routingFunctions.length > 0 ? `    routing::{${routingFunctions.join(", ")}},\n` : ""}    Json, Router,\n};`,
     chronoTypes.length > 0 ? `use chrono::{${chronoTypes.join(", ")}};` : "",
     hasAuthentication ? "use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};" : "",
     `use serde::{${hasAuthentication ? "de::DeserializeOwned, " : ""}Deserialize, Serialize};`,
@@ -520,6 +634,7 @@ pub enum AppError {
     Domain { status: u16, code: &'static str, message: &'static str, retryable: bool },
     Database(sqlx::Error),
     Configuration(&'static str),
+    Ui(String),
 }
 
 impl AppError {
@@ -544,6 +659,7 @@ impl IntoResponse for AppError {
                 tracing::error!(event = "air.configuration.error", error = message);
                 (500, "CONFIGURATION_ERROR", message.to_string(), false)
             }
+            Self::Ui(message) => (400, "INVALID_UI_PAYLOAD", message, false),
             Self::Database(error) => {
                 tracing::error!(event = "air.database.error", error = %error);
                 (500, "DATABASE_ERROR", "Database operation failed.".to_string(), true)
@@ -555,7 +671,7 @@ impl IntoResponse for AppError {
 }
 
 ${authSupport}
-${[...contracts, ...principals, ...entities, ...commands, renderRouter(air)].join("\n\n")}
+${[...contracts, ...principals, ...entities, ...commands, renderUi(air), renderRouter(air)].join("\n\n")}
 `;
 }
 
@@ -647,6 +763,11 @@ function formatRust(source: string, edition: ResolvedRustTargetOptions["rustEdit
 }
 
 export function renderRustFiles(air: AirDocument, options: ResolvedRustTargetOptions): readonly PlannedRustFile[] {
+  if (options.database === "mongodb") {
+    return renderMongoRustFiles(air, options).map((file) => file.path.endsWith(".rs")
+      ? { ...file, content: formatRust(file.content, options.rustEdition) }
+      : file);
+  }
   const packageName = snakeCase(air.metadata.name).replaceAll("_", "-");
   const files: PlannedRustFile[] = [
     {
@@ -666,8 +787,16 @@ export function renderRustFiles(air: AirDocument, options: ResolvedRustTargetOpt
       content: `FROM rust:${options.rustVersion}-bookworm AS build\nWORKDIR /app\nCOPY . .\nRUN cargo build --release\nFROM debian:bookworm-slim\nCOPY --from=build /app/target/release/${packageName} /usr/local/bin/air-app\nEXPOSE 3000\nHEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 CMD ["air-app", "--healthcheck"]\nCMD ["air-app"]\n`,
     },
     {
+      path: ".dockerignore", kind: "configuration", airNodes: ["/metadata"],
+      content: ".air\n.env\n.git\ntarget\n",
+    },
+    {
+      path: "compose.yaml", kind: "configuration", airNodes: ["/metadata", "/spec/entities"],
+      content: `services:\n  database:\n    image: postgres:17-bookworm\n    environment:\n      POSTGRES_DB: app\n      POSTGRES_USER: postgres\n      POSTGRES_PASSWORD: postgres\n    healthcheck:\n      test: ["CMD-SHELL", "pg_isready -U postgres -d app"]\n      interval: 2s\n      timeout: 3s\n      retries: 20\n    volumes:\n      - air-postgres:/var/lib/postgresql/data\n  application:\n    build: .\n    depends_on:\n      database:\n        condition: service_healthy\n    environment:\n      DATABASE_URL: postgres://postgres:postgres@database:5432/app\n      AIR_AUTH_SECRET: local-development-secret-change-me\n      AIR_PORT: 3000\n    ports:\n      - "\${AIR_PORT:-3000}:3000"\n\nvolumes:\n  air-postgres:\n`,
+    },
+    {
       path: "README.md", kind: "documentation", airNodes: ["/"],
-      content: `# ${air.metadata.displayName ?? air.metadata.name}\n\nGenerated by AIR for Rust, Axum, SQLx, and PostgreSQL.\n\n\`\`\`bash\ncp .env.example .env\ncargo run\n\`\`\`\n`,
+      content: `# ${air.metadata.displayName ?? air.metadata.name}\n\nGenerated by AIR for Rust, Axum, SQLx, PostgreSQL, and a server-rendered resource UI.\n\n## Run everything with Docker\n\n\`\`\`bash\ndocker compose up --build\n\`\`\`\n\nOpen http://localhost:3000/air-runtime/ui.\n\n## Run against an existing PostgreSQL database\n\n\`\`\`bash\ncp .env.example .env\nset -a\n. ./.env\nset +a\ncargo run\n\`\`\`\n\nThe generated UI exposes only unauthenticated list/create resources. It never bypasses AIR authorization rules.\n`,
     },
   ];
   return files

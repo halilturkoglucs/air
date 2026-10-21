@@ -18,7 +18,7 @@ export const pythonCapabilityManifest = {
     "domain.commands": {
       support: "conditional",
       conditions: ["AIR v0.9 create/update/delete effects, named atomic updates, authorization, invariants, idempotency, bounded retry, and transactional message effects are generated."],
-      constraints: [{ kind: "primary-effect-in", values: ["create", "update", "delete"] }],
+      constraints: [{ kind: "primary-effect-in", values: ["create", "update", "delete"] }, { kind: "option-in", option: "database", values: ["postgres"] }],
     },
     "authorization.ownership": { support: "supported" },
     "authorization.roles-scopes": { support: "supported" },
@@ -26,7 +26,7 @@ export const pythonCapabilityManifest = {
     "domain.multi_effect": { support: "conditional", constraints: [{ kind: "maximum-named-effects", value: 32 }] },
     "domain.idempotency": { support: "supported" },
     "domain.delete": { support: "supported" },
-    "persistence.relational": { support: "conditional", conditions: ["PostgreSQL through psycopg 3 is the only persistence provider."], constraints: [{ kind: "option-in", option: "database", values: ["postgres"] }] },
+    "persistence.relational": { support: "conditional", conditions: ["PostgreSQL through psycopg 3 supports the complete target surface.", "MongoDB supports entity CRUD and collection queries without relational foreign-key enforcement."], constraints: [{ kind: "option-in", option: "database", values: ["postgres", "mongodb"] }], notes: "MongoDB mode rejects commands and asynchronous runtime features until their transactional semantics are implemented." },
     "messaging.publish": { support: "supported" },
     "messaging.consume": { support: "supported" },
     "messaging.tasks": { support: "supported" },

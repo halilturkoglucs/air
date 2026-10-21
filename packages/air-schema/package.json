@@ -22,7 +22,8 @@
     "./air-0.10.schema.json": "./schema/air-0.10.schema.json",
     "./system-0.1.schema.json": "./schema/system-0.1.schema.json",
     "./system-0.2.schema.json": "./schema/system-0.2.schema.json",
-    "./deployment-0.1.schema.json": "./schema/deployment-0.1.schema.json"
+    "./deployment-0.1.schema.json": "./schema/deployment-0.1.schema.json",
+    "./ui-0.1.schema.json": "./schema/ui-0.1.schema.json"
   },
   "files": [
     "dist",

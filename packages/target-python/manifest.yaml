@@ -32,6 +32,13 @@
             "update",
             "delete"
           ]
+        },
+        {
+          "kind": "option-in",
+          "option": "database",
+          "values": [
+            "postgres"
+          ]
         }
       ]
     },
@@ -62,17 +69,20 @@
     "persistence.relational": {
       "support": "conditional",
       "conditions": [
-        "PostgreSQL through psycopg 3 is the only persistence provider."
+        "PostgreSQL through psycopg 3 supports the complete target surface.",
+        "MongoDB supports entity CRUD and collection queries without relational foreign-key enforcement."
       ],
       "constraints": [
         {
           "kind": "option-in",
           "option": "database",
           "values": [
-            "postgres"
+            "postgres",
+            "mongodb"
           ]
         }
-      ]
+      ],
+      "notes": "MongoDB mode rejects commands and asynchronous runtime features until their transactional semantics are implemented."
     },
     "messaging.publish": {
       "support": "supported"

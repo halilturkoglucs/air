@@ -15,7 +15,7 @@ import {
   planAirEvolution,
   serializeAir,
 } from "@air/parser";
-import type { AirDeploymentDocument, AirDocument, AirSystemDocument } from "@air/schema";
+import type { AirDeploymentDocument, AirDocument, AirSystemDocument, AirUiDocument } from "@air/schema";
 import { loadComposition, planComposition } from "@air/composer";
 import { providerFor } from "@air/providers";
 import { importPostgres } from "@air/import-postgres";
@@ -111,6 +111,7 @@ Compile options:
   --rust-edition <edition>   Rust edition 2021 or 2024 (default: 2024)
   --rust-version <version>   Exact Rust toolchain version (default: 1.99.0)
   --python-version <version> Python 3 version (default: 3.12)
+  --database <name>         postgres or mongodb (default: postgres)
   --detach                   Omit managed-mode ownership metadata
 
 Migrate options:
@@ -303,6 +304,19 @@ function inspectSource(document: AirSourceDocument): string {
       "",
     ].join("\n");
   }
+  if (document.kind === "UI") {
+    const ui = document as AirUiDocument;
+    return [
+      `UI: ${ui.metadata.displayName ?? ui.metadata.name}`,
+      `Name: ${ui.metadata.name}`,
+      `AIR version: ${ui.apiVersion}`,
+      `Rendering: ${ui.spec.implementation.rendering}`,
+      `Technology: ${ui.spec.implementation.technology}`,
+      `Screens (${Object.keys(ui.spec.screens).length}): ${Object.keys(ui.spec.screens).join(", ")}`,
+      `Data sources (${Object.keys(ui.spec.dataSources ?? {}).length}): ${Object.keys(ui.spec.dataSources ?? {}).join(", ")}`,
+      "",
+    ].join("\n");
+  }
   const deployment = document as AirDeploymentDocument;
   return [
     `Deployment: ${deployment.metadata.displayName ?? deployment.metadata.name}`,
@@ -353,6 +367,7 @@ function parseCompileArguments(args: readonly string[]): CompileArguments | stri
   let rustEdition = "2024";
   let rustVersion = "1.99.0";
   let pythonVersion = "3.12";
+  let database = "postgres";
   let mode: "managed" | "detached" = "managed";
 
   for (let index = 0; index < args.length; index += 1) {
@@ -390,6 +405,9 @@ function parseCompileArguments(args: readonly string[]): CompileArguments | stri
         case "--python-version":
           pythonVersion = value;
           break;
+        case "--database":
+          database = value;
+          break;
         default:
           return `Unknown compile option: ${argument}.`;
       }
@@ -404,6 +422,7 @@ function parseCompileArguments(args: readonly string[]): CompileArguments | stri
   if (!["pnpm", "npm", "yarn", "bun"].includes(packageManager)) {
     return `Unsupported package manager: ${packageManager}.`;
   }
+  if (database !== "postgres" && database !== "mongodb") return `Unsupported database: ${database}.`;
   if (target === "rust" || target === "rust-axum") {
     if (deployment !== undefined && deployment !== "binary" && deployment !== "container") return `Unsupported Rust deployment: ${deployment}.`;
     if (rustEdition !== "2021" && rustEdition !== "2024") return `Unsupported Rust edition: ${rustEdition}.`;
@@ -417,7 +436,7 @@ function parseCompileArguments(args: readonly string[]): CompileArguments | stri
         rustEdition,
         rustVersion,
         deployment: (deployment ?? "binary") as "binary" | "container",
-        database: "postgres",
+        database,
       },
     };
   }
@@ -433,7 +452,7 @@ function parseCompileArguments(args: readonly string[]): CompileArguments | stri
       options: {
         pythonVersion,
         deployment: (deployment ?? "process") as "process" | "container",
-        database: "postgres",
+        database,
       },
     };
   }
@@ -449,7 +468,7 @@ function parseCompileArguments(args: readonly string[]): CompileArguments | stri
       frameworkVersion,
       packageManager: packageManager as Required<NextjsTargetOptions>["packageManager"],
       deployment: (deployment ?? "vercel") as "vercel" | "node",
-      database: "postgres",
+      database,
     },
   };
 }
@@ -2016,6 +2035,7 @@ export async function runCli(args: readonly string[], io: CliIo = defaultIo): Pr
     if (command === "validate") {
       if (document.kind === "Application") io.stdout(`Valid AIR document: ${filePath}\n  ${Object.keys(document.spec.entities).length} entity/entities, ${document.spec.http?.operations.length ?? 0} HTTP operation(s)\n`);
       else if (document.kind === "System") io.stdout(`Valid AIR System document: ${filePath}\n  ${Object.keys(document.spec.components).length} component(s), ${Object.keys(document.spec.channels ?? {}).length} channel(s)\n`);
+      else if (document.kind === "UI") io.stdout(`Valid AIR UI document: ${filePath}\n  ${Object.keys(document.spec.screens).length} screen(s), ${document.spec.implementation.rendering} ${document.spec.implementation.technology}\n`);
       else io.stdout(`Valid AIR Deployment document: ${filePath}\n  ${Object.keys(document.spec.resources).length} resource(s), profile: ${document.spec.profile}\n`);
     } else {
       io.stdout(inspectSource(document));
