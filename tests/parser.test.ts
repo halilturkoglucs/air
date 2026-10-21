@@ -12,6 +12,7 @@ import {
   parseAir,
   parseDeployment,
   parseSystem,
+  parseUi,
 } from "@air/parser";
 
 const todoPath = resolve("examples/todo/air.yaml");
@@ -352,6 +353,75 @@ spec:
 
     expect(system.spec.components.inventoryWorker?.role).toBe("worker");
     expect(deployment.spec.resources.events).toMatchObject({ kind: "broker", provider: "kafka" });
+  });
+
+  it("validates framework-neutral UI documents", () => {
+    const ui = parseUi(`
+apiVersion: air.dev/ui/v0.1
+kind: UI
+metadata: { name: vocabulary-ui }
+spec:
+  application: vocabulary.air.yaml
+  implementation:
+    rendering: hybrid
+    technology: Next.js
+    language: TypeScript
+    framework: React
+  design:
+    tokens:
+      color: { primary: "#ff7f11", surface: "#ffffff" }
+      spacing: { sm: 8, md: 16 }
+  dataSources:
+    vocabulary:
+      kind: application
+      operation: listVocabulary
+  screens:
+    vocabulary:
+      path: /dashboard/vocabulary
+      load: [vocabulary]
+      root:
+        id: page
+        kind: element
+        element: main
+        children:
+          - id: title
+            kind: text
+            text: { translation: vocabulary.title }
+          - id: table
+            kind: component
+            component: DataTable
+            properties:
+              rows: { expression: data.vocabulary.items }
+            actions:
+              - { on: rowClick, kind: navigate, target: "/vocabulary/{row.id}" }
+  localization:
+    defaultLocale: en
+    locales: [en, nl, ar]
+    direction: { en: ltr, nl: ltr, ar: rtl }
+`);
+
+    expect(ui.spec.implementation).toMatchObject({ rendering: "hybrid", technology: "Next.js" });
+    expect(ui.spec.screens.vocabulary?.root.children).toHaveLength(2);
+  });
+
+  it("rejects invalid UI structure and references", () => {
+    expect(() => parseUi(`
+apiVersion: air.dev/ui/v0.1
+kind: UI
+metadata: { name: broken-ui }
+spec:
+  implementation: { rendering: server, technology: Spring JSP }
+  dataSources: {}
+  screens:
+    home:
+      load: [missing]
+      root:
+        id: duplicate
+        kind: fragment
+        children:
+          - { id: duplicate, kind: element }
+  localization: { defaultLocale: nl, locales: [en] }
+`)).toThrow(AirValidationError);
   });
 
   it("classifies semantic changes and produces a deterministic evolution plan", () => {

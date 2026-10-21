@@ -10,3 +10,6 @@ packages/cli/analyzers/
 .DS_Store
 packages/cli/LICENSE
 packages/cli/NOTICE
+experiments/
+graphify-out/
+.graphify/

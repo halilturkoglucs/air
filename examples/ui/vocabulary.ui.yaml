@@ -1,0 +1,49 @@
+apiVersion: air.dev/ui/v0.1
+kind: UI
+metadata:
+  name: vocabulary-ui
+  displayName: Vocabulary UI
+  description: Framework-neutral vocabulary screen used to demonstrate AIR UI documents.
+spec:
+  application: ../todo/air.yaml
+  implementation:
+    rendering: hybrid
+    technology: Next.js
+    language: TypeScript
+    framework: React
+  design:
+    tokens:
+      color: { primary: "#ff7f11", surface: "#ffffff", text: "#333333" }
+      spacing: { small: 8, medium: 16, large: 24 }
+  dataSources:
+    vocabulary:
+      kind: application
+      operation: listVocabularyItems
+  screens:
+    vocabulary:
+      path: /dashboard/vocabulary
+      title: My Vocabulary
+      load: [vocabulary]
+      root:
+        id: page
+        kind: element
+        element: main
+        children:
+          - id: title
+            kind: text
+            text: { translation: vocabulary.title }
+          - id: table
+            kind: component
+            component: DataTable
+            properties:
+              rows: { expression: data.vocabulary.items }
+            actions:
+              - { on: rowClick, kind: navigate, target: "/vocabulary/{row.id}" }
+  localization:
+    defaultLocale: en
+    locales: [en, nl, ar]
+    direction: { en: ltr, nl: ltr, ar: rtl }
+  provenance:
+    mode: authored
+    restrictions:
+      - Backend authorization remains authoritative.

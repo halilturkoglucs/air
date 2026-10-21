@@ -1,5 +1,6 @@
 import type { AirDocument, ConstraintValue, EntityDefinition, FieldDefinition } from "@air/schema";
 import { snakeCase, tableName } from "./naming.js";
+import { renderMongoPythonFiles } from "./mongo.js";
 import type { PlannedPythonFile, ResolvedPythonTargetOptions } from "./types.js";
 
 function sqlType(field: FieldDefinition): string {
@@ -728,6 +729,7 @@ async def realtime_sse(channel_name: str, cursor: int = 0):
 }
 
 export function renderPythonFiles(air: AirDocument, options: ResolvedPythonTargetOptions): readonly PlannedPythonFile[] {
+  if (options.database === "mongodb") return renderMongoPythonFiles(air, options);
   const files: PlannedPythonFile[] = [
     {
       path: "pyproject.toml", kind: "configuration", airNodes: ["/metadata"],

@@ -73,6 +73,19 @@ describe("AIR CLI", () => {
     expect(output.stderr()).toBe("");
   });
 
+  it("validates and inspects a UI document", async () => {
+    const file = resolve("examples/ui/vocabulary.ui.yaml");
+    const validation = captureIo();
+    expect(await runCli(["validate", file], validation.io)).toBe(0);
+    expect(validation.stdout()).toContain("Valid AIR UI document:");
+    expect(validation.stdout()).toContain("1 screen(s), hybrid Next.js");
+
+    const inspection = captureIo();
+    expect(await runCli(["inspect", file], inspection.io)).toBe(0);
+    expect(inspection.stdout()).toContain("UI: Vocabulary UI");
+    expect(inspection.stdout()).toContain("Screens (1): vocabulary");
+  });
+
   it("prints a stable semantic inspection", async () => {
     const output = captureIo();
     const exitCode = await runCli(["inspect", resolve("examples/todo/air.yaml")], output.io);

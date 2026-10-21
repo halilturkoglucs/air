@@ -8,7 +8,7 @@ import { planRust, RustTargetAdapter, rustCapabilityManifest } from "@air/target
 describe("Rust target boundary", () => {
   it("declares an explicit native capability boundary", () => {
     expect(rustCapabilityManifest.capabilities["http.crud"].support).toBe("supported");
-    expect(rustCapabilityManifest.capabilities["ui.web"].support).toBe("unsupported");
+    expect(rustCapabilityManifest.capabilities["ui.web"].support).toBe("supported");
   });
 
   it("plans deterministic Axum, SQLx, and PostgreSQL output", async () => {
@@ -24,11 +24,17 @@ describe("Rust target boundary", () => {
     expect(first.find((file) => file.path === "Cargo.toml")?.content).toContain('rust-version = "1.99.0"');
     expect(first.find((file) => file.path === "rust-toolchain.toml")?.content).toContain('channel = "1.99.0"');
     expect(first.find((file) => file.path === "src/generated.rs")?.content).toContain("pub async fn create_todo");
+    expect(first.find((file) => file.path === "src/generated.rs")?.content).toContain("pub async fn air_ui");
+    expect(first.find((file) => file.path === "src/generated.rs")?.content).toContain("pub async fn ui_create_todo");
+    expect(first.find((file) => file.path === "src/generated.rs")?.content).toContain('"/air-runtime/ui"');
     expect(first.find((file) => file.path === "migrations/0001_air.sql")?.content).toContain("CREATE TABLE todos");
     expect(first.find((file) => file.path === "src/generated.rs")?.content).toContain('"/air-runtime/ready"');
     expect(first.find((file) => file.path === "src/main.rs")?.content).toContain("with_graceful_shutdown");
     expect(first.find((file) => file.path === "src/main.rs")?.content).toContain('std::env::var("AIR_PORT")');
     expect(first.find((file) => file.path === "Dockerfile")?.content).toContain('CMD ["air-app", "--healthcheck"]');
+    expect(first.find((file) => file.path === ".dockerignore")?.content).toContain("target");
+    expect(first.find((file) => file.path === "compose.yaml")?.content).toContain("postgres:17-bookworm");
+    expect(first.find((file) => file.path === "README.md")?.content).toContain("http://localhost:3000/air-runtime/ui");
   });
 
   it("lowers the ledger command to locks, atomic arithmetic, replay, and retry", async () => {
@@ -41,6 +47,27 @@ describe("Rust target boundary", () => {
     expect(generated).toContain("if let Some(replayed)");
     expect(generated).toContain("for attempt in 1..=3");
     expect(generated).toContain('Some("40001" | "40P01" | "23505")');
+  });
+
+  it("plans MongoDB CRUD, UI, and container output", async () => {
+    const air = await loadAirFile(resolve("examples/todo/air.yaml"));
+    const files = planRust(air, { database: "mongodb" });
+
+    expect(files.find((file) => file.path === "Cargo.toml")?.content).toContain('mongodb = "3"');
+    expect(files.find((file) => file.path === "Cargo.toml")?.content).not.toContain("sqlx");
+    expect(files.find((file) => file.path === "src/generated.rs")?.content).toContain("insert_one");
+    expect(files.find((file) => file.path === "src/generated.rs")?.content).toContain("pub async fn air_ui");
+    expect(files.find((file) => file.path === "compose.yaml")?.content).toContain("mongo:8");
+    expect(files.some((file) => file.path.startsWith("migrations/"))).toBe(false);
+  });
+
+  it("rejects advanced transactional AIR runtime features in MongoDB mode", async () => {
+    const air = await loadAirFile(resolve("examples/ledger/air.yaml"));
+    const directory = await mkdtemp(resolve(tmpdir(), "air-rust-mongo-reject-"));
+    const result = await new RustTargetAdapter().compile({ air, outputDirectory: directory, mode: "managed", options: { database: "mongodb" } });
+
+    expect(result.status).toBe("failed");
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({ code: "RUST_MONGODB_ADVANCED_RUNTIME_UNSUPPORTED" }));
   });
 
   it("preserves route strings without regular-expression normalization", async () => {

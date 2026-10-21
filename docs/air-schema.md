@@ -1,6 +1,6 @@
 # AIR schemas
 
-The public application schemas are [`air-0.1.schema.json`](../packages/air-schema/schema/air-0.1.schema.json) through [`air-0.10.schema.json`](../packages/air-schema/schema/air-0.10.schema.json). System documents support v0.1 and v0.2; Deployment remains v0.1. AIR YAML is a human-friendly serialization of these JSON data models.
+The public application schemas are [`air-0.1.schema.json`](../packages/air-schema/schema/air-0.1.schema.json) through [`air-0.10.schema.json`](../packages/air-schema/schema/air-0.10.schema.json). System documents support v0.1 and v0.2; Deployment remains v0.1. The framework-neutral UI document is v0.1. AIR YAML is a human-friendly serialization of these JSON data models.
 
 ## Versioning
 
@@ -51,6 +51,12 @@ Transformations are intentionally bounded to projection, rename, literals, scala
 `air.dev/system/v0.2` additionally permits typed foreign components beside managed components. A foreign component declares its coarse type and interfaces, but AIR does not claim ownership of its implementation.
 
 `air.dev/deployment/v0.1` binds those logical resources to explicit providers and a deployment profile. Provider configuration stays out of application semantics. Plugins are named and version-locked; AIR never scans arbitrary installed packages. Supported first-party bindings are Kafka-compatible brokers (including Redpanda), RabbitMQ, PostgreSQL outbox/inbox queues, PostgreSQL persistence, and Redis derived caches.
+
+## UI documents
+
+`air.dev/ui/v0.1` preserves interface intent independently from backend and renderer choices. It models screens, recursive element/component trees, bindings, interactions, data sources, design tokens, assets, localization, implementation hints, and extraction provenance. `implementation.rendering` distinguishes static, server, client, and hybrid rendering while `technology` remains an open string. This supports HTML, JSP, React, Next.js, native widget sets, and future renderers without adding framework concepts to Application documents.
+
+UI documents may reference Application operation IDs but cannot redefine application authorization or transactional semantics. See the [UI schema guide](ui-schema.md).
 
 ## Identity, generation and nullability in v0.2
 

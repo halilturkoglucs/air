@@ -47,6 +47,15 @@ function diagnostic(code: string, message: string, airPath?: string, help?: stri
 
 export function validatePythonTarget(context: CompilationContext<PythonTargetOptions>): readonly CompilationDiagnostic[] {
   const diagnostics: CompilationDiagnostic[] = [];
+  const database = context.options.database ?? "postgres";
+  if (database === "mongodb") {
+    const unsupportedSections = ["commands", "events", "tasks", "consumers", "schedules", "cachedReads", "realtime"] as const;
+    for (const section of unsupportedSections) {
+      if (Object.keys(context.air.spec[section] ?? {}).length > 0) {
+        diagnostics.push(diagnostic("PYTHON_MONGODB_ADVANCED_RUNTIME_UNSUPPORTED", `MongoDB mode cannot lower AIR ${section} yet; its transactional runtime is currently PostgreSQL-only.`, `/spec/${section}`, "Use --database postgres or compile a CRUD-only AIR application to MongoDB."));
+      }
+    }
+  }
   if (Object.keys(context.air.spec.ports ?? {}).length > 0) {
     diagnostics.push(diagnostic("PYTHON_OUTBOUND_PORTS_UNSUPPORTED", "The Python target cannot lower AIR outbound ports yet.", "/spec/ports", "Keep the port behind a foreign component or select a target with outbound-port support."));
   }
@@ -64,6 +73,11 @@ export function validatePythonTarget(context: CompilationContext<PythonTargetOpt
   for (const [entityName, entity] of Object.entries(context.air.spec.entities)) {
     if (Object.values(entity.fields).filter((field) => field.primaryKey === true).length > 1) {
       diagnostics.push(diagnostic("PYTHON_COMPOSITE_PRIMARY_KEY_UNSUPPORTED", `Entity ${entityName} uses a composite primary key.`, `/spec/entities/${entityName}/fields`));
+    }
+    if (database === "mongodb") {
+      for (const [fieldName, field] of Object.entries(entity.fields)) {
+        if (field.generated === "auto-increment") diagnostics.push(diagnostic("PYTHON_MONGODB_AUTO_INCREMENT_UNSUPPORTED", `MongoDB mode cannot generate auto-increment field ${entityName}.${fieldName}.`, `/spec/entities/${entityName}/fields/${fieldName}/generated`, "Use a UUID-generated identifier for portable MongoDB output."));
+      }
     }
     for (const [relationshipName, relationship] of Object.entries(entity.relationships ?? {})) {
       if (relationship.cardinality === "many-to-many") diagnostics.push(diagnostic("PYTHON_MANY_TO_MANY_REQUIRES_JOIN_ENTITY", `Relationship ${entityName}.${relationshipName} requires an explicit join entity.`, `/spec/entities/${entityName}/relationships/${relationshipName}`));
@@ -141,7 +155,9 @@ export async function compilePython(context: CompilationContext<PythonTargetOpti
         source: { apiVersion: context.air.apiVersion, hash: sourceHash },
         compiler: { version: COMPILER_VERSION },
         target: { id: TARGET_ID, version: TARGET_VERSION, options: resolved },
-        dependencies: { fastapi: "0.115", psycopg: "3.2", psycopgPool: "3.2", pydantic: "2", pyjwt: "2.10", python: resolved.pythonVersion, uvicorn: "0.34" },
+        dependencies: resolved.database === "mongodb"
+          ? { fastapi: "0.115", pymongo: "4", pydantic: "2", pyjwt: "2.10", python: resolved.pythonVersion, uvicorn: "0.34" }
+          : { fastapi: "0.115", psycopg: "3.2", psycopgPool: "3.2", pydantic: "2", pyjwt: "2.10", python: resolved.pythonVersion, uvicorn: "0.34" },
         artifacts: artifacts.map((item) => ({ path: item.path, checksum: item.checksum })),
       }, null, 2)}\n`;
       await writeAtomic(join(context.outputDirectory, LOCK_PATH), lockContent);

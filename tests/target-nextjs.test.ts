@@ -70,6 +70,28 @@ describe("Next.js target boundary", () => {
     expect(responses).toContain('event: "air.http.unhandled_error"');
   });
 
+  it("plans MongoDB CRUD output without PostgreSQL artifacts", async () => {
+    const air = await loadAirFile(resolve("examples/todo/air.yaml"));
+    const files = planNextjs(air, { database: "mongodb", deployment: "node" });
+    const dependencies = JSON.parse(files.find((file) => file.path === "package.json")?.content ?? "{}").dependencies;
+
+    expect(dependencies.mongodb).toBeDefined();
+    expect(dependencies.drizzle).toBeUndefined();
+    expect(files.find((file) => file.path === "src/db/client.ts")?.content).toContain("MongoClient");
+    expect(files.find((file) => file.path === "src/repositories/todo.ts")?.content).toContain("insertOne");
+    expect(files.find((file) => file.path === "compose.yaml")?.content).toContain("mongo:8");
+    expect(files.some((file) => file.path.startsWith("migrations/"))).toBe(false);
+  });
+
+  it("rejects advanced transactional AIR runtime features in MongoDB mode", async () => {
+    const air = await loadAirFile(resolve("examples/ledger/air.yaml"));
+    const directory = await mkdtemp(resolve(tmpdir(), "air-nextjs-mongo-reject-"));
+    const result = await new NextjsTargetAdapter().compile({ air, outputDirectory: directory, mode: "managed", options: { database: "mongodb" } });
+
+    expect(result.status).toBe("failed");
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({ code: "NEXTJS_MONGODB_ADVANCED_RUNTIME_UNSUPPORTED" }));
+  });
+
   it("generates a managed Next.js project with provenance", async () => {
     const air = await loadAirFile(resolve("examples/todo/air.yaml"));
     const target = new NextjsTargetAdapter();

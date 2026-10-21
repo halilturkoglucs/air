@@ -3,14 +3,14 @@ import type { ArtifactKind } from "@air/compiler-core";
 export interface RustTargetOptions {
   readonly rustEdition?: "2021" | "2024";
   readonly rustVersion?: string;
-  readonly database?: "postgres";
+  readonly database?: "postgres" | "mongodb";
   readonly deployment?: "binary" | "container";
 }
 
 export interface ResolvedRustTargetOptions {
   readonly rustEdition: "2021" | "2024";
   readonly rustVersion: string;
-  readonly database: "postgres";
+  readonly database: "postgres" | "mongodb";
   readonly deployment: "binary" | "container";
 }
 

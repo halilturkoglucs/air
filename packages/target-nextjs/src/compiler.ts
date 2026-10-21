@@ -107,6 +107,21 @@ export function validateNextjsTarget(
   const operations = air.spec.http?.operations ?? [];
   const operationRoutes = new Map<string, { owner: string; methods: Set<string> }>();
   const tableOwners = new Map<string, string>();
+  const database = context.options.database ?? "postgres";
+
+  if (database === "mongodb") {
+    const unsupportedSections = ["commands", "events", "tasks", "consumers", "schedules", "cachedReads", "realtime"] as const;
+    for (const section of unsupportedSections) {
+      if (Object.keys(air.spec[section] ?? {}).length > 0) {
+        diagnostics.push(diagnostic(
+          "NEXTJS_MONGODB_ADVANCED_RUNTIME_UNSUPPORTED",
+          `MongoDB mode cannot lower AIR ${section} yet; its transactional runtime is currently PostgreSQL-only.`,
+          `/spec/${section}`,
+          "Use --database postgres for this application or compile a CRUD-only AIR application to MongoDB.",
+        ));
+      }
+    }
+  }
 
   if (Object.keys(air.spec.ports ?? {}).length > 0) {
     diagnostics.push(diagnostic(
@@ -148,6 +163,19 @@ export function validateNextjsTarget(
       );
     }
     tableOwners.set(table, entityName);
+
+    if (database === "mongodb") {
+      for (const [fieldName, field] of Object.entries(entity.fields)) {
+        if (field.generated === "auto-increment") {
+          diagnostics.push(diagnostic(
+            "NEXTJS_MONGODB_AUTO_INCREMENT_UNSUPPORTED",
+            `MongoDB mode cannot generate auto-increment field ${entityName}.${fieldName}.`,
+            `${entityPath}/fields/${fieldName}/generated`,
+            "Use a UUID-generated identifier for portable MongoDB output.",
+          ));
+        }
+      }
+    }
 
     for (const [relationshipName, relationship] of Object.entries(entity.relationships ?? {})) {
       if (relationship.cardinality === "many-to-many") {
@@ -443,13 +471,9 @@ export async function compileNextjs(
         source: { apiVersion: context.air.apiVersion, hash: sourceHash },
         compiler: { version: COMPILER_VERSION },
         target: { id: TARGET_ID, version: TARGET_VERSION, options: resolvedOptions },
-        dependencies: {
-          next: resolvedOptions.frameworkVersion,
-          drizzleOrm: "0.45.1",
-          jose: "6.1.3",
-          postgres: "3.4.8",
-          zod: "4.3.6",
-        },
+        dependencies: resolvedOptions.database === "mongodb"
+          ? { next: resolvedOptions.frameworkVersion, mongodb: "6", jose: "6.1.3", zod: "4.3.6" }
+          : { next: resolvedOptions.frameworkVersion, drizzleOrm: "0.45.1", jose: "6.1.3", postgres: "3.4.8", zod: "4.3.6" },
         artifacts: artifacts.map((artifact) => ({
           path: artifact.path,
           checksum: artifact.checksum,

@@ -2,13 +2,13 @@ import type { ArtifactKind } from "@air/compiler-core";
 
 export interface PythonTargetOptions {
   readonly pythonVersion?: string;
-  readonly database?: "postgres";
+  readonly database?: "postgres" | "mongodb";
   readonly deployment?: "process" | "container";
 }
 
 export interface ResolvedPythonTargetOptions {
   readonly pythonVersion: string;
-  readonly database: "postgres";
+  readonly database: "postgres" | "mongodb";
   readonly deployment: "process" | "container";
 }
 
