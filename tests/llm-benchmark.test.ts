@@ -11,6 +11,7 @@ import {
   root,
   sha256File,
   suiteSha256,
+  tokenUsage,
   validateEvidence,
   wilsonInterval,
 } from "../scripts/lib/llm-benchmark.mjs";
@@ -38,7 +39,7 @@ async function evidenceFixture() {
       inputs: { taskSha256: artifactHash, promptSha256: artifactHash, starterSha256: artifactHash },
       measurements: {
         passAt1: false, passAt3: false, roundsUsed: 3, passedScenarios: 2, totalScenarios: 3,
-        escapedDefects: 2, buildFailures: 0, mismatchesByCategory: { idempotency: 1, messages: 1 }, durationMs: 1000,
+        escapedDefects: 2, buildFailures: 0, infrastructureRetries: 0, mismatchesByCategory: { idempotency: 1, messages: 1 }, durationMs: 1000,
       },
       artifacts: { patch: artifact, transcript: artifact, result: artifact },
     }],
@@ -61,6 +62,14 @@ describe("LLM verification-lift benchmark", () => {
     const summary = aggregateEvidence({ runs: [run("control", false, 3), run("air", true, 2)] });
     expect(summary.arms.control).toMatchObject({ total: 1, passAt3: 0, escapedDefects: 2, medianRounds: 3 });
     expect(summary.arms.air).toMatchObject({ total: 1, passAt3: 1, escapedDefects: 0, medianRounds: 2 });
+  });
+
+  it("sums usage from independent repair turns", () => {
+    const transcript = [
+      JSON.stringify({ type: "turn.completed", usage: { input_tokens: 100, output_tokens: 20 } }),
+      JSON.stringify({ type: "turn.completed", usage: { input_tokens: 80, output_tokens: 10 } }),
+    ].join("\n");
+    expect(tokenUsage(transcript)).toEqual({ inputTokens: 180, outputTokens: 30 });
   });
 
   it("renders a deterministic evidence-backed scorecard", () => {

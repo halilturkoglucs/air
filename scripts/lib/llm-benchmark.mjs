@@ -62,7 +62,7 @@ function validateEvidenceShape(evidence) {
     for (const key of ["taskSha256", "promptSha256", "starterSha256"]) assertSha256(run.inputs?.[key], `${run.id}.inputs.${key}`);
     const measurements = run.measurements;
     if (!measurements || typeof measurements.passAt1 !== "boolean" || typeof measurements.passAt3 !== "boolean") throw new Error(`Invalid benchmark evidence: ${run.id} pass measurements are required.`);
-    for (const key of ["roundsUsed", "passedScenarios", "totalScenarios", "escapedDefects", "buildFailures", "durationMs"]) if (!Number.isInteger(measurements[key]) || measurements[key] < 0) throw new Error(`Invalid benchmark evidence: ${run.id}.measurements.${key} must be a non-negative integer.`);
+    for (const key of ["roundsUsed", "passedScenarios", "totalScenarios", "escapedDefects", "buildFailures", "infrastructureRetries", "durationMs"]) if (!Number.isInteger(measurements[key]) || measurements[key] < 0) throw new Error(`Invalid benchmark evidence: ${run.id}.measurements.${key} must be a non-negative integer.`);
     if (measurements.roundsUsed < 1 || measurements.totalScenarios < 1 || !measurements.mismatchesByCategory || typeof measurements.mismatchesByCategory !== "object") throw new Error(`Invalid benchmark evidence: ${run.id} measurements are incomplete.`);
     for (const key of ["patch", "transcript", "result"]) {
       if (typeof run.artifacts?.[key]?.path !== "string" || !run.artifacts[key].path) throw new Error(`Invalid benchmark evidence: ${run.id}.artifacts.${key}.path is required.`);
@@ -254,19 +254,16 @@ export function tokenUsage(jsonl) {
     if (!line.trim()) continue;
     try {
       const value = JSON.parse(line);
-      const visit = (item) => {
-        if (!item || typeof item !== "object") return;
-        if (Number.isFinite(item.input_tokens)) inputTokens = Math.max(inputTokens, Number(item.input_tokens));
-        if (Number.isFinite(item.output_tokens)) outputTokens = Math.max(outputTokens, Number(item.output_tokens));
-        for (const child of Object.values(item)) visit(child);
-      };
-      visit(value);
+      if (value.type === "turn.completed" && value.usage) {
+        if (Number.isFinite(value.usage.input_tokens)) inputTokens += Number(value.usage.input_tokens);
+        if (Number.isFinite(value.usage.output_tokens)) outputTokens += Number(value.usage.output_tokens);
+      }
     } catch { /* preserve non-JSON diagnostics, but they have no usage data */ }
   }
   return { inputTokens, outputTokens };
 }
 
-export function measurementFromResult(slice, result, rounds, passAt1, buildFailures, durationMs, usage) {
+export function measurementFromResult(slice, result, rounds, passAt1, buildFailures, infrastructureRetries, durationMs, usage) {
   const failed = new Set(result.scenarios.filter((scenario) => !scenario.passed).map((scenario) => scenario.id));
   const mismatchesByCategory = {};
   for (const scenario of failed) for (const category of slice.scenarioCategories[scenario] ?? ["unclassified"]) mismatchesByCategory[category] = (mismatchesByCategory[category] ?? 0) + 1;
@@ -278,6 +275,7 @@ export function measurementFromResult(slice, result, rounds, passAt1, buildFailu
     totalScenarios: result.scenarios.length,
     escapedDefects: Object.values(mismatchesByCategory).reduce((sum, count) => sum + count, 0),
     buildFailures,
+    infrastructureRetries,
     mismatchesByCategory,
     durationMs,
     ...(usage.inputTokens > 0 ? { inputTokens: usage.inputTokens } : {}),

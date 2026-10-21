@@ -74,7 +74,7 @@
         "measurements": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["passAt1", "passAt3", "roundsUsed", "passedScenarios", "totalScenarios", "escapedDefects", "buildFailures", "mismatchesByCategory", "durationMs"],
+          "required": ["passAt1", "passAt3", "roundsUsed", "passedScenarios", "totalScenarios", "escapedDefects", "buildFailures", "infrastructureRetries", "mismatchesByCategory", "durationMs"],
           "properties": {
             "passAt1": { "type": "boolean" },
             "passAt3": { "type": "boolean" },
@@ -83,6 +83,7 @@
             "totalScenarios": { "type": "integer", "minimum": 1 },
             "escapedDefects": { "type": "integer", "minimum": 0 },
             "buildFailures": { "type": "integer", "minimum": 0 },
+            "infrastructureRetries": { "type": "integer", "minimum": 0 },
             "mismatchesByCategory": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 0 } },
             "durationMs": { "type": "integer", "minimum": 0 },
             "inputTokens": { "type": "integer", "minimum": 0 },

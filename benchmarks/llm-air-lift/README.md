@@ -23,6 +23,7 @@ For concurrent local execution, run one `--slice` per process with a distinct `-
 - fully correct migrations and escaped defects
 - scenario results grouped by HTTP, database, messages, outbound calls, ordering, rollback, idempotency, authorization, filtering, and pagination
 - repair rounds, duration, build failures, and token counts when the agent exposes them
+- bounded infrastructure retries, which do not consume repair rounds and restore the pre-attempt candidate before retrying
 
 Runtime throughput remains documented separately in [`docs/benchmarking.md`](../../docs/benchmarking.md). This benchmark measures verification lift, not generated-runtime speed.
 

@@ -71,24 +71,33 @@ for (const target of targets) {
   let hiddenResult;
   let passAt1 = false;
   let buildFailures = 0;
+  let infrastructureRetries = 0;
   let roundsUsed = 0;
   const startedAt = Date.now();
 
   for (let round = 1; round <= suite.budget.repairRounds; round += 1) {
     roundsUsed = round;
     const prompt = round === 1 ? basePrompt : `${basePrompt}\nThis is repair round ${round} of ${suite.budget.repairRounds}. The current files contain your previous attempt.\n\nPrevious verification feedback:\n${previousFeedback}\n`;
-    const run = await runProcess("codex", [
-      "exec", "--ephemeral", "--ignore-user-config", "--ignore-rules", "--approve-for-me",
-      "--model", model,
-      "--config", `model_reasoning_effort=\"${reasoning}\"`, "--cd", workspace,
-      "--json", prompt,
-    ], {
-      cwd: workspace,
-      onStdout: (chunk) => process.stdout.write(chunk.includes("turn.completed") ? "." : ""),
-      onStderr: (chunk) => process.stderr.write(chunk),
-    });
-    transcriptParts.push(JSON.stringify({ kind: "round", round, exitCode: run.code }), run.stdout, run.stderr);
-    if (run.code !== 0) throw new Error(`Codex failed for ${target.id} round ${round} with exit ${run.code}: ${run.stderr.trim() || run.stdout.trim()}`);
+    const candidateBeforeRound = await readFile(resolve(workspace, "candidate.mjs"), "utf8");
+    let run;
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      run = await runProcess("codex", [
+        "exec", "--ephemeral", "--ignore-user-config", "--ignore-rules", "--approve-for-me",
+        "--model", model,
+        "--config", `model_reasoning_effort=\"${reasoning}\"`, "--cd", workspace,
+        "--json", prompt,
+      ], {
+        cwd: workspace,
+        onStdout: (chunk) => process.stdout.write(chunk.includes("turn.completed") ? "." : ""),
+        onStderr: (chunk) => process.stderr.write(chunk),
+      });
+      transcriptParts.push(JSON.stringify({ kind: "round", round, infrastructureAttempt: attempt, exitCode: run.code }), run.stdout, run.stderr);
+      if (run.code === 0) break;
+      if (attempt === 2) throw new Error(`Codex failed for ${target.id} round ${round} after one infrastructure retry: ${run.stderr.trim() || run.stdout.trim()}`);
+      infrastructureRetries += 1;
+      await writeFile(resolve(workspace, "candidate.mjs"), candidateBeforeRound, "utf8");
+      console.log(`\n[${target.id}] retrying round ${round} after Codex exit ${run.code}`);
+    }
     const ordinary = await runProcess("npm", ["test"], { cwd: workspace });
     if (ordinary.code !== 0) buildFailures += 1;
     hiddenResult = await evaluateCandidate(target.slice, resolve(workspace, "candidate.mjs"), "evaluation");
@@ -127,7 +136,7 @@ for (const target of targets) {
       promptSha256: sha256(basePrompt),
       starterSha256: starterHash,
     },
-    measurements: measurementFromResult(target.slice, hiddenResult, roundsUsed, passAt1, buildFailures, Date.now() - startedAt, usage),
+    measurements: measurementFromResult(target.slice, hiddenResult, roundsUsed, passAt1, buildFailures, infrastructureRetries, Date.now() - startedAt, usage),
     artifacts: {
       patch: { path: relative(benchmarkRoot, patchPath), sha256: await sha256File(patchPath) },
       transcript: { path: relative(benchmarkRoot, transcriptPath), sha256: await sha256File(transcriptPath) },
