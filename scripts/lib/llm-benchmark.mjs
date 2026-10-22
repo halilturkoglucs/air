@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { execFileSync, spawn } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { cp, mkdir, mkdtemp, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, relative, resolve, sep } from "node:path";
@@ -30,7 +30,7 @@ export async function suiteSha256() {
   const files = (await filesBelow(benchmarkRoot))
     .filter((path) => {
       const first = relative(benchmarkRoot, path).split(sep)[0];
-      return !["results", "results-batches", "badges", ".checkpoints"].includes(first);
+      return !["results", "results-batches", "badges", ".checkpoints", "archive"].includes(first);
     })
     .sort();
   const material = [];
@@ -64,7 +64,7 @@ function validateEvidenceShape(evidence) {
     if (!run || typeof run !== "object" || !/^[a-z0-9-]+$/u.test(run.id) || !["control", "air"].includes(run.arm) || !Number.isInteger(run.trial)) throw new Error("Invalid benchmark evidence: malformed run identity.");
     for (const key of ["taskSha256", "promptSha256", "starterSha256"]) assertSha256(run.inputs?.[key], `${run.id}.inputs.${key}`);
     const measurements = run.measurements;
-    if (!measurements || typeof measurements.passAt1 !== "boolean" || typeof measurements.passAt3 !== "boolean") throw new Error(`Invalid benchmark evidence: ${run.id} pass measurements are required.`);
+    if (!measurements || typeof measurements.passAt1 !== "boolean" || typeof measurements.passAt3 !== "boolean" || typeof measurements.ordinaryTestsPassed !== "boolean") throw new Error(`Invalid benchmark evidence: ${run.id} pass measurements are required.`);
     for (const key of ["roundsUsed", "passedScenarios", "totalScenarios", "escapedDefects", "buildFailures", "infrastructureRetries", "durationMs"]) if (!Number.isInteger(measurements[key]) || measurements[key] < 0) throw new Error(`Invalid benchmark evidence: ${run.id}.measurements.${key} must be a non-negative integer.`);
     if (measurements.roundsUsed < 1 || measurements.totalScenarios < 1 || !measurements.mismatchesByCategory || typeof measurements.mismatchesByCategory !== "object") throw new Error(`Invalid benchmark evidence: ${run.id} measurements are incomplete.`);
     for (const key of ["patch", "transcript", "result"]) {
@@ -135,44 +135,80 @@ export function aggregateEvidence(evidence) {
     const runs = evidence.runs.filter((run) => run.arm === arm);
     const passAt1 = runs.filter((run) => run.measurements.passAt1).length;
     const passAt3 = runs.filter((run) => run.measurements.passAt3).length;
+    const tokens = runs.filter((run) => Number.isInteger(run.measurements.inputTokens)).map((run) => run.measurements.inputTokens + (run.measurements.outputTokens ?? 0));
+    const mismatchesByCategory = {};
+    for (const run of runs) for (const [category, count] of Object.entries(run.measurements.mismatchesByCategory)) mismatchesByCategory[category] = (mismatchesByCategory[category] ?? 0) + count;
     arms[arm] = {
       total: runs.length,
       passAt1,
       passAt3,
       passAt3Interval: wilsonInterval(passAt3, runs.length),
       escapedDefects: runs.reduce((sum, run) => sum + run.measurements.escapedDefects, 0),
+      greenButWrong: runs.filter((run) => run.measurements.ordinaryTestsPassed === true && !run.measurements.passAt3).length,
       medianRounds: median(runs.map((run) => run.measurements.roundsUsed)),
+      medianTokens: tokens.length === runs.length && tokens.length > 0 ? median(tokens) : undefined,
+      mismatchesByCategory,
       scenarioPassRate: runs.reduce((sum, run) => sum + run.measurements.passedScenarios, 0) / runs.reduce((sum, run) => sum + run.measurements.totalScenarios, 0),
     };
   }
   const slices = [...new Set(evidence.runs.map((run) => run.slice))].map((slice) => ({
     slice,
+    trials: evidence.runs.filter((run) => run.slice === slice && run.arm === "control").length,
     control: evidence.runs.filter((run) => run.slice === slice && run.arm === "control" && run.measurements.passAt3).length,
     air: evidence.runs.filter((run) => run.slice === slice && run.arm === "air" && run.measurements.passAt3).length,
   }));
   return { arms, slices };
 }
 
-export function renderScorecard(evidence) {
-  const summary = aggregateEvidence(evidence);
+const percent = (value) => `${Math.round(value * 100)}%`;
+const ratio = (count, total) => `${count}/${total} (${percent(total === 0 ? 0 : count / total)})`;
+const compactTokens = (value) => value === undefined ? "n/a" : value >= 1_000_000 ? `${(value / 1_000_000).toFixed(1)}M` : `${Math.round(value / 1000)}k`;
+
+function lift(control, air, lowerIsBetter = false) {
+  if (control === air) return "=";
+  if (lowerIsBetter) return control === 0 ? `+${air}` : `**−${Math.round(((control - air) / control) * 100)}%**`.replace("−-", "+");
+  return `**${air > control ? "+" : "−"}${Math.abs(Math.round((air - control) * 100))} pts**`;
+}
+
+export function renderScorecard(evidence, labels = {}) {
+  const { arms: { control, air }, slices } = aggregateEvidence(evidence);
   const date = evidence.generatedAt.slice(0, 10);
-  const row = (label, item) => `| ${label} | ${item.passAt1}/${item.total} | ${item.passAt3}/${item.total} | ${item.escapedDefects} | ${item.medianRounds} |`;
-  const slices = summary.slices.map((item) => `| ${item.slice} | ${item.control}/3 | ${item.air}/3 |`).join("\n");
+  const model = `\`${evidence.model.id}\``;
+  const badge = (name, alt) => `![${alt}](https://raw.githubusercontent.com/halilturkoglucs/air/main/benchmarks/llm-air-lift/badges/${name}.svg)`;
+  const [low, high] = air.passAt3Interval; const [controlLow, controlHigh] = control.passAt3Interval;
+  const categories = [...new Set([...Object.keys(control.mismatchesByCategory), ...Object.keys(air.mismatchesByCategory)])].sort();
+  const categoryRows = categories.map((category) => `| ${category} | ${control.mismatchesByCategory[category] ?? 0} | ${air.mismatchesByCategory[category] ?? 0} |`).join("\n");
   return `<!-- AIR_LLM_BENCHMARK:START -->
 ## Does AIR improve an LLM migration?
 
-Same model. Same capability. Same three-round budget. The AIR arm receives behavioral differences; the control arm receives ordinary tests only.
+${badge("control-pass-at-3", "LLM alone pass@3")} ${badge("air-pass-at-3", "LLM + AIR pass@3")} ${badge("escaped-defects", "Escaped defects")}
 
-| Workflow | Pass@1 | Behavioral pass@3 | Escaped defects | Median rounds |
-| --- | ---: | ---: | ---: | ---: |
-${row(`${evidence.model.id} alone`, summary.arms.control)}
-${row(`${evidence.model.id} + AIR`, summary.arms.air)}
+> **Same model. Same task. Same 3-round repair budget.** With AIR feedback, ${model} shipped **${air.passAt3}/${air.total}** behaviorally correct migrations, compared with **${control.passAt3}/${control.total}** on ordinary tests alone. Escaped defects: **${control.escapedDefects} → ${air.escapedDefects}**.
+
+| Metric | LLM alone | LLM + AIR | Lift |
+| --- | ---: | ---: | ---: |
+| ✅ Behaviorally correct (pass@3) | ${ratio(control.passAt3, control.total)} | **${ratio(air.passAt3, air.total)}** | ${lift(control.passAt3 / control.total, air.passAt3 / air.total)} |
+| ⚡ Correct on first attempt (pass@1) | ${ratio(control.passAt1, control.total)} | ${ratio(air.passAt1, air.total)} | ${lift(control.passAt1 / control.total, air.passAt1 / air.total)} |
+| 🐛 Escaped defects (hidden suite) | ${control.escapedDefects} | **${air.escapedDefects}** | ${lift(control.escapedDefects, air.escapedDefects, true)} |
+| 🟢 Tests green, behavior wrong | ${control.greenButWrong}/${control.total} | ${air.greenButWrong}/${air.total} | ${lift(control.greenButWrong, air.greenButWrong, true)} |
+| 🎯 Hidden scenarios passed | ${percent(control.scenarioPassRate)} | ${percent(air.scenarioPassRate)} | ${lift(control.scenarioPassRate, air.scenarioPassRate)} |
+| 🔁 Median repair rounds | ${control.medianRounds} | ${air.medianRounds} | ${lift(control.medianRounds, air.medianRounds, true)} |
+| 🪙 Median tokens per run | ${compactTokens(control.medianTokens)} | ${compactTokens(air.medianTokens)} | ${control.medianTokens && air.medianTokens ? lift(control.medianTokens, air.medianTokens, true) : "n/a"} |
 
 | Capability slice | LLM alone | LLM + AIR |
 | --- | ---: | ---: |
-${slices}
+${slices.map((item) => `| ${labels[item.slice] ?? item.slice} | ${item.control}/${item.trials} | **${item.air}/${item.trials}** |`).join("\n")}
 
-Pinned result: ${evidence.model.id}, ${evidence.model.reasoning} reasoning · suite ${evidence.suiteVersion} · 3 trials per arm · ${date} · source \`${evidence.source.commit.slice(0, 12)}\`. [Methodology and evidence](https://github.com/halilturkoglucs/air/tree/main/benchmarks/llm-air-lift).
+<details>
+<summary>Escaped defects by category</summary>
+
+| Category | LLM alone | LLM + AIR |
+| --- | ---: | ---: |
+${categoryRows}
+
+</details>
+
+Pinned result: ${model}, ${evidence.model.reasoning} reasoning, ${evidence.model.agent} ${evidence.model.agentVersion} · suite ${evidence.suiteVersion} · ${control.total + air.total} isolated runs · ${date} · source \`${evidence.source.commit.slice(0, 12)}\`. pass@3 95% Wilson interval: alone ${percent(controlLow)}–${percent(controlHigh)}, AIR ${percent(low)}–${percent(high)}. Both arms see the same task and ordinary tests. The AIR arm also receives \`air check\` differences on feedback scenarios. A held-out hidden suite scores both arms. [Methodology and evidence](https://github.com/halilturkoglucs/air/tree/main/benchmarks/llm-air-lift).
 
 This result applies only to the named model and suite. Runtime throughput is measured separately.
 <!-- AIR_LLM_BENCHMARK:END -->`;
@@ -240,9 +276,43 @@ export async function evaluateCandidate(slice, candidatePath, checkKind) {
   return await discovery.runMigrationCheck({ check, policy, baseline, target: target("candidate", "candidate.mjs"), repositoryRoot: evaluationRoot, repositoryHash });
 }
 
-export function explainResult(result) {
+function pointerValue(value, pointer) {
+  let current = value;
+  for (const part of pointer.split("/").slice(1)) {
+    if (current === null || typeof current !== "object") return undefined;
+    current = current[part.replaceAll("~1", "/").replaceAll("~0", "~")];
+  }
+  return current;
+}
+
+function observe(file, input) {
+  const run = spawnSync(process.execPath, [file], { input: JSON.stringify(input), encoding: "utf8", timeout: 10_000 });
+  try { return JSON.parse(run.stdout); } catch { return undefined; }
+}
+
+// AIR results carry only digests. The benchmark harness re-observes feedback scenarios so the AIR arm sees reviewed values; holdout scenarios never reach this function.
+export async function feedbackValues(slice, candidatePath) {
+  const discovery = await import(pathToFileURL(resolve(root, "packages/discovery/dist/index.js")).href);
+  const check = discovery.parseCheckDocument(await readFile(resolve(benchmarkRoot, slice.feedbackCheck), "utf8"));
+  const legacy = resolve(benchmarkRoot, "slices", slice.id, "oracle/legacy.mjs");
+  const values = {};
+  for (const scenario of check.spec.scenarios) values[scenario.id] = { expected: observe(legacy, scenario.request.input), actual: observe(candidatePath, scenario.request.input) };
+  return values;
+}
+
+const shown = (value) => {
+  if (value === undefined) return "<missing>";
+  const text = JSON.stringify(value);
+  return text.length > 160 ? `${text.slice(0, 157)}...` : text;
+};
+
+export function explainResult(result, values) {
   if (result.passed) return "AIR check: PASS. Candidate matches the reviewed feedback boundary.";
-  return `AIR check: FAIL. Repair candidate code only.\n${result.mismatches.map((item) => `- ${item.classification} in ${item.scenario} at ${item.selector}; category ${item.category}; ${item.repair === "candidate-code" ? "fix candidate code" : "repair observation harness"}.`).join("\n")}`;
+  return `AIR check: FAIL. Repair candidate code only.\n${result.mismatches.map((item) => {
+    const observed = values?.[item.scenario];
+    const detail = observed ? ` expected ${shown(pointerValue(observed.expected, item.selector))}, got ${shown(pointerValue(observed.actual, item.selector))}.` : "";
+    return `- ${item.classification} in ${item.scenario} at ${item.selector}; category ${item.category}; ${item.classification === "missing-observation" ? "candidate must emit this observation" : "fix candidate code"}.${detail}`;
+  }).join("\n")}`;
 }
 
 export function scrubTranscript(source) {
@@ -271,13 +341,14 @@ export function isUsageLimitFailure(output) {
   return /(?:hit|reached|exceeded)[^\n]{0,80}usage limit|usage limit[^\n]{0,120}(?:upgrade|credits|try again|reset)/iu.test(output);
 }
 
-export function measurementFromResult(slice, result, rounds, passAt1, buildFailures, infrastructureRetries, durationMs, usage) {
+export function measurementFromResult(slice, result, rounds, passAt1, ordinaryTestsPassed, buildFailures, infrastructureRetries, durationMs, usage) {
   const failed = new Set(result.scenarios.filter((scenario) => !scenario.passed).map((scenario) => scenario.id));
   const mismatchesByCategory = {};
   for (const scenario of failed) for (const category of slice.scenarioCategories[scenario] ?? ["unclassified"]) mismatchesByCategory[category] = (mismatchesByCategory[category] ?? 0) + 1;
   return {
     passAt1,
     passAt3: result.passed,
+    ordinaryTestsPassed,
     roundsUsed: rounds,
     passedScenarios: result.scenarios.filter((scenario) => scenario.passed).length,
     totalScenarios: result.scenarios.length,

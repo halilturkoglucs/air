@@ -7,6 +7,7 @@ import {
   ensureDirectory,
   evaluateCandidate,
   explainResult,
+  feedbackValues,
   isUsageLimitFailure,
   loadSuite,
   measurementFromResult,
@@ -116,6 +117,7 @@ for (const target of targets) {
       transcriptParts: [],
       hiddenResult: null,
       passAt1: false,
+      ordinaryTestsPassed: false,
       buildFailures: 0,
       infrastructureRetries: 0,
       roundsUsed: 0,
@@ -184,12 +186,13 @@ for (const target of targets) {
     const verifyStartedAt = Date.now();
     const ordinary = await runProcess("npm", ["test"], { cwd: workspace });
     if (ordinary.code !== 0) state.buildFailures += 1;
+    state.ordinaryTestsPassed = ordinary.code === 0;
     state.hiddenResult = await evaluateCandidate(target.slice, resolve(workspace, "candidate.mjs"), "evaluation");
     if (round === 1) state.passAt1 = state.hiddenResult.passed;
     let airFeedback = "";
     if (target.arm === "air") {
       const feedbackResult = await evaluateCandidate(target.slice, resolve(workspace, "candidate.mjs"), "feedback");
-      airFeedback = `\n\n${explainResult(feedbackResult)}`;
+      airFeedback = `\n\n${explainResult(feedbackResult, await feedbackValues(target.slice, resolve(workspace, "candidate.mjs")))}`;
     }
     state.previousFeedback = `Ordinary test exit ${ordinary.code}.\n${ordinary.stdout}${ordinary.stderr}${airFeedback}`.trim();
     state.transcriptParts.push(JSON.stringify({ kind: "ordinary-tests", round, exitCode: ordinary.code, stdout: ordinary.stdout, stderr: ordinary.stderr }));
@@ -228,7 +231,7 @@ for (const target of targets) {
       promptSha256: sha256(basePrompt),
       starterSha256: starterHash,
     },
-    measurements: measurementFromResult(target.slice, state.hiddenResult, state.roundsUsed, state.passAt1, state.buildFailures, state.infrastructureRetries, state.durationMs, usage),
+    measurements: measurementFromResult(target.slice, state.hiddenResult, state.roundsUsed, state.passAt1, state.ordinaryTestsPassed, state.buildFailures, state.infrastructureRetries, state.durationMs, usage),
     artifacts: {
       patch: { path: relative(benchmarkRoot, patchPath), sha256: await sha256File(patchPath) },
       transcript: { path: relative(benchmarkRoot, transcriptPath), sha256: await sha256File(transcriptPath) },

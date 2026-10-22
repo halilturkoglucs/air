@@ -6,6 +6,8 @@ import {
   aggregateEvidence,
   benchmarkRoot,
   evaluateCandidate,
+  explainResult,
+  feedbackValues,
   isUsageLimitFailure,
   loadSuite,
   renderScorecard,
@@ -39,7 +41,7 @@ async function evidenceFixture() {
       trial: 1,
       inputs: { taskSha256: artifactHash, promptSha256: artifactHash, starterSha256: artifactHash },
       measurements: {
-        passAt1: false, passAt3: false, roundsUsed: 3, passedScenarios: 2, totalScenarios: 3,
+        passAt1: false, passAt3: false, ordinaryTestsPassed: true, roundsUsed: 3, passedScenarios: 2, totalScenarios: 3,
         escapedDefects: 2, buildFailures: 0, infrastructureRetries: 0, mismatchesByCategory: { idempotency: 1, messages: 1 }, durationMs: 1000,
       },
       artifacts: { patch: artifact, transcript: artifact, result: artifact },
@@ -50,7 +52,7 @@ async function evidenceFixture() {
 describe("LLM verification-lift benchmark", () => {
   it("loads the pinned three-slice, two-arm, 18-run design", async () => {
     const suite = await loadSuite();
-    expect(suite.model).toEqual({ id: "gpt-6-astra", reasoning: "high", agent: "codex-cli" });
+    expect(suite.model).toEqual({ id: "gpt-6-astra", reasoning: "medium", agent: "codex-cli" });
     expect(suite.slices.map((slice: { id: string }) => slice.id)).toEqual(["document-create", "ledger-transfer", "library-access"]);
     expect(suite.slices.length * suite.arms.length * suite.trialsPerArm).toBe(18);
   });
@@ -59,9 +61,9 @@ describe("LLM verification-lift benchmark", () => {
     const [lower, upper] = wilsonInterval(8, 9);
     expect(lower).toBeCloseTo(0.565, 2);
     expect(upper).toBeCloseTo(0.98, 2);
-    const run = (arm: "control" | "air", pass: boolean, rounds: number) => ({ arm, slice: "document-create", measurements: { passAt1: pass, passAt3: pass, escapedDefects: pass ? 0 : 2, roundsUsed: rounds, passedScenarios: pass ? 3 : 2, totalScenarios: 3 } });
+    const run = (arm: "control" | "air", pass: boolean, rounds: number) => ({ arm, slice: "document-create", measurements: { passAt1: pass, passAt3: pass, ordinaryTestsPassed: true, escapedDefects: pass ? 0 : 2, mismatchesByCategory: pass ? {} : { messages: 2 }, roundsUsed: rounds, passedScenarios: pass ? 3 : 2, totalScenarios: 3 } });
     const summary = aggregateEvidence({ runs: [run("control", false, 3), run("air", true, 2)] });
-    expect(summary.arms.control).toMatchObject({ total: 1, passAt3: 0, escapedDefects: 2, medianRounds: 3 });
+    expect(summary.arms.control).toMatchObject({ total: 1, passAt3: 0, escapedDefects: 2, greenButWrong: 1, medianRounds: 3, mismatchesByCategory: { messages: 2 } });
     expect(summary.arms.air).toMatchObject({ total: 1, passAt3: 1, escapedDefects: 0, medianRounds: 2 });
   });
 
@@ -80,17 +82,21 @@ describe("LLM verification-lift benchmark", () => {
 
   it("renders a deterministic evidence-backed scorecard", () => {
     const evidence = {
-      generatedAt: "2026-10-21T12:00:00.000Z", suiteVersion: "1.0.0",
-      source: { commit: "a".repeat(40) }, model: { id: "gpt-6-astra", reasoning: "high" },
+      generatedAt: "2026-10-21T12:00:00.000Z", suiteVersion: "1.1.0",
+      source: { commit: "a".repeat(40) }, model: { id: "gpt-6-astra", reasoning: "medium", agent: "codex-cli", agentVersion: "0.160.0" },
       runs: [
-        ...[1, 2, 3].map((trial) => ({ arm: "control", slice: "document-create", trial, measurements: { passAt1: false, passAt3: trial === 3, escapedDefects: trial === 3 ? 0 : 2, roundsUsed: 3, passedScenarios: trial === 3 ? 3 : 2, totalScenarios: 3 } })),
-        ...[1, 2, 3].map((trial) => ({ arm: "air", slice: "document-create", trial, measurements: { passAt1: false, passAt3: true, escapedDefects: 0, roundsUsed: 2, passedScenarios: 3, totalScenarios: 3 } })),
+        ...[1, 2, 3].map((trial) => ({ arm: "control", slice: "document-create", trial, measurements: { passAt1: false, passAt3: trial === 3, ordinaryTestsPassed: true, escapedDefects: trial === 3 ? 0 : 2, mismatchesByCategory: trial === 3 ? {} : { idempotency: 2 }, roundsUsed: 3, passedScenarios: trial === 3 ? 3 : 2, totalScenarios: 3, inputTokens: 300_000, outputTokens: 10_000 } })),
+        ...[1, 2, 3].map((trial) => ({ arm: "air", slice: "document-create", trial, measurements: { passAt1: false, passAt3: true, ordinaryTestsPassed: true, escapedDefects: 0, mismatchesByCategory: {}, roundsUsed: 2, passedScenarios: 3, totalScenarios: 3, inputTokens: 200_000, outputTokens: 5_000 } })),
       ],
     };
-    const first = renderScorecard(evidence);
-    expect(renderScorecard(evidence)).toBe(first);
-    expect(first).toContain("| gpt-6-astra alone | 0/3 | 1/3 | 4 | 3 |");
-    expect(first).toContain("| gpt-6-astra + AIR | 0/3 | 3/3 | 0 | 2 |");
+    const first = renderScorecard(evidence, { "document-create": "Document creation" });
+    expect(renderScorecard(evidence, { "document-create": "Document creation" })).toBe(first);
+    expect(first).toContain("| ✅ Behaviorally correct (pass@3) | 1/3 (33%) | **3/3 (100%)** | **+67 pts** |");
+    expect(first).toContain("| 🐛 Escaped defects (hidden suite) | 4 | **0** | **−100%** |");
+    expect(first).toContain("| 🟢 Tests green, behavior wrong | 2/3 | 0/3 | **−100%** |");
+    expect(first).toContain("| 🪙 Median tokens per run | 310k | 205k | **−34%** |");
+    expect(first).toContain("| Document creation | 1/3 | **3/3** |");
+    expect(first).toContain("| idempotency | 4 | 0 |");
   });
 
   it("rejects tampering, duplicates, mixed models, stale suites, stale commits, and missing trials", async () => {
@@ -104,6 +110,18 @@ describe("LLM verification-lift benchmark", () => {
     await expect(validateEvidence(tampered, { requireComplete: false })).rejects.toThrow("Artifact checksum mismatch");
     await expect(validateEvidence(valid)).rejects.toThrow("must contain all 18 runs");
   });
+
+  it("shows reviewed values only for feedback scenarios", async () => {
+    const suite = await loadSuite();
+    const slice = suite.slices.find((item: { id: string }) => item.id === "document-create");
+    const starter = resolve(benchmarkRoot, "slices/document-create/workspace/candidate.mjs");
+    const result = await evaluateCandidate(slice, starter, "feedback");
+    const values = await feedbackValues(slice, starter);
+    expect(Object.keys(values).sort()).toEqual(["creates-document", "maps-vendor-failure"]);
+    const text = explainResult(result, values);
+    expect(text).toContain('at /outbound/0; category outbound; candidate must emit this observation. expected {"operation":"vendor.authorize"');
+    expect(text).not.toContain("replays-idempotently");
+  }, 30_000);
 
   it("passes known-good candidates and rejects starter mutants for every hidden evaluator", async () => {
     const suite = await loadSuite();
