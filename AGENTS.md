@@ -75,5 +75,5 @@ Any agent can stop at any time. State lives in Git, in `pnpm benchmark:status`, 
 
 ### Current work
 
-- v0.15.0 is released. v0.16.0 (milestones 2 and 3 of `docs/roadmap.md` §12a: topology normalizations, `lifecycle.services`, `discover traces`, `check init --from-openapi`, `check coverage`) is prepared on `feat/m3-sources`; after that PR merges, tag `v0.16.0` on the merge commit.
-- Next: milestone 4 (a `ui` observation category produced by a user-owned script, no browser dependency in AIR), plus the developer-experience items listed in §12a. A benchmark rerun is allowed again if the owner asks.
+- v0.16.0 (milestones 2 and 3 of `docs/roadmap.md` §12a) is tagged and released through `release.yml`; the npm CLI tarball for 0.15.0 never appeared on the registry even though publish succeeded, so 0.16.0 supersedes it.
+- Next: milestone 4, source discovery for any codebase (`air discover code`, `air check init --from-code`; whole repo or one part, no telemetry needed; for everyday development as well as migration). Then milestone 5 (`ui` observations) and the developer-experience items in §12a. A benchmark rerun is allowed again if the owner asks.
