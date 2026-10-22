@@ -16,3 +16,4 @@ graphify-out/
 benchmarks/llm-air-lift/results-batches/
 benchmarks/llm-air-lift/archive/
 .air/last-run.json
+.air/last-run*.json

@@ -15,7 +15,7 @@ export interface CodeSeam {
   readonly id: string; readonly kind: SeamKind; readonly framework?: string; readonly method?: string; readonly route?: string; readonly name?: string;
   readonly file: string; readonly line: number; readonly evidence: Evidence; readonly effects: readonly SeamEffect[];
 }
-export interface CodeSeamReport { readonly apiVersion: "air.dev/code-seams/v0.1"; readonly scope: { readonly path: string; readonly symbol?: string; readonly since?: string }; readonly files: number; readonly seams: readonly CodeSeam[] }
+export interface CodeSeamReport { readonly apiVersion: "air.dev/code-seams/v0.1"; readonly scope: { readonly path: string; readonly symbol?: string; readonly since?: string }; readonly files: number; readonly seams: readonly CodeSeam[]; readonly effects: readonly (SeamEffect & { readonly file: string })[] }
 
 interface SeamRule { readonly kind: SeamKind; readonly framework: string; readonly pattern: string; readonly method?: number; readonly route?: number; readonly name?: number; readonly defaultMethod?: string; readonly routeFromPath?: string; readonly routePrefix?: string; readonly fileFilter?: string }
 interface EffectRule { readonly kind: SeamEffect["kind"]; readonly pattern: string; readonly name: number; readonly flags?: string }
@@ -70,7 +70,7 @@ export async function scanCodeSeams(options: { readonly root: string; readonly p
     const untracked = execFileSync("git", ["ls-files", "--others", "--exclude-standard"], { cwd: options.root, encoding: "utf8" }).split("\n").filter(Boolean).map((file) => resolve(options.root, file));
     const touched = new Set([...changed, ...untracked]); files = files.filter((file) => touched.has(file));
   }
-  const seams: CodeSeam[] = []; let scanned = 0;
+  const seams: CodeSeam[] = []; const allEffects: (SeamEffect & { file: string })[] = []; let scanned = 0;
   for (const file of files) {
     const ecosystem = ECOSYSTEMS.find((item) => item.extensions.some((extension) => file.endsWith(extension)));
     if (!ecosystem || (await stat(file)).size > MAX_FILE_BYTES) continue;
@@ -98,10 +98,15 @@ export async function scanCodeSeams(options: { readonly root: string; readonly p
         found.push({ ...(handler === undefined ? {} : { handler }), line, seam: { kind: rule.kind, framework: rule.framework, ...(method ? { method } : {}), ...(route !== undefined ? { route } : {}), ...(name ? { name } : {}), file: relativeFile, line, evidence: "inferred" } });
       }
     }
+    // Effects are collected for every file, seam or not: they show behavior that HTTP checks alone cannot see.
+    const effects: SeamEffect[] = [];
+    for (const rule of ecosystem.effects) for (const match of source.matchAll(new RegExp(rule.pattern, `g${rule.flags ?? ""}u`))) {
+      const line = lineOf(source, match.index);
+      if (!range || (line >= range.start && line <= range.end)) effects.push({ kind: rule.kind, name: match[rule.name]!, line });
+    }
+    allEffects.push(...[...new Map(effects.map((effect) => [`${effect.kind}:${effect.name}:${effect.line}`, effect])).values()].map((effect) => ({ ...effect, file: relativeFile })));
     if (found.length === 0) continue;
     found.sort((left, right) => left.line - right.line);
-    const effects: SeamEffect[] = [];
-    for (const rule of ecosystem.effects) for (const match of source.matchAll(new RegExp(rule.pattern, `g${rule.flags ?? ""}u`))) effects.push({ kind: rule.kind, name: match[rule.name]!, line: lineOf(source, match.index) });
     for (const [index, entry] of found.entries()) {
       // An effect belongs to the nearest seam above it in the same file; a function seam owns everything in its range.
       const next = found.slice(index + 1).find((item) => item.line > entry.line)?.line ?? Number.POSITIVE_INFINITY;
@@ -115,7 +120,7 @@ export async function scanCodeSeams(options: { readonly root: string; readonly p
   }
   const counts = new Map<string, number>();
   const unique = seams.sort((left, right) => left.file.localeCompare(right.file) || left.line - right.line).map((seam) => { const count = (counts.get(seam.id) ?? 0) + 1; counts.set(seam.id, count); return count === 1 ? seam : { ...seam, id: `${seam.id}-${count}` }; });
-  return { apiVersion: "air.dev/code-seams/v0.1", scope: { path: relative(options.root, scopePath).split(sep).join("/") || ".", ...(options.symbol ? { symbol: options.symbol } : {}), ...(options.since ? { since: options.since } : {}) }, files: scanned, seams: unique };
+  return { apiVersion: "air.dev/code-seams/v0.1", scope: { path: relative(options.root, scopePath).split(sep).join("/") || ".", ...(options.symbol ? { symbol: options.symbol } : {}), ...(options.since ? { since: options.since } : {}) }, files: scanned, seams: unique, effects: allEffects.sort((left, right) => left.file.localeCompare(right.file) || left.line - right.line || left.name.localeCompare(right.name)) };
 }
 
 export function formatCodeSeams(report: CodeSeamReport): string {

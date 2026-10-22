@@ -57,6 +57,14 @@ Developers should not have to learn or type this pipeline. A coding agent runs i
 - **Human decisions are phrased as questions.** When AIR needs a human (a `TODO review` scenario input, an unstable field that would need `ignore`, an intended behavior change), the report states the exact question and the command the agent runs once the developer answers, for example `QUESTION orders.total changes on every run; is it derived from time? If yes: air protect --ignore /http/body/total --reason "<answer>"`.
 - **Safe defaults for unattended runs.** `air protect` never baselines unreviewed scenarios, never approves changes, and never adds an `ignore` on its own. Everything it writes is ordinary, reviewable files under `.air/` plus the check files the developer commits.
 
+### Delivered first: `air protect` on existing sources
+
+At the owner's request, the agent-first entry point shipped before steps 4b–4d, built on sources that already work for any HTTP service: an OpenAPI file, routes found by `air discover code` (read-only, parameter-free GET routes only), or an optional recorded command. As 4b–4d land, `air protect` gains richer scenarios and non-HTTP seams without changing how people use it.
+
+### Behavior beyond HTTP: agent-written, AIR-verified harnesses
+
+Parsing every technology (brokers, caches, schedulers, file and mail systems) does not scale. Instead, the coding agent that already works in the repository writes a small harness in the existing command-target contract, and AIR decides whether to trust it with deterministic checks only: identical results across runs (generated UUIDs and timestamps become proposed `typed-token` rules), different observations for different inputs, and a detected difference when the same harness runs against a throwaway copy of the code with an agent-supplied breaking patch applied. Observation categories are open, so a harness reports whatever matters (`events`, `cache`, `files`, ...). This replaces most of the planned per-language work in steps 4b–4d: the code scanner now points the agent at what to cover instead of trying to model it.
+
 ## Everyday flow
 
 What the developer does: run `air agent install` once, then ask their agent for a change as usual.

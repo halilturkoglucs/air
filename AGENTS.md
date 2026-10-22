@@ -76,4 +76,4 @@ Any agent can stop at any time. State lives in Git, in `pnpm benchmark:status`, 
 ### Current work
 
 - v0.16.0 (milestones 2 and 3 of `docs/roadmap.md` §12a) is tagged and released through `release.yml`; the npm CLI tarball for 0.15.0 never appeared on the registry even though publish succeeded, so 0.16.0 supersedes it.
-- Milestone 4 (`docs/design/discover-code.md`, design PR #45): step 4a, the static seam scanner `air discover code`, is in review on `feat/discover-code-scan`. Next: 4b (start-command detection and `check init --from-code` proposals), 4c (execution gate), 4d (function adapters), 4e (`air protect`, `air agent install`, MCP tools). Seams must stay `inferred` until executed; this is not a code map.
+- Milestone 4 (`docs/design/discover-code.md`): 4a is merged. PR #47 (`feat/protect`) adds `air protect`, `air agent install`, open observation categories, and agent-written harnesses verified by AIR (`air harness task|new|verify --mutation`), replacing most of the planned per-language parsers. Next after it merges: release v0.17.0.
