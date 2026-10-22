@@ -61,6 +61,24 @@
       "kind": "message",
       "pattern": "\\bTopic:\\s*\"([^\"]+)\"",
       "name": 1
+    },
+    {
+      "kind": "database",
+      "pattern": "\\.Model\\(\\s*&?(\\w+)\\s*\\{",
+      "name": 1
+    },
+    {
+      "kind": "database",
+      "pattern": "\\.AutoMigrate\\(\\s*&?(\\w+)\\s*\\{",
+      "name": 1
+    }
+  ],
+  "mounts": [
+    {
+      "pattern": "\\b(?:\\w+\\.)?(\\w+)\\(\\s*\\w+\\.Group\\(\\s*\"([^\"]*)\"\\s*\\)\\s*\\)",
+      "target": 1,
+      "prefix": 2,
+      "targetKind": "function"
     }
   ]
 }

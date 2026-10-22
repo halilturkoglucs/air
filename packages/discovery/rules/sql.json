@@ -1,0 +1,16 @@
+{
+  "ecosystem": "sql",
+  "extensions": [
+    ".sql"
+  ],
+  "lineComment": "--",
+  "seams": [],
+  "effects": [
+    {
+      "kind": "database",
+      "pattern": "\\b(?:FROM|INTO|UPDATE|JOIN)\\s+[\"`]?([A-Za-z_][\\w.]*)",
+      "name": 1,
+      "flags": "i"
+    }
+  ]
+}
