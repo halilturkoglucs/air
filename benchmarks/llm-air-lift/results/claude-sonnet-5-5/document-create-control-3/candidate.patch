@@ -1,8 +1,11 @@
 diff --git a/candidate.mjs b/candidate.mjs
-index 63a496d..01ac87f 100644
+index 63a496d..f597071 100644
 --- a/candidate.mjs
 +++ b/candidate.mjs
-@@ -2,12 +2,53 @@ let source = "";
+@@ -1,13 +1,76 @@
++import { randomUUID } from "node:crypto";
++
+ let source = "";
  for await (const chunk of process.stdin) source += chunk;
  const input = JSON.parse(source || "{}");
  
@@ -15,53 +18,73 @@ index 63a496d..01ac87f 100644
 -  failures: [],
 -  retryability: false
 -}));
-+const headers = { "content-type": "application/json" };
-+const out = (http, o = {}) =>
-+  console.log(JSON.stringify({
-+    http,
-+    database: o.database ?? { rows: [], transaction: { committed: false } },
-+    messages: o.messages ?? [],
-+    outbound: o.outbound ?? [],
-+    ordering: o.ordering ?? [],
-+    failures: o.failures ?? [],
-+    retryability: o.retryability ?? false
-+  }));
++const store = new Map();
++const json = { "content-type": "application/json" };
 +
-+const title = input.title;
-+if (typeof title !== "string" || title.trim() === "") {
-+  out({ status: 400, headers, body: { error: "invalid_title" } }, {
-+    failures: [{ type: "validation", field: "title" }]
-+  });
-+} else if (input.existing && input.idempotencyKey && input.existing.idempotencyKey === input.idempotencyKey) {
-+  // Idempotent replay: return the stored response, no new side effects.
-+  const doc = input.existing.document ?? { id: input.existing.documentId, title: input.existing.title };
-+  out({ status: 201, headers: { ...headers, "idempotent-replay": "true" }, body: doc }, {
-+    database: { rows: [doc], transaction: { committed: false } }
-+  });
-+} else {
-+  const id = input.documentId;
-+  const timestamp = input.timestamp;
-+  const status = input.vendorStatus ?? 200;
-+  const calls = [
-+    { service: "vendor", operation: "authorize", documentId: id, status },
-+    { service: "vendor", operation: "index", documentId: id, status }
-+  ];
-+  if (status >= 200 && status < 300) {
-+    const doc = { id, title };
-+    const row = { ...doc, createdAt: timestamp };
-+    out({ status: 201, headers, body: { ...doc, createdAt: timestamp } }, {
-+      database: { rows: [row], transaction: { committed: true } },
-+      messages: [{ type: "document.created", documentId: id, title, occurredAt: timestamp, idempotencyKey: input.idempotencyKey }],
-+      outbound: calls,
-+      ordering: ["vendor.authorize", "vendor.index", "database.commit", "event.document.created"]
-+    });
-+  } else {
-+    // Authorization fails first; indexing is never attempted.
-+    out({ status: 502, headers, body: { error: "vendor_failure", vendorStatus: status } }, {
-+      outbound: [calls[0]],
-+      ordering: ["vendor.authorize", "database.rollback"],
-+      failures: [{ type: "vendor", status }],
-+      retryability: status >= 500 || status === 429 || status === 408
-+    });
++function handle(req) {
++  const key = req.idempotencyKey;
++  const out = { http: null, database: { rows: [], transaction: { committed: false } }, messages: [], outbound: [], ordering: [], failures: [], retryability: false };
++
++  if (key !== undefined && store.has(key)) {
++    const prev = store.get(key);
++    if (prev.title !== req.title) {
++      out.http = { status: 409, headers: json, body: { error: "idempotency_key_conflict" } };
++      out.failures.push({ type: "idempotency_conflict" });
++      out.database.transaction = { committed: false, rolledBack: false };
++      return out;
++    }
++    out.http = { status: 201, headers: { ...json, "idempotent-replay": "true" }, body: prev.body };
++    out.database = { rows: [prev.row], transaction: { committed: false, replayed: true } };
++    return out;
 +  }
++
++  if (typeof req.title !== "string" || req.title.trim() === "") {
++    out.http = { status: 400, headers: json, body: { error: "invalid_title" } };
++    out.failures.push({ type: "validation", field: "title" });
++    return out;
++  }
++
++  const id = req.documentId ?? randomUUID();
++  const createdAt = req.timestamp ?? new Date().toISOString();
++  const vendorStatus = req.vendorStatus ?? 200;
++
++  out.outbound.push({ target: "vendor", action: "authorize", documentId: id });
++  out.ordering.push("vendor.authorize");
++  let failedAt = vendorStatus >= 400 ? "authorize" : null;
++  if (!failedAt) {
++    out.outbound.push({ target: "vendor", action: "index", documentId: id, title: req.title });
++    out.ordering.push("vendor.index");
++  }
++
++  if (failedAt) {
++    const retryable = vendorStatus === 429 || vendorStatus >= 500;
++    const status = retryable ? 503 : 502;
++    out.http = { status, headers: json, body: { error: retryable ? "vendor_unavailable" : "vendor_rejected" } };
++    out.failures.push({ type: "vendor", stage: failedAt, vendorStatus });
++    out.retryability = retryable;
++    out.database = { rows: [], transaction: { committed: false, rolledBack: true } };
++    return out;
++  }
++
++  const row = { id, title: req.title, createdAt };
++  const body = { id, title: req.title, createdAt };
++  out.http = { status: 201, headers: json, body };
++  out.database = { rows: [row], transaction: { committed: true } };
++  out.ordering.push("db.commit", "event.document.created");
++  out.messages.push({ type: "document.created", documentId: id, title: req.title, timestamp: createdAt });
++  if (key !== undefined) store.set(key, { title: req.title, row, body });
++  return out;
 +}
++
++let result;
++if (Array.isArray(input.requests)) {
++  const base = { ...input };
++  delete base.requests;
++  result = handle({ ...base, ...input.requests[0] });
++  for (const r of input.requests.slice(1)) result = handle({ ...base, ...r });
++} else {
++  result = handle(input);
++  if (input.replay) result = handle(input);
++}
++
++console.log(JSON.stringify(result));

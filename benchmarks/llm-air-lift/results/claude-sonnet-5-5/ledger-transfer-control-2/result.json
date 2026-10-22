@@ -1,8 +1,8 @@
 {
   "apiVersion": "air.dev/check-result/v0.1",
   "kind": "CheckResult",
-  "generatedAt": "2026-10-22T08:41:37.866Z",
-  "baselineId": "2f696b6c88eead7c1d4b8381b424adb584d729326f016400e92d6460d6addc03",
+  "generatedAt": "2026-10-22T11:30:11.878Z",
+  "baselineId": "fa81bac020c1bcc400ee85d1ba07ac059828a505e20ed5fd9df24c993e306fd5",
   "candidate": {
     "name": "candidate",
     "targetHash": "665b2ecdd0ef2157bebeda0f24ae2012786e516d13d79b610d22592207a78d58"
@@ -74,19 +74,6 @@
       "repair": "harness"
     },
     {
-      "classification": "candidate-difference",
-      "scenario": "moves-funds-atomically",
-      "category": "http",
-      "selector": "/http/body/fromVersion",
-      "actual": {
-        "type": "number",
-        "bytes": 1,
-        "sha256": "ef2d127de37b942baad06145e54b0c619a1f22327b2ebbcfbec78f5564afe39d"
-      },
-      "provenance": "baseline:moves-funds-atomically/http/body/fromVersion",
-      "repair": "candidate-code"
-    },
-    {
       "classification": "missing-observation",
       "scenario": "moves-funds-atomically",
       "category": "http",
@@ -98,19 +85,6 @@
       },
       "provenance": "baseline:moves-funds-atomically/http/body/outcome",
       "repair": "harness"
-    },
-    {
-      "classification": "candidate-difference",
-      "scenario": "moves-funds-atomically",
-      "category": "http",
-      "selector": "/http/body/toVersion",
-      "actual": {
-        "type": "number",
-        "bytes": 1,
-        "sha256": "4e07408562bedb8b60ce05c1decfe3ad16b72230967de01f640b7e4729b49fce"
-      },
-      "provenance": "baseline:moves-funds-atomically/http/body/toVersion",
-      "repair": "candidate-code"
     },
     {
       "classification": "candidate-difference",
@@ -181,8 +155,8 @@
       },
       "actual": {
         "type": "string",
-        "bytes": 17,
-        "sha256": "bc14a2af3930adc1b907e264048aacc22f1f3930ce182d60e7e665e0c8416864"
+        "bytes": 7,
+        "sha256": "134cae4d68307d112295ce08addca34b680c6478b807f224c2c3d110c26daa55"
       },
       "provenance": "baseline:moves-funds-atomically/ordering/0",
       "repair": "candidate-code"
@@ -199,14 +173,14 @@
       },
       "actual": {
         "type": "string",
-        "bytes": 17,
-        "sha256": "ac3bbc121c092350ccc7ef8c27b30cbb7731abdcfe3fc57bdcfe6d39ba2f0632"
+        "bytes": 8,
+        "sha256": "8130bd48b98087f2683ed000fba66907267bd2e7599681efabe53c7da65dd336"
       },
       "provenance": "baseline:moves-funds-atomically/ordering/1",
       "repair": "candidate-code"
     },
     {
-      "classification": "missing-observation",
+      "classification": "candidate-difference",
       "scenario": "moves-funds-atomically",
       "category": "ordering",
       "selector": "/ordering/2",
@@ -215,8 +189,13 @@
         "bytes": 8,
         "sha256": "8130bd48b98087f2683ed000fba66907267bd2e7599681efabe53c7da65dd336"
       },
+      "actual": {
+        "type": "string",
+        "bytes": 7,
+        "sha256": "8f6e29cfb2f0df76f9f90f221edf3a7b4cfc6ba2e409bb0a78a2c031afd78580"
+      },
       "provenance": "baseline:moves-funds-atomically/ordering/2",
-      "repair": "harness"
+      "repair": "candidate-code"
     },
     {
       "classification": "missing-observation",
@@ -330,19 +309,6 @@
         "sha256": "5c6db652615b184f58fec55f3979f0ce8d89e016b80dc2da06090eedf4c9bfa9"
       },
       "provenance": "baseline:rolls-back-insufficient-funds/http/body/error",
-      "repair": "candidate-code"
-    },
-    {
-      "classification": "candidate-difference",
-      "scenario": "rolls-back-insufficient-funds",
-      "category": "http",
-      "selector": "/http/body/transferId",
-      "actual": {
-        "type": "string",
-        "bytes": 12,
-        "sha256": "5a122be6383798e724a3b7190ecb9342ec629c7a69f4fb006606da0b9feaa0e9"
-      },
-      "provenance": "baseline:rolls-back-insufficient-funds/http/body/transferId",
       "repair": "candidate-code"
     },
     {
@@ -535,19 +501,6 @@
       "classification": "candidate-difference",
       "scenario": "replays-transfer",
       "category": "http",
-      "selector": "/http/body/replayed",
-      "actual": {
-        "type": "boolean",
-        "bytes": 4,
-        "sha256": "b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b"
-      },
-      "provenance": "baseline:replays-transfer/http/body/replayed",
-      "repair": "candidate-code"
-    },
-    {
-      "classification": "candidate-difference",
-      "scenario": "replays-transfer",
-      "category": "http",
       "selector": "/http/body/toBalance",
       "expected": {
         "type": "number",
@@ -565,19 +518,6 @@
     {
       "classification": "candidate-difference",
       "scenario": "replays-transfer",
-      "category": "http",
-      "selector": "/http/headers/idempotent-replay",
-      "actual": {
-        "type": "string",
-        "bytes": 6,
-        "sha256": "18d10c7d2b4b04aaf04254d1ae5d655a5dc0407cbcdd5a8c3986e985370f36ee"
-      },
-      "provenance": "baseline:replays-transfer/http/headers/idempotent-replay",
-      "repair": "candidate-code"
-    },
-    {
-      "classification": "missing-observation",
-      "scenario": "replays-transfer",
       "category": "ordering",
       "selector": "/ordering/0",
       "expected": {
@@ -585,8 +525,13 @@
         "bytes": 18,
         "sha256": "8dad140e6b50a8f8a4f4583ed944f098f0a16b3c2e73b4d48a59d62d7f5c1eab"
       },
+      "actual": {
+        "type": "string",
+        "bytes": 19,
+        "sha256": "cd8c1caf8e2c5f58f3d397feeff4466c110966e4af72520f44fbfb64552068d9"
+      },
       "provenance": "baseline:replays-transfer/ordering/0",
-      "repair": "harness"
+      "repair": "candidate-code"
     },
     {
       "classification": "missing-observation",
@@ -760,19 +705,6 @@
       "classification": "candidate-difference",
       "scenario": "rejects-version-conflict",
       "category": "http",
-      "selector": "/http/body/fromVersion",
-      "actual": {
-        "type": "number",
-        "bytes": 1,
-        "sha256": "ef2d127de37b942baad06145e54b0c619a1f22327b2ebbcfbec78f5564afe39d"
-      },
-      "provenance": "baseline:rejects-version-conflict/http/body/fromVersion",
-      "repair": "candidate-code"
-    },
-    {
-      "classification": "candidate-difference",
-      "scenario": "rejects-version-conflict",
-      "category": "http",
       "selector": "/http/body/toBalance",
       "actual": {
         "type": "number",
@@ -780,19 +712,6 @@
         "sha256": "1a6562590ef19d1045d06c4055742d38288e9e6dcd71ccde5cee80f1d5a774eb"
       },
       "provenance": "baseline:rejects-version-conflict/http/body/toBalance",
-      "repair": "candidate-code"
-    },
-    {
-      "classification": "candidate-difference",
-      "scenario": "rejects-version-conflict",
-      "category": "http",
-      "selector": "/http/body/toVersion",
-      "actual": {
-        "type": "number",
-        "bytes": 1,
-        "sha256": "4e07408562bedb8b60ce05c1decfe3ad16b72230967de01f640b7e4729b49fce"
-      },
-      "provenance": "baseline:rejects-version-conflict/http/body/toVersion",
       "repair": "candidate-code"
     },
     {
@@ -851,8 +770,8 @@
       },
       "actual": {
         "type": "string",
-        "bytes": 17,
-        "sha256": "bc14a2af3930adc1b907e264048aacc22f1f3930ce182d60e7e665e0c8416864"
+        "bytes": 7,
+        "sha256": "134cae4d68307d112295ce08addca34b680c6478b807f224c2c3d110c26daa55"
       },
       "provenance": "baseline:rejects-version-conflict/ordering/0",
       "repair": "candidate-code"
@@ -869,14 +788,14 @@
       },
       "actual": {
         "type": "string",
-        "bytes": 17,
-        "sha256": "ac3bbc121c092350ccc7ef8c27b30cbb7731abdcfe3fc57bdcfe6d39ba2f0632"
+        "bytes": 8,
+        "sha256": "8130bd48b98087f2683ed000fba66907267bd2e7599681efabe53c7da65dd336"
       },
       "provenance": "baseline:rejects-version-conflict/ordering/1",
       "repair": "candidate-code"
     },
     {
-      "classification": "missing-observation",
+      "classification": "candidate-difference",
       "scenario": "rejects-version-conflict",
       "category": "ordering",
       "selector": "/ordering/2",
@@ -885,8 +804,13 @@
         "bytes": 10,
         "sha256": "3770b198a03f18cbf37a3bfd4eba2fbbab9ea2eb9795b207678b45c957a6ce18"
       },
+      "actual": {
+        "type": "string",
+        "bytes": 7,
+        "sha256": "8f6e29cfb2f0df76f9f90f221edf3a7b4cfc6ba2e409bb0a78a2c031afd78580"
+      },
       "provenance": "baseline:rejects-version-conflict/ordering/2",
-      "repair": "harness"
+      "repair": "candidate-code"
     },
     {
       "classification": "candidate-difference",
@@ -933,19 +857,6 @@
       "repair": "harness"
     },
     {
-      "classification": "candidate-difference",
-      "scenario": "moves-funds-atomically-holdout",
-      "category": "http",
-      "selector": "/http/body/fromVersion",
-      "actual": {
-        "type": "number",
-        "bytes": 2,
-        "sha256": "4a44dc15364204a80fe80e9039455cc1608281820fe2b24f1e5233ade6af1dd5"
-      },
-      "provenance": "baseline:moves-funds-atomically-holdout/http/body/fromVersion",
-      "repair": "candidate-code"
-    },
-    {
       "classification": "missing-observation",
       "scenario": "moves-funds-atomically-holdout",
       "category": "http",
@@ -957,19 +868,6 @@
       },
       "provenance": "baseline:moves-funds-atomically-holdout/http/body/outcome",
       "repair": "harness"
-    },
-    {
-      "classification": "candidate-difference",
-      "scenario": "moves-funds-atomically-holdout",
-      "category": "http",
-      "selector": "/http/body/toVersion",
-      "actual": {
-        "type": "number",
-        "bytes": 1,
-        "sha256": "d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35"
-      },
-      "provenance": "baseline:moves-funds-atomically-holdout/http/body/toVersion",
-      "repair": "candidate-code"
     },
     {
       "classification": "candidate-difference",
@@ -1040,8 +938,8 @@
       },
       "actual": {
         "type": "string",
-        "bytes": 17,
-        "sha256": "bc14a2af3930adc1b907e264048aacc22f1f3930ce182d60e7e665e0c8416864"
+        "bytes": 7,
+        "sha256": "134cae4d68307d112295ce08addca34b680c6478b807f224c2c3d110c26daa55"
       },
       "provenance": "baseline:moves-funds-atomically-holdout/ordering/0",
       "repair": "candidate-code"
@@ -1058,14 +956,14 @@
       },
       "actual": {
         "type": "string",
-        "bytes": 17,
-        "sha256": "ac3bbc121c092350ccc7ef8c27b30cbb7731abdcfe3fc57bdcfe6d39ba2f0632"
+        "bytes": 8,
+        "sha256": "8130bd48b98087f2683ed000fba66907267bd2e7599681efabe53c7da65dd336"
       },
       "provenance": "baseline:moves-funds-atomically-holdout/ordering/1",
       "repair": "candidate-code"
     },
     {
-      "classification": "missing-observation",
+      "classification": "candidate-difference",
       "scenario": "moves-funds-atomically-holdout",
       "category": "ordering",
       "selector": "/ordering/2",
@@ -1074,8 +972,13 @@
         "bytes": 8,
         "sha256": "8130bd48b98087f2683ed000fba66907267bd2e7599681efabe53c7da65dd336"
       },
+      "actual": {
+        "type": "string",
+        "bytes": 7,
+        "sha256": "8f6e29cfb2f0df76f9f90f221edf3a7b4cfc6ba2e409bb0a78a2c031afd78580"
+      },
       "provenance": "baseline:moves-funds-atomically-holdout/ordering/2",
-      "repair": "harness"
+      "repair": "candidate-code"
     },
     {
       "classification": "missing-observation",
@@ -1189,19 +1092,6 @@
         "sha256": "5c6db652615b184f58fec55f3979f0ce8d89e016b80dc2da06090eedf4c9bfa9"
       },
       "provenance": "baseline:rolls-back-insufficient-funds-holdout/http/body/error",
-      "repair": "candidate-code"
-    },
-    {
-      "classification": "candidate-difference",
-      "scenario": "rolls-back-insufficient-funds-holdout",
-      "category": "http",
-      "selector": "/http/body/transferId",
-      "actual": {
-        "type": "string",
-        "bytes": 12,
-        "sha256": "7afad091cde236644140c4e318656f9921d9539b9e3febbd3bae645a638b9a7d"
-      },
-      "provenance": "baseline:rolls-back-insufficient-funds-holdout/http/body/transferId",
       "repair": "candidate-code"
     },
     {
@@ -1394,19 +1284,6 @@
       "classification": "candidate-difference",
       "scenario": "replays-transfer-holdout",
       "category": "http",
-      "selector": "/http/body/replayed",
-      "actual": {
-        "type": "boolean",
-        "bytes": 4,
-        "sha256": "b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b"
-      },
-      "provenance": "baseline:replays-transfer-holdout/http/body/replayed",
-      "repair": "candidate-code"
-    },
-    {
-      "classification": "candidate-difference",
-      "scenario": "replays-transfer-holdout",
-      "category": "http",
       "selector": "/http/body/toBalance",
       "expected": {
         "type": "number",
@@ -1424,19 +1301,6 @@
     {
       "classification": "candidate-difference",
       "scenario": "replays-transfer-holdout",
-      "category": "http",
-      "selector": "/http/headers/idempotent-replay",
-      "actual": {
-        "type": "string",
-        "bytes": 6,
-        "sha256": "18d10c7d2b4b04aaf04254d1ae5d655a5dc0407cbcdd5a8c3986e985370f36ee"
-      },
-      "provenance": "baseline:replays-transfer-holdout/http/headers/idempotent-replay",
-      "repair": "candidate-code"
-    },
-    {
-      "classification": "missing-observation",
-      "scenario": "replays-transfer-holdout",
       "category": "ordering",
       "selector": "/ordering/0",
       "expected": {
@@ -1444,8 +1308,13 @@
         "bytes": 18,
         "sha256": "8dad140e6b50a8f8a4f4583ed944f098f0a16b3c2e73b4d48a59d62d7f5c1eab"
       },
+      "actual": {
+        "type": "string",
+        "bytes": 19,
+        "sha256": "cd8c1caf8e2c5f58f3d397feeff4466c110966e4af72520f44fbfb64552068d9"
+      },
       "provenance": "baseline:replays-transfer-holdout/ordering/0",
-      "repair": "harness"
+      "repair": "candidate-code"
     },
     {
       "classification": "missing-observation",
@@ -1619,19 +1488,6 @@
       "classification": "candidate-difference",
       "scenario": "rejects-version-conflict-holdout",
       "category": "http",
-      "selector": "/http/body/fromVersion",
-      "actual": {
-        "type": "number",
-        "bytes": 2,
-        "sha256": "4a44dc15364204a80fe80e9039455cc1608281820fe2b24f1e5233ade6af1dd5"
-      },
-      "provenance": "baseline:rejects-version-conflict-holdout/http/body/fromVersion",
-      "repair": "candidate-code"
-    },
-    {
-      "classification": "candidate-difference",
-      "scenario": "rejects-version-conflict-holdout",
-      "category": "http",
       "selector": "/http/body/toBalance",
       "actual": {
         "type": "number",
@@ -1639,19 +1495,6 @@
         "sha256": "f369cb89fc627e668987007d121ed1eacdc01db9e28f8bb26f358b7d8c4f08ac"
       },
       "provenance": "baseline:rejects-version-conflict-holdout/http/body/toBalance",
-      "repair": "candidate-code"
-    },
-    {
-      "classification": "candidate-difference",
-      "scenario": "rejects-version-conflict-holdout",
-      "category": "http",
-      "selector": "/http/body/toVersion",
-      "actual": {
-        "type": "number",
-        "bytes": 1,
-        "sha256": "d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35"
-      },
-      "provenance": "baseline:rejects-version-conflict-holdout/http/body/toVersion",
       "repair": "candidate-code"
     },
     {
@@ -1710,8 +1553,8 @@
       },
       "actual": {
         "type": "string",
-        "bytes": 17,
-        "sha256": "bc14a2af3930adc1b907e264048aacc22f1f3930ce182d60e7e665e0c8416864"
+        "bytes": 7,
+        "sha256": "134cae4d68307d112295ce08addca34b680c6478b807f224c2c3d110c26daa55"
       },
       "provenance": "baseline:rejects-version-conflict-holdout/ordering/0",
       "repair": "candidate-code"
@@ -1728,14 +1571,14 @@
       },
       "actual": {
         "type": "string",
-        "bytes": 17,
-        "sha256": "ac3bbc121c092350ccc7ef8c27b30cbb7731abdcfe3fc57bdcfe6d39ba2f0632"
+        "bytes": 8,
+        "sha256": "8130bd48b98087f2683ed000fba66907267bd2e7599681efabe53c7da65dd336"
       },
       "provenance": "baseline:rejects-version-conflict-holdout/ordering/1",
       "repair": "candidate-code"
     },
     {
-      "classification": "missing-observation",
+      "classification": "candidate-difference",
       "scenario": "rejects-version-conflict-holdout",
       "category": "ordering",
       "selector": "/ordering/2",
@@ -1744,8 +1587,13 @@
         "bytes": 10,
         "sha256": "3770b198a03f18cbf37a3bfd4eba2fbbab9ea2eb9795b207678b45c957a6ce18"
       },
+      "actual": {
+        "type": "string",
+        "bytes": 7,
+        "sha256": "8f6e29cfb2f0df76f9f90f221edf3a7b4cfc6ba2e409bb0a78a2c031afd78580"
+      },
       "provenance": "baseline:rejects-version-conflict-holdout/ordering/2",
-      "repair": "harness"
+      "repair": "candidate-code"
     },
     {
       "classification": "candidate-difference",
