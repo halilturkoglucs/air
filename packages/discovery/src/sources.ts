@@ -152,7 +152,7 @@ export function checkFromOpenApi(spec: unknown, options: { readonly name: string
     const definition = item[operation.method.toLowerCase()] as JsonObject;
     const parameters = [...((item.parameters ?? []) as unknown[]), ...((definition.parameters ?? []) as unknown[])].map((parameter) => resolveRef(document, parameter) as JsonObject);
     const valueFor = (parameter: JsonObject): string => String(parameter.example ?? exampleFor(document, parameter.schema) ?? "1");
-    const path = operation.path.replace(/\{([^}]+)\}/gu, (_match, name: string) => encodeURIComponent(valueFor(parameters.find((parameter) => parameter.in === "path" && parameter.name === name) ?? {})));
+    const path = operation.path.replace(/\{([^{}]+)\}/gu, (_match, name: string) => encodeURIComponent(valueFor(parameters.find((parameter) => parameter.in === "path" && parameter.name === name) ?? {})));
     const query = parameters.filter((parameter) => parameter.in === "query" && parameter.required === true).map((parameter) => `${encodeURIComponent(String(parameter.name))}=${encodeURIComponent(valueFor(parameter))}`).join("&");
     const content = ((resolveRef(document, definition.requestBody) as JsonObject | undefined)?.content ?? {}) as Record<string, JsonObject>;
     const json = content["application/json"];
@@ -171,7 +171,7 @@ export function checkFromOpenApi(spec: unknown, options: { readonly name: string
 
 export interface CoverageReport { readonly total: number; readonly covered: number; readonly operations: readonly { readonly method: string; readonly path: string; readonly sources: readonly string[]; readonly scenarios: readonly string[] }[] }
 
-export const templatePattern = (template: string): RegExp => new RegExp(`^${template.split(/(\{[^}]+\}|:[A-Za-z_]\w*)/u).map((part) => (/^(\{[^}]+\}|:[A-Za-z_]\w*)$/u.test(part) ? "[^/]+" : part.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"))).join("")}/?$`, "u");
+export const templatePattern = (template: string): RegExp => new RegExp(`^${template.split(/(\{[^{}]+\}|:[A-Za-z_]\w*)/u).map((part) => (/^(\{[^{}]+\}|:[A-Za-z_]\w*)$/u.test(part) ? "[^/]+" : part.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"))).join("")}/?$`, "u");
 
 export function checkCoverage(check: CheckDocument, sources: { readonly openapi?: unknown; readonly traces?: TraceMap }): CoverageReport {
   const wanted = new Map<string, { method: string; path: string; sources: Set<string> }>();

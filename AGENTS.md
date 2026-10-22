@@ -31,6 +31,10 @@ graphify update .             # refresh after code changes, no LLM cost
 - Commits follow Conventional Commits and need a DCO `Signed-off-by` line (`git commit -s`).
 - Never add `Co-Authored-By` trailers, "Generated with" lines, or any other AI attribution to commits, PR descriptions, tags, or release notes.
 - Match surrounding code: dense single-line helpers in `scripts/`, few comments, no new dependencies without need.
+- CodeQL runs on every PR and has flagged these repeatedly; write code that avoids them up front:
+  - Regexes on input (paths, files, responses, templates): a quantified class must exclude the character that starts the next match, so no input can be rescanned from many start positions. Write `\{[^{}]+\}`, not `\{[^}]+\}`; `\[([^[\]/]+)\]`, not `\[(.+?)\]`. Avoid nested or adjacent overlapping quantifiers (`(a+)+`, `\s*\w*\s*`). Time a 100k-character worst case (`"{".repeat(1e5)`) when unsure.
+  - Outbound requests: never build a URL host from recorded or user input. Keep a fixed origin and validate the path (`^\/(?![/\\])[^\s]*$`).
+  - Never log, store, or write credentials or header values to files; keep only environment variable names.
 - Generated README blocks between `<!-- AIR_LLM_BENCHMARK:START -->` and `<!-- AIR_LLM_BENCHMARK:END -->` are owned by `pnpm benchmark:render`. Never hand-edit them.
 
 ## Before pushing
