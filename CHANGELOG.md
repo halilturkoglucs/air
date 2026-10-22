@@ -4,6 +4,8 @@ All notable changes are recorded here. AIR follows the pre-1.0 policy in `docs/v
 
 ## Unreleased
 
+## 0.17.0 - 2026-10-22
+
 - Added `air protect`, one command for people and agents: the first run (`--url`) builds read-only scenarios from an OpenAPI file or the routes in the code, or records a command through `$AIR_PROXY_URL`, and creates a baseline; later runs check the current code and show expected and actual values from a local, gitignored cache. No proxy or framework plugin is required.
 - Added `air agent install`, which writes a managed AIR block to `AGENTS.md` and `CLAUDE.md` and can register the MCP server (`--mcp`), and the `air_protect` MCP tool.
 - `air check run --reveal` now uses locally cached expected values when the legacy service is no longer running.
