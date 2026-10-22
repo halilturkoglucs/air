@@ -56,11 +56,13 @@ describe("air protect setup guidance", () => {
     expect(first.err).toContain("Built 3 read-only scenario(s) from routes found in the code");
     expect(first.out).toContain("NOTE 2 of 3 scenarios only reached a login wall");
     expect(first.out).toContain("NOTE this code stores data");
+    // The stability pass reruns everything once and names the counter that changes between identical runs.
+    expect(first.out).toContain("NOTE 1 value(s) changed between two identical runs and will fail every check: get-visits/http/body/count");
 
     // Without a reset, the stored counter makes the next run differ even though the code did not change.
     const drift = air({}, "protect");
     expect(drift.code).toBe(1);
-    expect(drift.out).toContain("/http/body/count: expected 1, got 2");
+    expect(drift.out).toContain("/http/body/count: expected 1, got 3");
     expect(drift.out).toContain("NEXT fix the code (never the checks) unless the change is intended, then rerun the same AIR command.");
 
     const reset = air({ AIR_TEST_COOKIE: "session=ok" }, "protect", "--reset", "node reset.mjs", "--header", "Cookie=AIR_TEST_COOKIE", "--rebaseline");

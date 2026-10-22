@@ -1,4 +1,4 @@
-import { observeAllScenarios, sameDigest, type CheckDocument, type CheckTarget, type DigestNode, type NormalizationRule } from "./check.js";
+import { JWT, observeAllScenarios, sameDigest, type CheckDocument, type CheckTarget, type DigestNode, type NormalizationRule } from "./check.js";
 
 // Acceptance gate for agent-written harnesses. An LLM may write the harness; only these deterministic checks decide
 // whether AIR trusts it: stable across runs, sensitive to input, and able to detect a planted behavior change.
@@ -25,6 +25,14 @@ function differingPointers(left: unknown, right: unknown, pointer = ""): { point
   return JSON.stringify(left) === JSON.stringify(right) ? [] : [{ pointer, left, right }];
 }
 
+// The format of a value that legitimately changes between identical runs, if it is one AIR can type-check.
+export function generatedFormat(left: unknown, right: unknown): "uuid" | "timestamp" | "jwt" | undefined {
+  const both = (pattern: RegExp): boolean => [left, right].every((value) => typeof value === "string" && pattern.test(value));
+  return both(UUID) ? "uuid" : both(TIMESTAMP) ? "timestamp" : both(JWT) ? "jwt" : undefined;
+}
+
+export { differingPointers };
+
 export async function verifyHarness(input: { readonly check: CheckDocument; readonly target: CheckTarget; readonly repositoryRoot: string; readonly runs?: number; readonly mutatedRoot?: string }): Promise<HarnessVerdict> {
   const runs = Math.max(2, input.runs ?? 3);
   const problems: string[] = [];
@@ -38,7 +46,7 @@ export async function verifyHarness(input: { readonly check: CheckDocument; read
     const other = later.scenarios.find((scenario) => scenario.id === first.id);
     if (!other) { problems.push(`${first.id}: missing in a later run`); continue; }
     for (const difference of differingPointers(first.raw, other.raw)) {
-      const format = [difference.left, difference.right].every((value) => typeof value === "string" && UUID.test(value)) ? "uuid" : [difference.left, difference.right].every((value) => typeof value === "string" && TIMESTAMP.test(value)) ? "timestamp" : undefined;
+      const format = generatedFormat(difference.left, difference.right);
       if (format) tokens.set(difference.pointer, { kind: "typed-token", pointer: difference.pointer, format });
       else unstable.add(`${first.id}${difference.pointer}`);
     }

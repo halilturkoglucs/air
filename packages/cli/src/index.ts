@@ -24,7 +24,7 @@ import { importPostgres } from "@air/import-postgres";
 import { importOpenApiSource } from "@air/import-openapi";
 import { importNextjs } from "@air/import-nextjs";
 import { importSpring } from "@air/import-spring";
-import { CheckInfrastructureError, CheckInputError, adoptExtractedCapability, createCheckBaseline, discoverSpring, discoveryFromAirCandidate, extractCapability, ingestEvidence, initializeMigrationCheck, loadCheckBaseline, loadCheckPolicy, loadCheckTarget, loadMigrationCheck, mergeDiscoveryBundles, parseCheckResult, readDiscoveryBundle, runMigrationCheckDetailed, observeCheckTarget, approveBaselineScenarios, diffBaselines, checkFromExchanges, exchangesFromHar, recordHttpTraffic, writeRecordedCheck, traceMapFromOtlp, formatTraceMap, addBaselineScenarios, templatePattern, verifyHarness, createCheckBaselineDetailed, observationDigest, checkFromOpenApi, checkCoverage, formatCoverage, type CheckBaseline, sameDigest, buildAgentReport, formatAgentReport, differenceKey, AGENT_PROTOCOL, startWorkbench, validateMigrationCheck, verifyImportedCapability, writeCheckBaseline, writeCheckResult, writeDiscoveryBundle, writeDiscoveryReport, type CheckMismatch, type CheckDocument, type DiscoveryBundle, scanCodeSeams, formatCodeSeams } from "@air/discovery";
+import { CheckInfrastructureError, CheckInputError, adoptExtractedCapability, createCheckBaseline, discoverSpring, discoveryFromAirCandidate, extractCapability, ingestEvidence, initializeMigrationCheck, loadCheckBaseline, loadCheckPolicy, loadCheckTarget, loadMigrationCheck, mergeDiscoveryBundles, parseCheckResult, readDiscoveryBundle, runMigrationCheckDetailed, observeCheckTarget, approveBaselineScenarios, diffBaselines, checkFromExchanges, exchangesFromHar, recordHttpTraffic, writeRecordedCheck, traceMapFromOtlp, formatTraceMap, observeAllScenarios, generatedFormat, differingPointers, type NormalizationRule, addBaselineScenarios, templatePattern, verifyHarness, createCheckBaselineDetailed, observationDigest, checkFromOpenApi, checkCoverage, formatCoverage, type CheckBaseline, sameDigest, buildAgentReport, formatAgentReport, differenceKey, AGENT_PROTOCOL, startWorkbench, validateMigrationCheck, verifyImportedCapability, writeCheckBaseline, writeCheckResult, writeDiscoveryBundle, writeDiscoveryReport, type CheckMismatch, type CheckDocument, type DiscoveryBundle, scanCodeSeams, formatCodeSeams } from "@air/discovery";
 import { startLanguageServer } from "@air/language-server";
 import { NextjsTargetAdapter, type NextjsTargetOptions } from "@air/target-nextjs";
 import { RustTargetAdapter, type RustTargetOptions } from "@air/target-rust";
@@ -1599,6 +1599,36 @@ async function resetCandidates(root: string): Promise<string[]> {
   return found;
 }
 
+// Runs every scenario once more right after baselining. Values that changed between two identical runs are either
+// generated (UUIDs, timestamps, JWTs: normalized automatically, still type-checked, then re-baselined) or real
+// instability that would fail every run (reported with the exact fields so a person decides).
+async function stabilize(root: string, profile: CheckProfile, io: CliIo): Promise<void> {
+  const checkPath = resolve(root, profile.check);
+  const [check, target, policy] = await Promise.all([loadMigrationCheck(checkPath), loadCheckTarget(resolve(root, profile.legacy)), loadCheckPolicy(profile.policy ? resolve(root, profile.policy) : undefined)]);
+  const repository = gitRepositoryState(); const cache = await readExpectedCache(root);
+  const second = await observeAllScenarios({ check, target, repositoryRoot: repository.root });
+  const rules = new Map<string, NormalizationRule & { scenarios: string[] }>(); const unstable: string[] = [];
+  for (const scenario of second.scenarios) {
+    const key = `${check.metadata.name}::${scenario.id}`; if (!Object.hasOwn(cache, key)) continue;
+    for (const difference of differingPointers(cache[key], scenario.raw)) {
+      const format = generatedFormat(difference.left, difference.right);
+      if (!format) { unstable.push(`${scenario.id}${difference.pointer}`); continue; }
+      const rule = rules.get(`${format} ${difference.pointer}`) ?? { kind: "typed-token" as const, pointer: difference.pointer, format, scenarios: [] };
+      rule.scenarios.push(scenario.id); rules.set(`${format} ${difference.pointer}`, rule);
+    }
+  }
+  if (rules.size > 0) {
+    const normalized: CheckDocument = { ...check, spec: { ...check.spec, normalization: [...(check.spec.normalization ?? []), ...rules.values()] } };
+    await writeFile(checkPath, stringifyYaml(normalized), "utf8");
+    await rename(resolve(root, profile.baseline), resolve(root, `${profile.baseline}-unnormalized-${new Date().toISOString().replace(/[:.]/gu, "-")}`));
+    const { baseline, observations } = await createCheckBaselineDetailed({ check: normalized, target, policy, repositoryRoot: repository.root, repositoryHash: repository.hash, clean: repository.clean, allowDirty: true, keepObservations: true });
+    await writeCheckBaseline(resolve(root, profile.baseline), baseline);
+    await writeExpectedCache(root, check.metadata.name, observations);
+    io.stdout(`NOTE normalized ${rules.size} generated value(s) that change on every run (${[...rules.values()].map((rule) => `${rule.pointer} as ${rule.kind === "typed-token" ? rule.format : ""}`).slice(0, 4).join(", ")}${rules.size > 4 ? ", ..." : ""}); they are still type-checked.\n`);
+  }
+  if (unstable.length > 0) io.stdout(`NOTE ${unstable.length} value(s) changed between two identical runs and will fail every check: ${unstable.slice(0, 6).join(", ")}${unstable.length > 6 ? ", ..." : ""}. If they depend on stored state, add --reset; if they are random or counters, add an ignore rule with a reason to the check file.\n`);
+}
+
 function credentialNotes(recorded: { readonly chained: number; readonly untraced: number }, io: CliIo): void {
   if (recorded.chained > 0) io.stderr(`NOTE ${recorded.chained} credential header(s) are taken from earlier responses at replay time (for example a login token); no credential is stored.\n`);
   if (recorded.untraced > 0) io.stderr(`NOTE ${recorded.untraced} credential header(s) came from outside the recording and were dropped, so those requests replay signed out. Include the sign-in in the recorded command, or use --header Name=ENV_VAR.\n`);
@@ -1753,6 +1783,7 @@ async function protectCommand(args: readonly string[], io: CliIo): Promise<numbe
       const { baseline, observations } = await createCheckBaselineDetailed({ check, target, policy, repositoryRoot: repository.root, repositoryHash: repository.hash, clean: repository.clean, allowDirty: true, keepObservations: true });
       await writeCheckBaseline(resolve(root, profile.baseline), baseline);
       await writeExpectedCache(root, check.metadata.name, observations);
+      await stabilize(root, profile, io);
       for (const note of await setupNotes(root, target, observations)) io.stdout(`NOTE ${note}\n`);
       io.stdout(await coverageLine(root, check));
       io.stdout(`PROTECTED ${baseline.scenarios.length} scenario(s) (baseline ${baseline.baselineId.slice(0, 12)}). Commit ${dirname(profile.check)}/ and .air/check.json.\nNEXT change the code, restart the service, then run \`air protect\`.\n`);
@@ -1843,6 +1874,7 @@ async function protectAdd(input: { readonly root: string; readonly profile: Chec
   await rename(resolve(root, profile.baseline), previous);
   await writeCheckBaseline(resolve(root, profile.baseline), result.baseline);
   await writeExpectedCache(root, check.metadata.name, result.observations);
+  await stabilize(root, profile, io);
   io.stdout(`ADDED ${added.length} scenario(s); ${extended.spec.scenarios.length} in total (previous baseline kept at ${relative(root, previous)}).\n${await coverageLine(root, extended)}`);
   return 0;
 }

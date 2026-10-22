@@ -20,12 +20,14 @@ type CommandDefinition = { readonly argv: readonly string[]; readonly workingDir
 type CheckRequest =
   | { readonly kind: "http"; readonly method: string; readonly path: string; readonly headers?: Readonly<Record<string, string>>; readonly headersFrom?: Readonly<Record<string, { readonly scenario: string; readonly pointer?: string; readonly setCookie?: string; readonly template: string }>>; readonly body?: unknown }
   | { readonly kind: "command"; readonly arguments?: readonly string[]; readonly input?: unknown };
-export type NormalizationRule =
+// Any rule may be limited to some scenarios; generated values usually exist only in a few responses.
+export type NormalizationRule = (
   | { readonly kind: "ignore"; readonly pointer: string; readonly reason: string }
-  | { readonly kind: "typed-token"; readonly pointer: string; readonly format: "uuid" | "timestamp"; readonly binding?: string }
+  | { readonly kind: "typed-token"; readonly pointer: string; readonly format: "uuid" | "timestamp" | "jwt"; readonly binding?: string }
   | { readonly kind: "unordered-array"; readonly pointer: string; readonly key: string }
   | { readonly kind: "rename"; readonly pointer: string; readonly to: string; readonly reason: string }
-  | { readonly kind: "internal-boundary"; readonly pointer: string; readonly match: unknown; readonly reason: string };
+  | { readonly kind: "internal-boundary"; readonly pointer: string; readonly match: unknown; readonly reason: string }
+) & { readonly scenarios?: readonly string[] };
 
 export interface CheckDocument {
   readonly apiVersion: "air.dev/check/v0.1";
@@ -164,6 +166,7 @@ export function parseCheckTarget(source: string): CheckTarget {
 }
 
 export function parseCheckPolicy(source: string): CheckPolicy { return parseDocument<CheckPolicy>(source, "Check policy", validatePolicy); }
+export const JWT = /^[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}$/u;
 function isUtcTimestamp(value: string): boolean { return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z$/u.test(value) && !Number.isNaN(Date.parse(value)); }
 export function parseCheckBaseline(source: string): CheckBaseline {
   const baseline = parseDocument<CheckBaseline>(source, "Check baseline", validateBaseline);
@@ -265,7 +268,7 @@ function applyNormalization(observation: unknown, rules: readonly NormalizationR
       setAt(parent, key, [...value].sort((left, right) => canonical((left as Record<string, unknown>)[rule.key]).localeCompare(canonical((right as Record<string, unknown>)[rule.key]))));
       continue;
     }
-    if (typeof value !== "string" || (rule.format === "uuid" ? !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(value) : !isUtcTimestamp(value))) throw new CheckInputError(`Value at ${rule.pointer} is not a valid ${rule.format}.`);
+    if (typeof value !== "string" || (rule.format === "uuid" ? !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(value) : rule.format === "jwt" ? !JWT.test(value) : !isUtcTimestamp(value))) throw new CheckInputError(`Value at ${rule.pointer} is not a valid ${rule.format}.`);
     if (rule.binding) {
       const encoded = canonical(value); const existing = bindings.get(rule.binding);
       if (existing !== undefined && existing !== encoded) throw new CheckInputError(`Named binding ${rule.binding} is inconsistent within this observation.`);
@@ -502,7 +505,7 @@ async function executeScenarios(check: CheckDocument, target: CheckTarget, repos
         else selected[category] = rawRecord[category];
       }
       for (const category of Object.keys(rawRecord)) if (!check.spec.observations.includes(category as ObservationCategory)) issues.push({ scenario: scenario.id, kind: "unmatched", selector: `/${category}`, message: `Target returned undeclared ${category} evidence.` });
-      const applicableRules = (check.spec.normalization ?? []).filter((rule) => Object.hasOwn(selected, decodePointer(rule.pointer)[0] ?? ""));
+      const applicableRules = (check.spec.normalization ?? []).filter((rule) => Object.hasOwn(selected, decodePointer(rule.pointer)[0] ?? "") && (!rule.scenarios || rule.scenarios.includes(scenario.id)));
       try { const normalized = applyNormalization(selected, applicableRules); output.push({ id: scenario.id, observation: summarize(normalized), ...(keepRaw ? { raw: normalized } : {}) }); }
       catch (error) {
         issues.push({ scenario: scenario.id, kind: "normalization", selector: "/normalization", message: error instanceof Error ? error.message : String(error) });

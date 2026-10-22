@@ -25,8 +25,13 @@ function findString(value: unknown, needle: string, pointer = ""): string | unde
 // (a login body field or a Set-Cookie), the check records where to take it from at replay time instead.
 export function checkFromExchanges(exchanges: readonly RecordedExchange[], options: { readonly name: string; readonly capability?: string; readonly keepHeaders?: readonly string[]; readonly includeStatic?: boolean; readonly existing?: CheckDocument["spec"]["scenarios"] }): { readonly check: CheckDocument; readonly skipped: number; readonly chained: number; readonly untraced: number } {
   const keep = new Set((options.keepHeaders ?? []).map((name) => name.toLowerCase()));
-  const keyOf = (method: string, path: string, body: unknown): string => JSON.stringify([method, path, body ?? null]);
-  const known = new Map<string, string>((options.existing ?? []).filter((scenario) => scenario.request.kind === "http").map((scenario) => [keyOf((scenario.request as { method: string }).method, (scenario.request as { path: string }).path, (scenario.request as { body?: unknown }).body), scenario.id]));
+  // A signed-in request is a different scenario from the same request signed out (often a login wall).
+  const credentialsOf = (headers: Readonly<Record<string, unknown>>): string[] => Object.keys(headers).map((name) => name.toLowerCase()).filter((name) => CREDENTIAL_HEADERS.includes(name)).sort();
+  const keyOf = (method: string, path: string, body: unknown, credentials: readonly string[]): string => JSON.stringify([method, path, body ?? null, credentials]);
+  const known = new Map<string, string>((options.existing ?? []).filter((scenario) => scenario.request.kind === "http").map((scenario) => {
+    const request = scenario.request as { method: string; path: string; body?: unknown; headers?: Record<string, string>; headersFrom?: Record<string, unknown> };
+    return [keyOf(request.method, request.path, request.body, credentialsOf({ ...request.headers, ...request.headersFrom })), scenario.id];
+  }));
   const ids = new Map<string, number>(); for (const id of known.values()) ids.set(id, 1);
   const scenarios: CheckDocument["spec"]["scenarios"][number][] = []; const sources: { id: string; body: unknown; setCookies: readonly string[] }[] = [];
   let skipped = 0; let chained = 0; let untraced = 0;
@@ -36,11 +41,8 @@ export function checkFromExchanges(exchanges: readonly RecordedExchange[], optio
     if (exchange.body !== undefined && exchange.body !== "") { try { body = JSON.parse(exchange.body) as unknown; } catch { skipped += 1; continue; } }
     if (!METHODS.has(method) || !exchange.path.startsWith("/") || (!options.includeStatic && STATIC_CONTENT.test(exchange.contentType ?? ""))) { skipped += 1; continue; }
     let responseBody: unknown; try { responseBody = exchange.responseBody ? JSON.parse(exchange.responseBody) as unknown : undefined; } catch { /* not JSON */ }
-    const key = keyOf(method, exchange.path, body);
-    const existingId = known.get(key);
-    if (existingId) { sources.push({ id: existingId, body: responseBody, setCookies: exchange.setCookies ?? [] }); continue; }
     const headers = Object.fromEntries(Object.entries(exchange.headers).filter(([name]) => keep.has(name.toLowerCase())).map(([name, value]) => [name.toLowerCase(), value]));
-    const headersFrom: Record<string, HeaderSource> = {};
+    const headersFrom: Record<string, HeaderSource> = {}; let dropped = 0;
     for (const [rawName, value] of Object.entries(exchange.headers)) {
       const name = rawName.toLowerCase();
       if (!CREDENTIAL_HEADERS.includes(name) || keep.has(name)) continue;
@@ -48,21 +50,27 @@ export function checkFromExchanges(exchanges: readonly RecordedExchange[], optio
       if (name === "cookie") {
         for (const pair of value.split(/;\s*/u)) {
           const [cookie, cookieValue] = [pair.slice(0, pair.indexOf("=")), pair.slice(pair.indexOf("=") + 1)];
-          const origin = [...sources].reverse().find((item) => item.setCookies.some((header) => header.startsWith(`${cookie}=${cookieValue}`)));
+          const origin = sources.find((item) => item.setCookies.some((header) => header.startsWith(`${cookie}=${cookieValue}`)));
           if (origin && cookie) { source = { scenario: origin.id, setCookie: cookie, template: `${cookie}={value}` }; break; }
         }
       } else {
         const candidates = [value, value.split(" ").slice(1).join(" ")].filter((candidate) => candidate.length >= 8);
         for (const candidate of candidates) {
-          const origin = [...sources].reverse().map((item) => ({ item, pointer: findString(item.body, candidate) })).find((entry) => entry.pointer !== undefined);
+          // The earliest response carrying the value is the one that issued it (later ones, like GET /user, only echo it).
+          const origin = sources.map((item) => ({ item, pointer: findString(item.body, candidate) })).find((entry) => entry.pointer !== undefined);
           if (origin) { source = { scenario: origin.item.id, pointer: origin.pointer!, template: value.replace(candidate, "{value}") }; break; }
         }
       }
-      if (source) { headersFrom[name] = source; chained += 1; } else untraced += 1;
+      if (source) headersFrom[name] = source; else dropped += 1;
     }
-    known.set(key, "");
+    // Only credentials that replay (kept or chained) make the request a signed-in one.
+    const credentials = credentialsOf({ ...headers, ...headersFrom });
+    const key = keyOf(method, exchange.path, body, credentials);
+    const existingId = known.get(key);
+    if (existingId) { sources.push({ id: existingId, body: responseBody, setCookies: exchange.setCookies ?? [] }); continue; }
+    chained += Object.keys(headersFrom).length; untraced += dropped;
     const slug = exchange.path.split("?")[0]!.toLowerCase().replace(/[^a-z0-9]+/gu, "-").replace(/^-|-$/gu, "").slice(0, 60) || "root";
-    const base = `${method.toLowerCase()}-${slug}`; let id = base; for (let count = 2; ids.has(id); count += 1) id = `${base}-${count}`; ids.set(id, 1);
+    const base = `${method.toLowerCase()}-${slug}${credentials.length > 0 ? "-signed-in" : ""}`; let id = base; for (let count = 2; ids.has(id); count += 1) id = `${base}-${count}`; ids.set(id, 1);
     known.set(key, id);
     sources.push({ id, body: responseBody, setCookies: exchange.setCookies ?? [] });
     scenarios.push({ id, description: `Recorded ${method} ${exchange.path} -> ${exchange.status}`, request: { kind: "http", method, path: exchange.path, ...(Object.keys(headers).length > 0 ? { headers } : {}), ...(Object.keys(headersFrom).length > 0 ? { headersFrom } : {}), ...(body === undefined ? {} : { body }) } });
