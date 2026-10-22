@@ -4,9 +4,14 @@ All notable changes are recorded here. AIR follows the pre-1.0 policy in `docs/v
 
 ## Unreleased
 
+## 0.14.0 - 2026-10-22
+
 - Added the compact agent protocol `air.dev/agent/v1`: `air check profile` stores a check's paths in `.air/check.json`, so `air check run --agent` needs no arguments and prints a deterministic, line-budgeted report with progress since the last run.
 - Added `air check run --reveal`, which re-runs the legacy target locally for failing scenarios and prints expected and actual values without persisting them. Policies can deny it with the new `reveal` field.
 - Added `air check status`, `air agent instructions`, and a dependency-free MCP server, `air mcp`, exposing `air_check_*` tools.
+- Benchmark suite v1.4 feeds the AIR arm the exact `air check run --agent --reveal` output: `claude-sonnet-5-5` reached pass@3 9/9 with AIR versus 0/9 alone, with zero escaped defects.
+- Benchmark evidence verification now treats the source commit as provenance, so evidence stays verifiable after squash merges.
+- The plugin SDK publishes with npm's normalized repository URL.
 
 ## 0.13.0 - 2026-10-22
 
