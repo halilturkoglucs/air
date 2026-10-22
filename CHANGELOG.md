@@ -4,6 +4,10 @@ All notable changes are recorded here. AIR follows the pre-1.0 policy in `docs/v
 
 ## Unreleased
 
+- Added the compact agent protocol `air.dev/agent/v1`: `air check profile` stores a check's paths in `.air/check.json`, so `air check run --agent` needs no arguments and prints a deterministic, line-budgeted report with progress since the last run.
+- Added `air check run --reveal`, which re-runs the legacy target locally for failing scenarios and prints expected and actual values without persisting them. Policies can deny it with the new `reveal` field.
+- Added `air check status`, `air agent instructions`, and a dependency-free MCP server, `air mcp`, exposing `air_check_*` tools.
+
 ## 0.13.0 - 2026-10-22
 
 - Added the framework-neutral UI v0.1 schema and MongoDB target generation.

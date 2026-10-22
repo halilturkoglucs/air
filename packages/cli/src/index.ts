@@ -22,7 +22,7 @@ import { importPostgres } from "@air/import-postgres";
 import { importOpenApiSource } from "@air/import-openapi";
 import { importNextjs } from "@air/import-nextjs";
 import { importSpring } from "@air/import-spring";
-import { CheckInfrastructureError, CheckInputError, adoptExtractedCapability, createCheckBaseline, discoverSpring, discoveryFromAirCandidate, extractCapability, ingestEvidence, initializeMigrationCheck, loadCheckBaseline, loadCheckPolicy, loadCheckTarget, loadMigrationCheck, mergeDiscoveryBundles, parseCheckResult, readDiscoveryBundle, runMigrationCheck, startWorkbench, validateMigrationCheck, verifyImportedCapability, writeCheckBaseline, writeCheckResult, writeDiscoveryBundle, writeDiscoveryReport, type CheckMismatch, type DiscoveryBundle } from "@air/discovery";
+import { CheckInfrastructureError, CheckInputError, adoptExtractedCapability, createCheckBaseline, discoverSpring, discoveryFromAirCandidate, extractCapability, ingestEvidence, initializeMigrationCheck, loadCheckBaseline, loadCheckPolicy, loadCheckTarget, loadMigrationCheck, mergeDiscoveryBundles, parseCheckResult, readDiscoveryBundle, runMigrationCheckDetailed, observeCheckTarget, sameDigest, buildAgentReport, formatAgentReport, differenceKey, AGENT_PROTOCOL, startWorkbench, validateMigrationCheck, verifyImportedCapability, writeCheckBaseline, writeCheckResult, writeDiscoveryBundle, writeDiscoveryReport, type CheckMismatch, type DiscoveryBundle } from "@air/discovery";
 import { startLanguageServer } from "@air/language-server";
 import { NextjsTargetAdapter, type NextjsTargetOptions } from "@air/target-nextjs";
 import { RustTargetAdapter, type RustTargetOptions } from "@air/target-rust";
@@ -42,6 +42,7 @@ import {
 } from "@air/verifier";
 import { createPostgresHttpLiveAdapter } from "./live-verifier.js";
 import { captureEvidence } from "./evidence-capture.js";
+import { AGENT_INSTRUCTIONS, serveMcp } from "./agent.js";
 import packageJson from "../package.json" with { type: "json" };
 
 export interface CliIo {
@@ -60,10 +61,14 @@ const HELP = `AIR verification and compiler toolkit ${VERSION}
 
 Usage:
   air check init <discovery> --capability <id> --output <directory>
-  air check validate <check.yaml> [--policy <file>] [--json]
-  air check baseline <check.yaml> --target <file> --output <directory> [--policy <file>] [--allow-dirty] [--json]
-  air check run <check.yaml> --baseline <directory> --target <file> --output <directory> [--policy <file>] [--json]
-  air check explain <result.json> [--json]
+  air check profile --check <file> --baseline <dir> --legacy <file> --candidate <file> --output <dir> [--policy <file>]
+  air check validate [<check.yaml>] [--policy <file>] [--json]
+  air check baseline [<check.yaml>] [--target <file>] [--output <directory>] [--policy <file>] [--allow-dirty] [--json]
+  air check run [<check.yaml>] [--baseline <dir>] [--target <file>] [--output <dir>] [--policy <file>] [--agent] [--reveal] [--max-lines <n>] [--json]
+  air check explain <result.json> [--agent] [--json]
+  air check status [--json]                   Check profile and last-run summary (runs nothing)
+  air agent instructions                      Print the agent repair loop for AGENTS.md / CLAUDE.md
+  air mcp                                     Serve air_check_* tools over MCP stdio
   air validate <file>                         Parse and validate AIR YAML
   air inspect <file>                          Print a semantic summary
   air migrate <file> [options]                Migrate AIR to a newer schema
@@ -1140,85 +1145,173 @@ function explainMismatch(mismatch: CheckMismatch): string {
   return `${mismatch.classification} ${mismatch.scenario} ${mismatch.selector}: ${action}; provenance ${mismatch.provenance}`;
 }
 
+interface CheckProfile { readonly check: string; readonly policy?: string; readonly baseline: string; readonly legacy: string; readonly candidate: string; readonly output: string }
+interface LastRun { readonly v: string; readonly baselineId: string; readonly at: string; readonly passed: number; readonly total: number; readonly differences: number; readonly keys: readonly string[] }
+
+function projectRoot(): string {
+  const result = spawnSync("git", ["rev-parse", "--show-toplevel"], { cwd: process.cwd(), encoding: "utf8", shell: false });
+  return result.status === 0 ? result.stdout.trim() : process.cwd();
+}
+
+// .air/check.json remembers the check's paths so agents can run `air check run --agent` with no arguments.
+async function readCheckProfile(root: string): Promise<CheckProfile | undefined> {
+  try { return JSON.parse(await readFile(resolve(root, ".air/check.json"), "utf8")) as CheckProfile; }
+  catch (error) { if (error instanceof Error && "code" in error && error.code === "ENOENT") return undefined; throw new CheckInputError(`.air/check.json is not valid JSON: ${error instanceof Error ? error.message : String(error)}`); }
+}
+
+async function readLastRun(root: string): Promise<LastRun | undefined> {
+  try { return JSON.parse(await readFile(resolve(root, ".air/last-run.json"), "utf8")) as LastRun; } catch { return undefined; }
+}
+
 async function checkCommand(args: readonly string[], io: CliIo): Promise<number> {
-  const [action, input, ...options] = args;
+  const [action, ...rest] = args;
   const usages = {
     init: "Usage: air check init <discovery> --capability <id> --output <directory>\n",
-    validate: "Usage: air check validate <check.yaml> [--policy <file>] [--json]\n",
-    baseline: "Usage: air check baseline <check.yaml> --target <file> --output <directory> [--policy <file>] [--allow-dirty] [--json]\n",
-    run: "Usage: air check run <check.yaml> --baseline <directory> --target <file> --output <directory> [--policy <file>] [--json]\n",
-    explain: "Usage: air check explain <result.json> [--json]\n",
+    profile: "Usage: air check profile --check <check.yaml> --baseline <directory> --legacy <target> --candidate <target> --output <directory> [--policy <file>]\n",
+    status: "Usage: air check status [--json]\n",
+    validate: "Usage: air check validate [<check.yaml>] [--policy <file>] [--json]\n",
+    baseline: "Usage: air check baseline [<check.yaml>] [--target <file>] [--output <directory>] [--policy <file>] [--allow-dirty] [--json]\n",
+    run: "Usage: air check run [<check.yaml>] [--baseline <directory>] [--target <file>] [--output <directory>] [--policy <file>] [--agent] [--reveal] [--legacy <file>] [--max-lines <n>] [--json]\n",
+    explain: "Usage: air check explain <result.json> [--agent] [--max-lines <n>] [--json]\n",
   } as const;
-  if (!action || !(action in usages) || !input || input.startsWith("--")) {
+  const input = rest[0] && !rest[0].startsWith("--") ? rest[0] : undefined;
+  const options = input ? rest.slice(1) : rest;
+  if (!action || !(action in usages) || (!input && (action === "init" || action === "explain")) || (input && (action === "profile" || action === "status"))) {
     io.stderr(Object.values(usages).join("")); return 2;
   }
   const usage = usages[action as keyof typeof usages];
-  let json = false; let allowDirty = false; const values = new Map<string, string>();
+  let json = false; let allowDirty = false; let agent = false; let reveal = false; const values = new Map<string, string>();
   const allowed = action === "init" ? new Set(["--capability", "--output"])
-    : action === "validate" ? new Set(["--policy"])
-      : action === "baseline" ? new Set(["--target", "--output", "--policy"])
-        : action === "run" ? new Set(["--baseline", "--target", "--output", "--policy"])
-          : new Set<string>();
+    : action === "profile" ? new Set(["--check", "--policy", "--baseline", "--legacy", "--candidate", "--output"])
+      : action === "validate" ? new Set(["--policy"])
+        : action === "baseline" ? new Set(["--target", "--output", "--policy"])
+          : action === "run" ? new Set(["--baseline", "--target", "--output", "--policy", "--legacy", "--max-lines"])
+            : action === "explain" ? new Set(["--max-lines"])
+              : new Set<string>();
   for (let index = 0; index < options.length; index += 1) {
     const option = options[index];
     if (option === "--json") { json = true; continue; }
     if (option === "--allow-dirty" && action === "baseline") { allowDirty = true; continue; }
+    if (option === "--agent" && (action === "run" || action === "explain")) { agent = true; continue; }
+    if (option === "--reveal" && action === "run") { reveal = true; continue; }
     const value = options[index + 1];
     if (!option || !allowed.has(option) || !value || value.startsWith("--") || values.has(option)) { io.stderr(usage); return 2; }
     values.set(option, value); index += 1;
   }
+  const maxLines = values.has("--max-lines") ? Number(values.get("--max-lines")) : undefined;
+  if (maxLines !== undefined && (!Number.isInteger(maxLines) || maxLines < 4)) { io.stderr(usage); return 2; }
   try {
+    const root = projectRoot();
+    if (action === "profile") {
+      const required = ["--check", "--baseline", "--legacy", "--candidate", "--output"] as const;
+      if (required.some((option) => !values.has(option))) { io.stderr(usage); return 2; }
+      const relativePath = (option: string): string => relative(root, resolve(values.get(option)!));
+      const profile: CheckProfile = { check: relativePath("--check"), ...(values.has("--policy") ? { policy: relativePath("--policy") } : {}), baseline: relativePath("--baseline"), legacy: relativePath("--legacy"), candidate: relativePath("--candidate"), output: relativePath("--output") };
+      await mkdir(resolve(root, ".air"), { recursive: true });
+      await writeFile(resolve(root, ".air/check.json"), `${JSON.stringify(profile, null, 2)}\n`, "utf8");
+      io.stdout(json ? `${JSON.stringify({ ok: true, profile: resolve(root, ".air/check.json") })}\n` : `Check profile: ${resolve(root, ".air/check.json")}\n`);
+      return 0;
+    }
+    const profile = action === "init" ? undefined : await readCheckProfile(root);
+    const fromProfile = (key: keyof CheckProfile): string | undefined => profile?.[key] ? resolve(root, profile[key]!) : undefined;
+    const option = (name: string, key?: keyof CheckProfile): string | undefined => values.has(name) ? resolve(values.get(name)!) : key ? fromProfile(key) : undefined;
+    const checkPath = input ? resolve(input) : fromProfile("check");
+    const policyPath = option("--policy", "policy");
+    if (action === "status") {
+      if (!profile) throw new CheckInputError("No check profile. Create one with `air check profile`.");
+      const last = await readLastRun(root);
+      if (json) io.stdout(`${JSON.stringify({ v: AGENT_PROTOCOL, profile, last: last ? { at: last.at, passed: last.passed, total: last.total, differences: last.differences } : null })}\n`);
+      else io.stdout(`PROFILE check=${profile.check} candidate=${profile.candidate} baseline=${profile.baseline}\n${last ? `LAST ${last.differences === 0 ? "PASS" : "FAIL"} ${last.passed}/${last.total} scenarios · ${last.differences} differences · ${last.at}` : "LAST none"}\n`);
+      return 0;
+    }
     if (action === "init") {
       const capability = values.get("--capability"); const output = values.get("--output");
       if (!capability || !output) { io.stderr(usage); return 2; }
-      const path = await initializeMigrationCheck(resolve(input), capability, resolve(output));
+      const path = await initializeMigrationCheck(resolve(input!), capability, resolve(output));
       if (json) io.stdout(`${JSON.stringify({ ok: true, check: path, reviewRequired: true })}\n`);
       else io.stdout(`Check review candidate: ${path}\nReview and replace the generated scenario before creating a baseline.\n`);
       return 0;
     }
+    if (action === "explain") {
+      const result = parseCheckResult(await readFile(resolve(input!), "utf8"));
+      if (agent) {
+        const report = buildAgentReport({ result, maxLines });
+        io.stdout(json ? `${JSON.stringify(report)}\n` : formatAgentReport(report));
+        return result.passed ? 0 : 1;
+      }
+      const explanation = { passed: result.passed, baselineId: result.baselineId, differences: result.mismatches.map((mismatch) => ({ ...mismatch, action: mismatch.repair === "candidate-code" ? "fix-code" : "repair-harness" })) };
+      if (json) io.stdout(`${JSON.stringify(explanation)}\n`);
+      else if (result.mismatches.length === 0) io.stdout(`No differences. Candidate matches baseline ${result.baselineId} within the declared observation boundary.\n`);
+      else for (const mismatch of result.mismatches) io.stdout(`${explainMismatch(mismatch)}\n`);
+      return result.passed ? 0 : 1;
+    }
+    if (!checkPath) throw new CheckInputError("No check file. Pass <check.yaml> or create a profile with `air check profile`.");
     if (action === "validate") {
-      const [check, policy] = await Promise.all([loadMigrationCheck(resolve(input)), loadCheckPolicy(values.get("--policy") ? resolve(values.get("--policy")!) : undefined)]);
+      const [check, policy] = await Promise.all([loadMigrationCheck(checkPath), loadCheckPolicy(policyPath)]);
       const violations = validateMigrationCheck(check, policy);
-      if (json) io.stdout(`${JSON.stringify({ ok: violations.length === 0, check: resolve(input), violations })}\n`);
-      else if (violations.length === 0) io.stdout(`PASS ${resolve(input)}\n`); else for (const violation of violations) io.stderr(`POLICY ${violation}\n`);
+      if (json) io.stdout(`${JSON.stringify({ ok: violations.length === 0, check: checkPath, violations })}\n`);
+      else if (violations.length === 0) io.stdout(`PASS ${checkPath}\n`); else for (const violation of violations) io.stderr(`POLICY ${violation}\n`);
       return violations.length === 0 ? 0 : 1;
     }
     if (action === "baseline") {
-      const targetPath = values.get("--target"); const output = values.get("--output");
+      const targetPath = option("--target", "legacy"); const output = option("--output", "baseline");
       if (!targetPath || !output) { io.stderr(usage); return 2; }
       const repository = gitRepositoryState();
       if (!repository.clean && !allowDirty) throw new CheckInputError("Tracked working tree is dirty; commit/stash changes or pass --allow-dirty for a non-releasable baseline.");
-      const [check, target, policy] = await Promise.all([loadMigrationCheck(resolve(input)), loadCheckTarget(resolve(targetPath)), loadCheckPolicy(values.get("--policy") ? resolve(values.get("--policy")!) : undefined)]);
+      const [check, target, policy] = await Promise.all([loadMigrationCheck(checkPath), loadCheckTarget(targetPath), loadCheckPolicy(policyPath)]);
       const baseline = await createCheckBaseline({ check, target, policy, repositoryRoot: repository.root, repositoryHash: repository.hash, clean: repository.clean, allowDirty });
-      const path = await writeCheckBaseline(resolve(output), baseline);
+      const path = await writeCheckBaseline(output, baseline);
       const response = { ok: true, baselineId: baseline.baselineId, releasable: baseline.releasable, path };
       if (json) io.stdout(`${JSON.stringify(response)}\n`); else io.stdout(`Baseline ${baseline.baselineId}: ${path}\n${baseline.releasable ? "Releasable clean-tree baseline." : "NON-RELEASABLE dirty-tree baseline."}\n`);
       return 0;
     }
-    if (action === "run") {
-      const baselinePath = values.get("--baseline"); const targetPath = values.get("--target"); const output = values.get("--output");
-      if (!baselinePath || !targetPath || !output) { io.stderr(usage); return 2; }
-      const repository = gitRepositoryState();
-      const [check, baseline, target, policy] = await Promise.all([loadMigrationCheck(resolve(input)), loadCheckBaseline(resolve(baselinePath)), loadCheckTarget(resolve(targetPath)), loadCheckPolicy(values.get("--policy") ? resolve(values.get("--policy")!) : undefined)]);
-      const result = await runMigrationCheck({ check, baseline, target, policy, repositoryRoot: repository.root, repositoryHash: repository.hash });
-      const path = await writeCheckResult(resolve(output), result);
-      if (json) io.stdout(`${JSON.stringify({ ...result, path })}\n`);
-      else {
-        io.stdout(`${result.passed ? "PASS" : "FAIL"} migration check against baseline ${result.baselineId}\nResult: ${path}\n`);
-        for (const mismatch of result.mismatches) io.stderr(`  ${explainMismatch(mismatch)}\n`);
+    const baselinePath = option("--baseline", "baseline"); const targetPath = option("--target", "candidate");
+    const output = values.has("--output") ? resolve(values.get("--output")!) : profile ? resolve(root, profile.output, new Date().toISOString().replace(/[:.]/gu, "-")) : undefined;
+    if (!baselinePath || !targetPath || !output) { io.stderr(usage); return 2; }
+    const repository = gitRepositoryState();
+    const [check, baseline, target, policy] = await Promise.all([loadMigrationCheck(checkPath), loadCheckBaseline(baselinePath), loadCheckTarget(targetPath), loadCheckPolicy(policyPath)]);
+    let legacyTarget: Awaited<ReturnType<typeof loadCheckTarget>> | undefined;
+    if (reveal) {
+      if (policy.spec.reveal === "deny") throw new CheckInputError("The check policy denies --reveal (reveal: deny).");
+      const legacyPath = option("--legacy", "legacy");
+      if (!legacyPath) throw new CheckInputError("--reveal needs the legacy target: pass --legacy or set it in the check profile.");
+      legacyTarget = await loadCheckTarget(legacyPath);
+      if (legacyTarget.spec.evidenceCaptureProfile && policy.spec.reveal !== "allow") throw new CheckInputError("The legacy target uses evidence capture; set `reveal: allow` in the check policy to show its values locally.");
+    }
+    const { result, observations } = await runMigrationCheckDetailed({ check, baseline, target, policy, repositoryRoot: repository.root, repositoryHash: repository.hash, keepObservations: reveal });
+    const path = await writeCheckResult(output, result);
+    if (agent) {
+      const revealed = new Map<string, { expected: unknown; actual: unknown }>(); const notes: string[] = [];
+      if (legacyTarget && !result.passed) {
+        const failing = result.scenarios.filter((scenario) => !scenario.passed).map((scenario) => scenario.id);
+        const legacy = await observeCheckTarget({ check, target: legacyTarget, repositoryRoot: repository.root, scenarioIds: failing });
+        for (const id of failing) {
+          const approved = baseline.scenarios.find((scenario) => scenario.id === id)?.observation; const observed = legacy.get(id);
+          if (observed && sameDigest(observed.digest, approved)) revealed.set(id, { expected: observed.raw, actual: observations.get(id) });
+          else notes.push(`legacy output for ${id} no longer matches the baseline; values hidden. Re-baseline if legacy changed on purpose.`);
+        }
       }
+      const last = await readLastRun(root);
+      const report = buildAgentReport({ result, values: revealed, previousKeys: last?.baselineId === result.baselineId ? last.keys : undefined, maxLines, notes });
+      const lastRun: LastRun = { v: AGENT_PROTOCOL, baselineId: result.baselineId, at: result.generatedAt, passed: report.passed, total: report.total, differences: report.differences, keys: result.mismatches.map(differenceKey) };
+      await mkdir(resolve(root, ".air"), { recursive: true });
+      await writeFile(resolve(root, ".air/last-run.json"), `${JSON.stringify(lastRun)}\n`, "utf8");
+      io.stdout(json ? `${JSON.stringify({ ...report, result: path })}\n` : formatAgentReport(report));
       return result.passed ? 0 : 1;
     }
-    if (options.some((option) => option !== "--json")) { io.stderr(usage); return 2; }
-    const result = parseCheckResult(await readFile(resolve(input), "utf8"));
-    const explanation = { passed: result.passed, baselineId: result.baselineId, differences: result.mismatches.map((mismatch) => ({ ...mismatch, action: mismatch.repair === "candidate-code" ? "fix-code" : "repair-harness" })) };
-    if (json) io.stdout(`${JSON.stringify(explanation)}\n`);
-    else if (result.mismatches.length === 0) io.stdout(`No differences. Candidate matches baseline ${result.baselineId} within the declared observation boundary.\n`);
-    else for (const mismatch of result.mismatches) io.stdout(`${explainMismatch(mismatch)}\n`);
+    if (json) io.stdout(`${JSON.stringify({ ...result, path })}\n`);
+    else {
+      io.stdout(`${result.passed ? "PASS" : "FAIL"} migration check against baseline ${result.baselineId}\nResult: ${path}\n`);
+      for (const mismatch of result.mismatches) io.stderr(`  ${explainMismatch(mismatch)}\n`);
+    }
     return result.passed ? 0 : 1;
   } catch (error) {
     const code = checkFailureCode(error); const message = error instanceof Error && "code" in error && error.code === "EEXIST" ? "Output already exists; AIR will not overwrite an approved check artifact." : error instanceof Error ? error.message : String(error);
-    if (json) io.stderr(`${JSON.stringify({ ok: false, category: code === 2 ? "invalid-input" : "infrastructure-error", message })}\n`); else io.stderr(`${message}\n`);
+    // Agents get the first lines only; a full stack trace costs tokens and rarely changes the next action.
+    const lines = message.split("\n"); const cause = lines.slice(1).find((line) => /\b\w*Error\b|error:/u.test(line));
+    const shown = agent ? [lines[0], cause?.trim()].filter(Boolean).join(" | ").slice(0, 400) : message;
+    if (json) io.stderr(`${JSON.stringify({ ok: false, category: code === 2 ? "invalid-input" : "infrastructure-error", message: shown })}\n`);
+    else io.stderr(agent ? `${code === 2 ? "INPUT" : "INFRA"} ${shown}\nNEXT fix the target or environment, not the candidate's behavior; exit ${code}.\n` : `${message}\n`);
     return code;
   }
 }
@@ -1982,6 +2075,8 @@ export async function runCli(args: readonly string[], io: CliIo = defaultIo): Pr
   }
 
   if (command === "check") return checkCommand(args.slice(1), io);
+  if (command === "mcp" && args.length === 1) return serveMcp(runCli, VERSION);
+  if (command === "agent" && args[1] === "instructions" && args.length === 2) { io.stdout(AGENT_INSTRUCTIONS); return 0; }
   if (command === "compile") return compile(args.slice(1), io);
   if (command === "compose") return composeSystem(args.slice(1), io);
   if (command === "dev") return devSystem(args.slice(1), io);
