@@ -1599,12 +1599,19 @@ async function resetCandidates(root: string): Promise<string[]> {
   return found;
 }
 
+function credentialNotes(recorded: { readonly chained: number; readonly untraced: number }, io: CliIo): void {
+  if (recorded.chained > 0) io.stderr(`NOTE ${recorded.chained} credential header(s) are taken from earlier responses at replay time (for example a login token); no credential is stored.\n`);
+  if (recorded.untraced > 0) io.stderr(`NOTE ${recorded.untraced} credential header(s) came from outside the recording and were dropped, so those requests replay signed out. Include the sign-in in the recorded command, or use --header Name=ENV_VAR.\n`);
+}
+
 // Field-trial lessons turned into guidance: login walls, missing configuration, and state that hides changes.
 async function setupNotes(root: string, target: Awaited<ReturnType<typeof loadCheckTarget>>, observations: ReadonlyMap<string, unknown>): Promise<string[]> {
   const statuses = [...observations.values()].map((value) => (value as { http?: { status?: number } } | undefined)?.http?.status).filter((status): status is number => typeof status === "number");
   const notes: string[] = [];
   const walled = statuses.filter((status) => status === 401 || status === 403 || (status >= 300 && status < 400)).length;
   if (statuses.length > 0 && walled * 2 >= statuses.length && !target.spec.headers) notes.push(`${walled} of ${statuses.length} scenarios only reached a login wall or redirect. To check signed-in behavior, put a session cookie or token in an environment variable (ask the developer how to sign in) and run: air protect --header Cookie=AIR_SESSION --rebaseline`);
+  const missing = statuses.filter((status) => status === 404).length;
+  if (missing > 0 && missing * 2 >= statuses.length) notes.push(`${missing} of ${statuses.length} scenarios returned 404, so their routes were probably not reached (for example a prefix AIR could not see). Check the paths in the check file before relying on them.`);
   const failing = statuses.filter((status) => status >= 500).length;
   if (failing > 0) notes.push(`${failing} scenario(s) returned 5xx; the service may be missing configuration in this environment. Those scenarios lock the failure, not the feature.`);
   if (!target.spec.lifecycle?.reset) {
@@ -1665,7 +1672,7 @@ async function protectCommand(args: readonly string[], io: CliIo): Promise<numbe
     if (!match) { io.stderr(`${usage}--header takes Name=ENV_VAR; the value is read from that environment variable and never stored.\n`); return 2; }
     headers.push([match[1]!, match[2]!]); index += 1;
   }
-  const parsed = parseFlags(rest, ["--url", "--from-har", "--output", "--max-lines", "--reset"], ["--json", "--rebaseline", "--tests", "--add"]);
+  const parsed = parseFlags(rest, ["--url", "--from-har", "--output", "--max-lines", "--reset", "--reset-scope"], ["--json", "--rebaseline", "--tests", "--add"]);
   if (!parsed || parsed.positional.length > 0) { io.stderr(usage); return 2; }
   const passThrough = [...(parsed.values.has("--max-lines") ? ["--max-lines", parsed.values.get("--max-lines")!] : []), ...(parsed.flags.has("--json") ? ["--json"] : [])];
   try {
@@ -1702,7 +1709,7 @@ async function protectCommand(args: readonly string[], io: CliIo): Promise<numbe
       if (!check) exchanges = await recordFromSource({ root, upstream, command: trafficCommand, har: parsed.values.get("--from-har"), io });
       const output = resolve(parsed.values.get("--output") ?? "air-checks");
       let skipped = 0;
-      if (!check) ({ check, skipped } = checkFromExchanges(exchanges, { name }));
+      if (!check) { const recorded = checkFromExchanges(exchanges, { name }); ({ check, skipped } = recorded); credentialNotes(recorded, io); }
       const paths = await writeRecordedCheck(output, check, upstream);
       if (note) io.stderr(note);
       io.stderr(`${built ? `Built ${check.spec.scenarios.length} read-only scenario(s) from ${built}` : `Recorded ${check.spec.scenarios.length} scenario(s)${skipped > 0 ? ` (skipped ${skipped} non-JSON or static)` : ""}`}.\n`);
@@ -1724,7 +1731,11 @@ async function protectCommand(args: readonly string[], io: CliIo): Promise<numbe
         const argv = splitCommand(parsed.values.get("--reset")!);
         if (argv.length === 0) throw new CheckInputError("--reset needs a command, e.g. --reset \"npm run db:reset\".");
         target.spec.fixtureIsolation = "reset-command";
-        target.spec.lifecycle = { ...(target.spec.lifecycle as object | undefined), reset: { argv } };
+        // Recorded flows (sign in, then use the token) need state to survive between scenarios: reset once per run.
+        const chainedCheck = (await loadMigrationCheck(resolve(root, profile.check))).spec.scenarios.some((scenario) => scenario.request.kind === "http" && scenario.request.headersFrom);
+        const scope = parsed.values.get("--reset-scope") ?? (chainedCheck ? "run" : "scenario");
+        if (scope !== "run" && scope !== "scenario") throw new CheckInputError("--reset-scope is run or scenario.");
+        target.spec.lifecycle = { ...(target.spec.lifecycle as object | undefined), reset: { argv }, resetScope: scope };
       }
       const source = stringifyYaml(target);
       await writeFile(targetPath, source, "utf8"); await loadCheckTarget(targetPath);
@@ -1820,14 +1831,10 @@ async function protectAdd(input: { readonly root: string; readonly profile: Chec
   const [check, target, policy, baseline] = await Promise.all([loadMigrationCheck(checkPath), loadCheckTarget(resolve(root, profile.legacy)), loadCheckPolicy(profile.policy ? resolve(root, profile.policy) : undefined), loadCheckBaseline(resolve(root, profile.baseline))]);
   if (target.spec.type !== "http" || !(target.spec.baseUrl)) throw new CheckInputError("--add records HTTP traffic; this setup's target is not an HTTP base URL.");
   const exchanges = await recordFromSource({ root, upstream: target.spec.baseUrl, command: input.trafficCommand, har: input.har, io });
-  const recorded = checkFromExchanges(exchanges, { name: check.metadata.name }).check.spec.scenarios;
-  const key = (scenario: CheckDocument["spec"]["scenarios"][number]): string => JSON.stringify(scenario.request);
-  const existing = new Set(check.spec.scenarios.map(key)); const ids = new Set(check.spec.scenarios.map((scenario) => scenario.id));
-  const added = recorded.filter((scenario) => !existing.has(key(scenario))).map((scenario) => {
-    let id = scenario.id; for (let count = 2; ids.has(id); count += 1) id = `${scenario.id}-${count}`;
-    ids.add(id); return { ...scenario, id };
-  });
-  if (added.length === 0) { io.stdout(`No new requests: all ${recorded.length} recorded request(s) are already covered.\n${await coverageLine(root, check)}`); return 0; }
+  const recorded = checkFromExchanges(exchanges, { name: check.metadata.name, existing: check.spec.scenarios });
+  const added = recorded.check.spec.scenarios;
+  credentialNotes(recorded, io);
+  if (added.length === 0) { io.stdout(`No new requests: all ${exchanges.length} recorded request(s) are already covered.\n${await coverageLine(root, check)}`); return 0; }
   const extended: CheckDocument = { ...check, spec: { ...check.spec, scenarios: [...check.spec.scenarios, ...added] } };
   const repository = gitRepositoryState();
   const result = await addBaselineScenarios({ check: extended, policy, baseline, target, repositoryRoot: repository.root, scenarioIds: added.map((scenario) => scenario.id), reason: "coverage added by air protect --add" });
@@ -1845,8 +1852,11 @@ async function coverageLine(root: string, check: CheckDocument): Promise<string>
   const report = await scanCodeSeams({ root }).catch(() => undefined);
   const routes = [...new Map((report?.seams ?? []).filter((seam) => seam.kind === "http" && seam.route).map((seam) => [`${seam.method ?? "ANY"} ${seam.route}`, { method: seam.method ?? "ANY", route: seam.route! }])).values()];
   if (routes.length === 0) return "";
-  const requests = check.spec.scenarios.flatMap((scenario) => (scenario.request.kind === "http" ? [{ method: scenario.request.method, path: scenario.request.path.split("?")[0]! }] : []));
-  const covered = routes.filter((route) => requests.some((request) => (route.method === "ANY" || route.method === request.method) && templatePattern(route.route.replace(/<(?:\w+:)?(\w+)>/gu, ":$1")).test(request.path))).length;
+  // A scenario that only ever saw 404 did not reach a route, so it does not count as coverage.
+  const cache = await readExpectedCache(root);
+  const reached = (id: string): boolean => (cache[`${check.metadata.name}::${id}`] as { http?: { status?: number } } | undefined)?.http?.status !== 404;
+  const requests = check.spec.scenarios.flatMap((scenario) => (scenario.request.kind === "http" && reached(scenario.id) ? [{ method: scenario.request.method, path: scenario.request.path.split("?")[0]! }] : []));
+  const covered = routes.filter((route) => requests.some((request) => (route.method === "ANY" || route.method === request.method) && templatePattern(route.route.replace(/<(?:\w+:)?(\w+)>/gu, ":$1").replace(/(.)\/$/u, "$1")).test(request.path))).length;
   return `COVERAGE ${covered} of ${routes.length} HTTP routes found in the code are exercised${covered < routes.length ? "; add more with: air protect --add --tests (or --add -- <command that calls $AIR_PROXY_URL>)" : ""}.\n`;
 }
 

@@ -18,7 +18,7 @@ export type FailureClassification = "candidate-difference" | "baseline-stale" | 
 type EnvironmentReferences = Readonly<Record<string, { readonly fromEnv: string }>>;
 type CommandDefinition = { readonly argv: readonly string[]; readonly workingDirectory?: string; readonly environment?: EnvironmentReferences };
 type CheckRequest =
-  | { readonly kind: "http"; readonly method: string; readonly path: string; readonly headers?: Readonly<Record<string, string>>; readonly body?: unknown }
+  | { readonly kind: "http"; readonly method: string; readonly path: string; readonly headers?: Readonly<Record<string, string>>; readonly headersFrom?: Readonly<Record<string, { readonly scenario: string; readonly pointer?: string; readonly setCookie?: string; readonly template: string }>>; readonly body?: unknown }
   | { readonly kind: "command"; readonly arguments?: readonly string[]; readonly input?: unknown };
 export type NormalizationRule =
   | { readonly kind: "ignore"; readonly pointer: string; readonly reason: string }
@@ -54,7 +54,7 @@ export interface CheckTarget {
     readonly headers?: Readonly<Record<string, { readonly fromEnv: string }>>;
     readonly command?: CommandDefinition;
     readonly observationPath?: string;
-    readonly lifecycle?: { readonly start?: CommandDefinition; readonly reset?: CommandDefinition; readonly readiness?: { readonly path: string; readonly timeoutMs?: number }; readonly services?: readonly { readonly name: string; readonly command: CommandDefinition; readonly readinessUrl?: string; readonly timeoutMs?: number }[] };
+    readonly lifecycle?: { readonly start?: CommandDefinition; readonly reset?: CommandDefinition; readonly readiness?: { readonly path: string; readonly timeoutMs?: number }; readonly resetScope?: "scenario" | "run"; readonly services?: readonly { readonly name: string; readonly command: CommandDefinition; readonly readinessUrl?: string; readonly timeoutMs?: number }[] };
     readonly evidenceCaptureProfile?: string;
   };
 }
@@ -418,11 +418,14 @@ function targetHeaders(target: CheckTarget): Record<string, string> {
   }));
 }
 
-async function observeHttp(base: string, scenario: CheckDocument["spec"]["scenarios"][number], categories: readonly ObservationCategory[], observationPath: string, extraHeaders: Readonly<Record<string, string>> = {}): Promise<unknown> {
+type HttpResponseMemory = { readonly body: unknown; readonly setCookies: readonly string[] };
+
+async function observeHttp(base: string, scenario: CheckDocument["spec"]["scenarios"][number], categories: readonly ObservationCategory[], observationPath: string, extraHeaders: Readonly<Record<string, string>> = {}, remember?: (memory: HttpResponseMemory) => void): Promise<unknown> {
   if (scenario.request.kind !== "http") throw new CheckInputError(`HTTP target cannot execute command scenario ${scenario.id}.`);
   const response = await fetch(scopedUrl(base, scenario.request.path), { method: scenario.request.method, headers: { "content-type": "application/json", ...extraHeaders, ...scenario.request.headers }, redirect: "manual", signal: AbortSignal.timeout(scenario.timeoutMs ?? 30_000), ...(scenario.request.body === undefined ? {} : { body: JSON.stringify(scenario.request.body) }) });
   const bodyText = await readBoundedResponse(response, `HTTP response for ${scenario.id}`); let body: unknown = bodyText;
   try { body = JSON.parse(bodyText) as unknown; } catch { /* preserve text */ }
+  remember?.({ body, setCookies: response.headers.getSetCookie() });
   const selected = new Set(categories); const observation: Record<string, unknown> = {};
   if (selected.has("http")) observation.http = { status: response.status, headers: Object.fromEntries([...response.headers.entries()].filter(([name]) => name.toLowerCase() === "content-type")), body };
   const sideCategories = categories.filter((category) => category !== "http");
@@ -468,13 +471,24 @@ async function executeScenarios(check: CheckDocument, target: CheckTarget, repos
     }
     await waitForReadiness(target);
     const output: { id: string; observation: DigestNode; raw?: unknown }[] = []; const issues: ExecutionIssue[] = [];
-    for (const scenario of check.spec.scenarios) {
-      if (target.spec.lifecycle?.reset) {
+    // Responses stay in memory so later requests can reuse credentials they issued (headersFrom); nothing is stored.
+    const responses = new Map<string, HttpResponseMemory>();
+    for (const [index, scenario] of check.spec.scenarios.entries()) {
+      if (target.spec.lifecycle?.reset && (target.spec.lifecycle.resetScope !== "run" || index === 0)) {
         const reset = await executeCommand(target.spec.lifecycle.reset, target, repositoryRoot);
         if (reset.code !== 0) throw new CheckInfrastructureError(`Fixture reset failed for ${scenario.id} with exit ${reset.code}: ${reset.stderr.trim()}`);
       }
       let raw: unknown;
-      if (target.spec.type === "http") raw = await observeHttp(targetBaseUrl(target), scenario, check.spec.observations, target.spec.observationPath ?? "/_air/observations/{scenario}", targetHeaders(target));
+      if (target.spec.type === "http") {
+        const chained: Record<string, string> = {};
+        for (const [name, source] of Object.entries(scenario.request.kind === "http" ? scenario.request.headersFrom ?? {} : {})) {
+          const memory = responses.get(source.scenario);
+          const value = !memory ? undefined : source.setCookie ? memory.setCookies.map((header) => header.split(";")[0]!).find((pair) => pair.startsWith(`${source.setCookie}=`))?.slice(source.setCookie.length + 1) : (() => { let current: unknown = memory.body; for (const part of decodePointer(source.pointer ?? "")) current = current && typeof current === "object" ? (current as Record<string, unknown>)[part] : undefined; return typeof current === "string" ? current : undefined; })();
+          if (value === undefined) issues.push({ scenario: scenario.id, kind: "missing", selector: "/http", message: `Credential for header ${name} was not available from scenario ${source.scenario}.` });
+          else chained[name] = source.template.replace("{value}", value);
+        }
+        raw = await observeHttp(targetBaseUrl(target), scenario, check.spec.observations, target.spec.observationPath ?? "/_air/observations/{scenario}", { ...targetHeaders(target), ...chained }, (memory) => responses.set(scenario.id, memory));
+      }
       else {
         if (scenario.request.kind !== "command" || !target.spec.command) throw new CheckInputError(`Command target cannot execute HTTP scenario ${scenario.id}.`);
         const execution = await executeCommand(target.spec.command, target, repositoryRoot, scenario.request.arguments ?? [], scenario.request.input, scenario.timeoutMs ?? 30_000);

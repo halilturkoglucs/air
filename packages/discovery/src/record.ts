@@ -7,31 +7,69 @@ import { parseCheckDocument, parseCheckTarget, type CheckDocument } from "./chec
 
 // Turns observed HTTP traffic into reviewable check scenarios for any language or framework.
 // Recording writes only requests; the baseline is created later by replaying them against legacy.
-export interface RecordedExchange { readonly method: string; readonly path: string; readonly headers: Readonly<Record<string, string>>; readonly body?: string; readonly status: number; readonly contentType?: string }
+export interface RecordedExchange { readonly method: string; readonly path: string; readonly headers: Readonly<Record<string, string>>; readonly body?: string; readonly status: number; readonly contentType?: string; readonly responseBody?: string; readonly setCookies?: readonly string[] }
+export type HeaderSource = { readonly scenario: string; readonly pointer?: string; readonly setCookie?: string; readonly template: string };
 
 const METHODS = new Set(["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"]);
 const STATIC_CONTENT = /^(text\/(html|css|javascript)|application\/javascript|image\/|font\/|video\/|audio\/)/u;
+const CREDENTIAL_HEADERS = ["authorization", "cookie", "x-api-key", "x-auth-token"];
+const escapePointer = (key: string): string => key.replaceAll("~", "~0").replaceAll("/", "~1");
 
-export function checkFromExchanges(exchanges: readonly RecordedExchange[], options: { readonly name: string; readonly capability?: string; readonly keepHeaders?: readonly string[]; readonly includeStatic?: boolean }): { readonly check: CheckDocument; readonly skipped: number } {
+function findString(value: unknown, needle: string, pointer = ""): string | undefined {
+  if (typeof value === "string") return value === needle ? pointer : undefined;
+  if (value && typeof value === "object") for (const [key, item] of Object.entries(value)) { const found = findString(item, needle, `${pointer}/${escapePointer(key)}`); if (found !== undefined) return found; }
+  return undefined;
+}
+
+// Credentials are never written to a check. When a recorded request carries a token that an earlier response issued
+// (a login body field or a Set-Cookie), the check records where to take it from at replay time instead.
+export function checkFromExchanges(exchanges: readonly RecordedExchange[], options: { readonly name: string; readonly capability?: string; readonly keepHeaders?: readonly string[]; readonly includeStatic?: boolean; readonly existing?: CheckDocument["spec"]["scenarios"] }): { readonly check: CheckDocument; readonly skipped: number; readonly chained: number; readonly untraced: number } {
   const keep = new Set((options.keepHeaders ?? []).map((name) => name.toLowerCase()));
-  const seen = new Set<string>(); const ids = new Map<string, number>(); const scenarios: CheckDocument["spec"]["scenarios"][number][] = [];
-  let skipped = 0;
+  const keyOf = (method: string, path: string, body: unknown): string => JSON.stringify([method, path, body ?? null]);
+  const known = new Map<string, string>((options.existing ?? []).filter((scenario) => scenario.request.kind === "http").map((scenario) => [keyOf((scenario.request as { method: string }).method, (scenario.request as { path: string }).path, (scenario.request as { body?: unknown }).body), scenario.id]));
+  const ids = new Map<string, number>(); for (const id of known.values()) ids.set(id, 1);
+  const scenarios: CheckDocument["spec"]["scenarios"][number][] = []; const sources: { id: string; body: unknown; setCookies: readonly string[] }[] = [];
+  let skipped = 0; let chained = 0; let untraced = 0;
   for (const exchange of exchanges) {
     const method = exchange.method.toUpperCase();
     let body: unknown;
     if (exchange.body !== undefined && exchange.body !== "") { try { body = JSON.parse(exchange.body) as unknown; } catch { skipped += 1; continue; } }
     if (!METHODS.has(method) || !exchange.path.startsWith("/") || (!options.includeStatic && STATIC_CONTENT.test(exchange.contentType ?? ""))) { skipped += 1; continue; }
-    const key = JSON.stringify([method, exchange.path, body ?? null]);
-    if (seen.has(key)) continue;
-    seen.add(key);
+    let responseBody: unknown; try { responseBody = exchange.responseBody ? JSON.parse(exchange.responseBody) as unknown : undefined; } catch { /* not JSON */ }
+    const key = keyOf(method, exchange.path, body);
+    const existingId = known.get(key);
+    if (existingId) { sources.push({ id: existingId, body: responseBody, setCookies: exchange.setCookies ?? [] }); continue; }
     const headers = Object.fromEntries(Object.entries(exchange.headers).filter(([name]) => keep.has(name.toLowerCase())).map(([name, value]) => [name.toLowerCase(), value]));
+    const headersFrom: Record<string, HeaderSource> = {};
+    for (const [rawName, value] of Object.entries(exchange.headers)) {
+      const name = rawName.toLowerCase();
+      if (!CREDENTIAL_HEADERS.includes(name) || keep.has(name)) continue;
+      let source: HeaderSource | undefined;
+      if (name === "cookie") {
+        for (const pair of value.split(/;\s*/u)) {
+          const [cookie, cookieValue] = [pair.slice(0, pair.indexOf("=")), pair.slice(pair.indexOf("=") + 1)];
+          const origin = [...sources].reverse().find((item) => item.setCookies.some((header) => header.startsWith(`${cookie}=${cookieValue}`)));
+          if (origin && cookie) { source = { scenario: origin.id, setCookie: cookie, template: `${cookie}={value}` }; break; }
+        }
+      } else {
+        const candidates = [value, value.split(" ").slice(1).join(" ")].filter((candidate) => candidate.length >= 8);
+        for (const candidate of candidates) {
+          const origin = [...sources].reverse().map((item) => ({ item, pointer: findString(item.body, candidate) })).find((entry) => entry.pointer !== undefined);
+          if (origin) { source = { scenario: origin.item.id, pointer: origin.pointer!, template: value.replace(candidate, "{value}") }; break; }
+        }
+      }
+      if (source) { headersFrom[name] = source; chained += 1; } else untraced += 1;
+    }
+    known.set(key, "");
     const slug = exchange.path.split("?")[0]!.toLowerCase().replace(/[^a-z0-9]+/gu, "-").replace(/^-|-$/gu, "").slice(0, 60) || "root";
-    const base = `${method.toLowerCase()}-${slug}`; const count = (ids.get(base) ?? 0) + 1; ids.set(base, count);
-    scenarios.push({ id: count === 1 ? base : `${base}-${count}`, description: `Recorded ${method} ${exchange.path} -> ${exchange.status}`, request: { kind: "http", method, path: exchange.path, ...(Object.keys(headers).length > 0 ? { headers } : {}), ...(body === undefined ? {} : { body }) } });
+    const base = `${method.toLowerCase()}-${slug}`; let id = base; for (let count = 2; ids.has(id); count += 1) id = `${base}-${count}`; ids.set(id, 1);
+    known.set(key, id);
+    sources.push({ id, body: responseBody, setCookies: exchange.setCookies ?? [] });
+    scenarios.push({ id, description: `Recorded ${method} ${exchange.path} -> ${exchange.status}`, request: { kind: "http", method, path: exchange.path, ...(Object.keys(headers).length > 0 ? { headers } : {}), ...(Object.keys(headersFrom).length > 0 ? { headersFrom } : {}), ...(body === undefined ? {} : { body }) } });
   }
-  if (scenarios.length === 0) throw new Error("No replayable JSON/HTTP exchanges were recorded.");
+  if (scenarios.length === 0 && !options.existing) throw new Error("No replayable JSON/HTTP exchanges were recorded.");
   const check: CheckDocument = { apiVersion: "air.dev/check/v0.1", kind: "Check", metadata: { name: options.name }, spec: { capability: { id: options.capability ?? options.name }, observations: ["http"], scenarios } };
-  return { check, skipped };
+  return { check, skipped, chained, untraced };
 }
 
 interface HarEntry { readonly request?: { readonly method?: string; readonly url?: string; readonly headers?: readonly { readonly name: string; readonly value: string }[]; readonly postData?: { readonly text?: string } }; readonly response?: { readonly status?: number; readonly content?: { readonly mimeType?: string } } }
@@ -79,7 +117,8 @@ export async function recordHttpTraffic(options: { readonly upstream: string; re
         const payload = Buffer.from(await upstream.arrayBuffer());
         const responseHeaders = Object.fromEntries([...upstream.headers.entries()].filter(([name]) => !HOP_HEADERS.has(name) && name !== "content-encoding"));
         response.writeHead(upstream.status, responseHeaders).end(payload);
-        const exchange: RecordedExchange = { method: request.method ?? "GET", path: request.url ?? "/", headers, status: upstream.status, ...(body ? { body } : {}), ...(upstream.headers.get("content-type") ? { contentType: upstream.headers.get("content-type")! } : {}) };
+        // Response bodies and Set-Cookie headers stay in memory only, to trace where later credentials came from.
+        const exchange: RecordedExchange = { method: request.method ?? "GET", path: request.url ?? "/", headers, status: upstream.status, responseBody: payload.toString("utf8"), setCookies: upstream.headers.getSetCookie(), ...(body ? { body } : {}), ...(upstream.headers.get("content-type") ? { contentType: upstream.headers.get("content-type")! } : {}) };
         exchanges.push(exchange); options.onExchange?.(exchange);
         if (options.maxRequests && exchanges.length >= options.maxRequests) server.close();
       } catch (error) {

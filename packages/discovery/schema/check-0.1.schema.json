@@ -145,7 +145,35 @@
                     "type": "string"
                   }
                 },
-                "body": true
+                "body": true,
+                "headersFrom": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "scenario",
+                      "template"
+                    ],
+                    "properties": {
+                      "scenario": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "pointer": {
+                        "$ref": "#/$defs/pointer"
+                      },
+                      "setCookie": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "template": {
+                        "type": "string",
+                        "pattern": "\\{value\\}"
+                      }
+                    }
+                  }
+                }
               }
             },
             {
