@@ -363,6 +363,7 @@ export function explainResult(result, values) {
 
 export function scrubTranscript(source) {
   return source
+    .replaceAll(homedir(), "~")
     .replace(/\bsk-[A-Za-z0-9_-]{16,}\b/gu, "[REDACTED_API_KEY]")
     .replace(/(authorization["']?\s*[:=]\s*["']?bearer\s+)[A-Za-z0-9._~-]+/giu, "$1[REDACTED]")
     .replace(/([A-Z][A-Z0-9_]*(?:TOKEN|SECRET|PASSWORD|API_KEY)[A-Z0-9_]*["']?\s*[:=]\s*["']?)[^\s"']+/gu, "$1[REDACTED]");

@@ -1,0 +1,71 @@
+let source = "";
+for await (const chunk of process.stdin) source += chunk;
+const input = JSON.parse(source || "{}");
+
+const { documentId, title, timestamp, idempotencyKey } = input;
+const outbound = [];
+const ordering = [];
+
+function observe(status, body, opts = {}) {
+  const { rows = [], committed = false, messages = [], failures = [], retryability = false, extraHeaders = {}, replayed = false } = opts;
+  console.log(JSON.stringify({
+    http: { status, headers: { "content-type": "application/json", ...extraHeaders }, body },
+    database: {
+      rows,
+      transaction: { committed, rollsBackOnFailure: true },
+      idempotency: { key: idempotencyKey ?? null, replayed }
+    },
+    messages, outbound, ordering, failures, retryability
+  }));
+}
+
+function fail(status, code, retryable) {
+  observe(status, { error: { code, retryable } }, { failures: [{ code, retryable, status }], retryability: retryable });
+}
+
+function classify(status) {
+  if (status >= 200 && status < 300) return null;
+  if (status === 401 || status === 403) return [403, "vendor-unauthorized", false];
+  if (status === 429) return [503, "vendor-rate-limited", true];
+  if (status >= 500) return [503, "vendor-unavailable", true];
+  return [502, "vendor-rejected", false];
+}
+
+function call(operation, status) {
+  outbound.push({ id: documentId, operation: `vendor.${operation}`, status });
+  ordering.push(`vendor.${operation}`);
+}
+
+if (typeof title !== "string" || title.trim() === "" || !documentId || !timestamp) {
+  fail(400, "validation-failed", false);
+} else if (input.existing && idempotencyKey && input.existing.idempotencyKey === idempotencyKey) {
+  // Idempotent replay: return the original result with no new side effects.
+  const prior = input.existing;
+  if (prior.title !== title) {
+    fail(409, "idempotency-key-conflict", false);
+  } else {
+    observe(200, { id: prior.documentId ?? documentId, title: prior.title, createdAt: prior.timestamp ?? timestamp, outcome: "created" },
+      { replayed: true, extraHeaders: { "idempotent-replay": "true" } });
+  }
+} else {
+  const authStatus = input.vendorStatus ?? 200;
+  call("authorize", authStatus);
+  let err = classify(authStatus);
+  if (!err) {
+    ordering.push("database");
+    const idxStatus = input.indexStatus ?? 202;
+    call("index", idxStatus);
+    err = classify(idxStatus);
+  }
+  if (err) {
+    ordering.push("rollback");
+    fail(err[0], err[1], err[2]);
+  } else {
+    ordering.push("message");
+    observe(201, { id: documentId, title, createdAt: timestamp, outcome: "created" }, {
+      rows: [{ id: documentId, title, createdAt: timestamp, state: "created" }],
+      committed: true,
+      messages: [{ type: "document.created", id: documentId, createdAt: timestamp }]
+    });
+  }
+}

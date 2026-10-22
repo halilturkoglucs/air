@@ -1,0 +1,73 @@
+diff --git a/candidate.mjs b/candidate.mjs
+index 57274b2..90c44ad 100644
+--- a/candidate.mjs
++++ b/candidate.mjs
+@@ -1,14 +1,57 @@
+ let source = "";
+ for await (const chunk of process.stdin) source += chunk;
+ const input = JSON.parse(source || "{}");
+-const fromBalance = input.fromBalance - input.amount;
+-const toBalance = input.toBalance + input.amount;
+-
+-console.log(JSON.stringify({
+-  http: { status: 200, headers: { "content-type": "application/json" }, body: { transferId: input.transferId, fromBalance, toBalance } },
+-  database: { accounts: [{ id: input.fromId, balance: fromBalance }, { id: input.toId, balance: toBalance }], transaction: { committed: true } },
+-  messages: [],
+-  ordering: [],
+-  failures: [],
+-  retryability: false
+-}));
++
++const headers = { "content-type": "application/json" };
++const { transferId, idempotencyKey, fromId, toId, amount, fromBalance, toBalance, fromVersion, toVersion } = input;
++
++const unchanged = () => [
++  { id: fromId, balance: fromBalance, version: fromVersion },
++  { id: toId, balance: toBalance, version: toVersion }
++];
++
++function out(status, body, { accounts = unchanged(), committed = false, messages = [], ordering = [], failures = [], retryable = false, replayed = false } = {}) {
++  const transaction = { committed, rollsBackOnFailure: true };
++  console.log(JSON.stringify({
++    http: { status, headers, body },
++    database: { accounts, transaction, idempotency: { key: idempotencyKey, replayed } },
++    messages,
++    ordering,
++    failures,
++    retryability: retryable
++  }));
++}
++
++function fail(status, code, retryable) {
++  const ordering = code === "invalid-request" ? [] : code === "version-conflict" ? ["lock", "rollback"] : ["lock", "balance-check", "rollback"];
++  out(status, { error: { code, retryable } }, { failures: [{ code, status, retryable }], retryable, ordering });
++}
++
++// Prior outcome recorded for this idempotency key (replay).
++const prior = input.existingTransfer ?? input.replay ?? input.processed?.[idempotencyKey];
++
++if (prior) {
++  out(200, { ...prior, transferId: prior.transferId ?? transferId, replayed: true }, { ordering: ["idempotency-check"], replayed: true });
++} else if (!Number.isInteger(amount) || amount <= 0 || !fromId || !toId || fromId === toId) {
++  fail(400, "invalid-request", false);
++} else if (
++  (input.expectedFromVersion !== undefined && input.expectedFromVersion !== fromVersion) ||
++  (input.expectedToVersion !== undefined && input.expectedToVersion !== toVersion)
++) {
++  fail(409, "version-conflict", true);
++} else if (fromBalance < amount) {
++  fail(422, "insufficient-funds", false);
++} else {
++  const newFrom = fromBalance - amount;
++  const newTo = toBalance + amount;
++  const event = { type: "ledger.transfer-completed", transferId, amount };
++  out(200,{ transferId, outcome: "committed", fromBalance: newFrom, toBalance: newTo }, {
++    accounts: [
++      { id: fromId, balance: newFrom, version: fromVersion + 1 },
++      { id: toId, balance: newTo, version: toVersion + 1 }
++    ],
++    committed: true,
++    messages: [event],
++    ordering: ["lock", "debit", "credit", "idempotency-write", "message", "commit"]
++  });
++}

@@ -1,0 +1,75 @@
+diff --git a/candidate.mjs b/candidate.mjs
+index 57274b2..7aece1e 100644
+--- a/candidate.mjs
++++ b/candidate.mjs
+@@ -1,14 +1,59 @@
+ let source = "";
+ for await (const chunk of process.stdin) source += chunk;
+ const input = JSON.parse(source || "{}");
+-const fromBalance = input.fromBalance - input.amount;
+-const toBalance = input.toBalance + input.amount;
+-
+-console.log(JSON.stringify({
+-  http: { status: 200, headers: { "content-type": "application/json" }, body: { transferId: input.transferId, fromBalance, toBalance } },
+-  database: { accounts: [{ id: input.fromId, balance: fromBalance }, { id: input.toId, balance: toBalance }], transaction: { committed: true } },
+-  messages: [],
+-  ordering: [],
+-  failures: [],
+-  retryability: false
+-}));
++
++const { transferId, idempotencyKey, fromId, toId, amount } = input;
++const { fromBalance, toBalance, fromVersion, toVersion } = input;
++const headers = { "content-type": "application/json" };
++
++const unchanged = (rolledBack) => ({
++  accounts: [
++    { id: fromId, balance: fromBalance, version: fromVersion },
++    { id: toId, balance: toBalance, version: toVersion }
++  ],
++  transaction: rolledBack ? { committed: false, rolledBack: true } : { committed: false }
++});
++
++const out = (status, body, database, messages, ordering, failures, retryability) =>
++  console.log(JSON.stringify({ http: { status, headers, body }, database, messages, ordering, failures, retryability }));
++
++const seen = input.processedKeys ?? input.idempotencyKeys ?? input.seenKeys;
++const prior = input.priorTransfer ?? input.existingTransfer ?? input.replay
++  ?? (seen && !Array.isArray(seen) && idempotencyKey !== undefined ? seen[idempotencyKey] : undefined);
++const isReplay = (prior !== undefined && prior !== null && prior !== false)
++  || (Array.isArray(seen) && idempotencyKey !== undefined && seen.includes(idempotencyKey));
++
++const expFrom = input.expectedFromVersion ?? input.currentFromVersion;
++const expTo = input.expectedToVersion ?? input.currentToVersion;
++const validAmount = Number.isFinite(amount) && amount > 0;
++
++if (isReplay) {
++  const p = typeof prior === "object" && prior !== null ? prior : {};
++  out(200,
++    { transferId: p.transferId ?? transferId, fromBalance: p.fromBalance ?? fromBalance, toBalance: p.toBalance ?? toBalance, replayed: true },
++    unchanged(false), [], ["idempotency-check"], [], false);
++} else if ((expFrom !== undefined && expFrom !== fromVersion) || (expTo !== undefined && expTo !== toVersion)) {
++  out(409, { error: "version_conflict", retryable: true }, unchanged(true), [],
++    ["idempotency-check", "version-check"],
++    [{ code: "version_conflict", status: 409, retryable: true }], true);
++} else if (!validAmount || fromBalance < amount) {
++  const code = validAmount ? "insufficient_funds" : "invalid_amount";
++  const status = validAmount ? 422 : 400;
++  out(status, { error: code }, unchanged(true), [],
++    ["idempotency-check", "version-check", "balance-check"],
++    [{ code, status, retryable: false }], false);
++} else {
++  const newFrom = fromBalance - amount;
++  const newTo = toBalance + amount;
++  out(200, { transferId, fromBalance: newFrom, toBalance: newTo },
++    {
++      accounts: [
++        { id: fromId, balance: newFrom, version: fromVersion + 1 },
++        { id: toId, balance: newTo, version: toVersion + 1 }
++      ],
++      transaction: { committed: true }
++    },
++    [{ type: "transfer.completed", transferId, fromId, toId, amount }],
++    ["idempotency-check", "version-check", "balance-check", "debit", "credit", "commit", "publish"],
++    [], false);
++}

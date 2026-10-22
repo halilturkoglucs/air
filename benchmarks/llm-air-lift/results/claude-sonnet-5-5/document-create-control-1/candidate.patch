@@ -1,0 +1,81 @@
+diff --git a/candidate.mjs b/candidate.mjs
+index 63a496d..0e1fff7 100644
+--- a/candidate.mjs
++++ b/candidate.mjs
+@@ -2,12 +2,68 @@ let source = "";
+ for await (const chunk of process.stdin) source += chunk;
+ const input = JSON.parse(source || "{}");
+ 
+-console.log(JSON.stringify({
+-  http: { status: 201, headers: { "content-type": "application/json" }, body: { id: input.documentId, title: input.title } },
+-  database: { rows: [{ id: input.documentId, title: input.title }], transaction: { committed: true } },
+-  messages: [],
+-  outbound: [],
+-  ordering: [],
+-  failures: [],
+-  retryability: false
++const { documentId, title, timestamp, idempotencyKey } = input;
++const vendorStatus = input.vendorStatus ?? 200;
++const headers = { "content-type": "application/json" };
++
++const observe = (o) => console.log(JSON.stringify({
++  http: o.http,
++  database: o.database ?? { rows: [], transaction: { committed: false } },
++  messages: o.messages ?? [],
++  outbound: o.outbound ?? [],
++  ordering: o.ordering ?? [],
++  failures: o.failures ?? [],
++  retryability: o.retryability ?? false
+ }));
++
++const fail = (status, code, retryable, outbound = [], ordering = []) => observe({
++  http: { status, headers, body: { error: code } },
++  database: { rows: [], transaction: { committed: false, rolledBack: true } },
++  outbound,
++  ordering,
++  failures: [{ code, source: outbound.length ? "vendor" : "request", status: outbound.length ? vendorStatus : status }],
++  retryability: retryable
++});
++
++if (input.operation !== undefined && input.operation !== "create") {
++  fail(400, "unsupported_operation", false);
++} else if (typeof title !== "string" || title.trim() === "" || !documentId || !timestamp) {
++  fail(400, "validation_failed", false);
++} else if (!idempotencyKey) {
++  fail(400, "idempotency_key_required", false);
++} else {
++  const doc = { id: documentId, title, createdAt: timestamp };
++  const prior = input.existing ?? input.replay;
++  if (prior && typeof prior === "object" && prior.idempotencyKey === idempotencyKey) {
++    // Replay: return the original result; no vendor calls, writes, or events.
++    const row = prior.row ?? { id: prior.id ?? documentId, title: prior.title ?? title, createdAt: prior.createdAt ?? timestamp };
++    observe({
++      http: { status: 200, headers: { ...headers, "idempotent-replay": "true" }, body: { id: row.id, title: row.title, createdAt: row.createdAt } },
++      database: { rows: [row], transaction: { committed: false, skipped: true } }
++    });
++  } else {
++    const outbound = [{ target: "vendor", operation: "authorize", documentId, timestamp, status: vendorStatus }];
++    const ordering = ["vendor.authorize"];
++    if (vendorStatus >= 200 && vendorStatus < 300) {
++      outbound.push({ target: "vendor", operation: "index", documentId, timestamp, status: vendorStatus });
++      ordering.push("vendor.index", "database.commit", "message.publish");
++      observe({
++        http: { status: 201, headers, body: { id: documentId, title, createdAt: timestamp } },
++        database: { rows: [doc], transaction: { committed: true } },
++        messages: [{ topic: "document.created", key: documentId, payload: { id: documentId, title, createdAt: timestamp }, idempotencyKey }],
++        outbound,
++        ordering
++      });
++    } else if (vendorStatus === 401 || vendorStatus === 403) {
++      fail(403, "vendor_unauthorized", false, outbound, ordering);
++    } else if (vendorStatus === 429) {
++      fail(503, "vendor_rate_limited", true, outbound, ordering);
++    } else if (vendorStatus === 408 || vendorStatus === 504) {
++      fail(504, "vendor_timeout", true, outbound, ordering);
++    } else if (vendorStatus >= 500) {
++      fail(502, "vendor_unavailable", true, outbound, ordering);
++    } else {
++      fail(502, "vendor_rejected", false, outbound, ordering);
++    }
++  }
++}

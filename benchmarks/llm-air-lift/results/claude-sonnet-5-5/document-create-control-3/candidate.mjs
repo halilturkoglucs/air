@@ -1,0 +1,59 @@
+let source = "";
+for await (const chunk of process.stdin) source += chunk;
+const input = JSON.parse(source || "{}");
+
+const { title, idempotencyKey } = input;
+const documentId = input.documentId ?? input.id ?? crypto.randomUUID();
+const timestamp = input.timestamp ?? new Date().toISOString();
+const vendorStatus = input.vendorStatus ?? 200;
+const headers = { "content-type": "application/json" };
+
+const observe = (o) => console.log(JSON.stringify({
+  http: o.http,
+  database: o.database ?? { rows: [], transaction: { committed: false, rolledBack: false } },
+  messages: o.messages ?? [],
+  outbound: o.outbound ?? [],
+  ordering: o.ordering ?? [],
+  failures: o.failures ?? [],
+  retryability: o.retryability ?? false
+}));
+
+const fail = (status, code, retryable, outbound, ordering) => observe({
+  http: { status, headers, body: { error: code } },
+  outbound, ordering,
+  failures: [{ code, boundary: "vendor", status: vendorStatus, retryable }],
+  retryability: retryable
+});
+
+if (input.operation && input.operation !== "create") {
+  observe({ http: { status: 400, headers, body: { error: "unsupported_operation" } },
+    failures: [{ code: "unsupported_operation", boundary: "request", retryable: false }] });
+} else if (typeof title !== "string" || !title.trim() || !documentId) {
+  observe({ http: { status: 422, headers, body: { error: "validation_failed" } },
+    failures: [{ code: "validation_failed", boundary: "request", retryable: false }] });
+} else if (input.existing || input.replay) {
+  // Idempotent replay: return the original result, no new side effects.
+  const prior = { id: documentId, title, created_at: timestamp, ...(typeof input.existing === "object" ? input.existing : {}) };
+  observe({
+    http: { status: 200, headers: { ...headers, "idempotent-replay": "true" }, body: { id: prior.id, title: prior.title, created_at: prior.created_at } },
+    ordering: ["replay"]
+  });
+} else {
+  const authorize = { target: "vendor", operation: "authorize", documentId, idempotencyKey, timestamp };
+  const index = { target: "vendor", operation: "index", documentId, title, idempotencyKey, timestamp };
+  if (vendorStatus >= 200 && vendorStatus < 300) {
+    observe({
+      http: { status: 201, headers, body: { id: documentId, title, created_at: timestamp } },
+      database: { rows: [{ id: documentId, title, created_at: timestamp, idempotencyKey }], transaction: { committed: true, rolledBack: false } },
+      messages: [{ type: "document.created", documentId, title, timestamp, idempotencyKey }],
+      outbound: [authorize, index],
+      ordering: ["vendor.authorize", "vendor.index", "database.commit", "message.document.created"]
+    });
+  } else if (vendorStatus === 401 || vendorStatus === 403) {
+    fail(403, "authorization_failed", false, [authorize], ["vendor.authorize"]);
+  } else if (vendorStatus === 408 || vendorStatus === 429 || vendorStatus >= 500) {
+    fail(503, "vendor_unavailable", true, [authorize], ["vendor.authorize"]);
+  } else {
+    fail(502, "vendor_rejected", false, [authorize], ["vendor.authorize"]);
+  }
+}

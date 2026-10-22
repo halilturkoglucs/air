@@ -1,0 +1,87 @@
+import { randomUUID } from "node:crypto";
+
+let source = "";
+for await (const chunk of process.stdin) source += chunk;
+const input = JSON.parse(source || "{}");
+
+const JSON_HEADERS = { "content-type": "application/json" };
+const { title, idempotencyKey } = input;
+const documentId = input.documentId ?? randomUUID();
+const timestamp = input.timestamp ?? new Date().toISOString();
+
+function observe(status, body, extra = {}) {
+  return {
+    http: { status, headers: { ...JSON_HEADERS, ...(extra.headers || {}) }, body },
+    database: { rows: extra.rows || [], transaction: { committed: Boolean(extra.committed) } },
+    messages: extra.messages || [],
+    outbound: extra.outbound || [],
+    ordering: extra.ordering || [],
+    failures: extra.failures || [],
+    retryability: Boolean(extra.retryable)
+  };
+}
+
+function fail(status, code, extra = {}) {
+  return observe(status, { error: code }, { ...extra, failures: [{ code, status, ...(extra.detail || {}) }] });
+}
+
+// Maps a vendor HTTP status to an outward failure.
+function mapVendorFailure(vendorStatus) {
+  if (vendorStatus === 401 || vendorStatus === 403) return { status: 403, code: "forbidden", retryable: false };
+  if (vendorStatus === 408 || vendorStatus === 429 || vendorStatus >= 500) {
+    return { status: 503, code: "vendor_unavailable", retryable: true };
+  }
+  return { status: 502, code: "vendor_rejected", retryable: false };
+}
+
+function run() {
+  if (input.operation !== undefined && input.operation !== "create") return fail(400, "unsupported_operation");
+  if (typeof title !== "string" || title.trim() === "") return fail(400, "invalid_title");
+  if (typeof documentId !== "string" || documentId === "") return fail(400, "invalid_document_id");
+
+  // Idempotent replay: a prior record under the same key returns the original result without side effects.
+  const prior = input.existing;
+  if (idempotencyKey && prior && prior.idempotencyKey === idempotencyKey) {
+    if (prior.title !== title) return fail(409, "idempotency_conflict");
+    return observe(
+      201,
+      { id: prior.documentId, title: prior.title, createdAt: prior.timestamp },
+      { headers: { "idempotent-replay": "true" }, ordering: ["replay"] }
+    );
+  }
+
+  const outbound = [];
+  const ordering = [];
+  const steps = [
+    ["authorize", "/authorize", input.authorizeStatus ?? input.vendorStatus ?? 200],
+    ["index", "/index", input.indexStatus ?? input.vendorStatus ?? 200]
+  ];
+  for (const [name, path, vendorStatus] of steps) {
+    outbound.push({ vendor: name, method: "POST", path, documentId, timestamp, status: vendorStatus });
+    ordering.push(`vendor.${name}`);
+    if (vendorStatus < 200 || vendorStatus >= 300) {
+      const m = mapVendorFailure(vendorStatus);
+      return fail(m.status, m.code, {
+        outbound,
+        ordering,
+        retryable: m.retryable,
+        detail: { step: name, vendorStatus }
+      });
+    }
+  }
+
+  ordering.push("database.insert", "database.commit", "message.document.created");
+  return observe(201, { id: documentId, title, createdAt: timestamp }, {
+    rows: [{ id: documentId, title, created_at: timestamp }],
+    committed: true,
+    outbound,
+    ordering,
+    messages: [{
+      topic: "document.created",
+      key: documentId,
+      payload: { id: documentId, title, createdAt: timestamp, idempotencyKey: idempotencyKey ?? null }
+    }]
+  });
+}
+
+console.log(JSON.stringify(run()));
