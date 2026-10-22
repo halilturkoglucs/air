@@ -63,6 +63,7 @@ export interface CheckPolicy {
     readonly allowedNormalizations?: readonly NormalizationRule["kind"][];
     readonly requireCleanBaseline?: boolean;
     readonly unmatchedEvidence?: "fail" | "report";
+    readonly reveal?: "allow" | "deny";
   };
 }
 
@@ -388,9 +389,10 @@ async function observeHttp(base: string, scenario: CheckDocument["spec"]["scenar
 }
 
 interface ExecutionIssue { readonly scenario: string; readonly kind: "missing" | "unmatched" | "normalization"; readonly selector: string; readonly message: string }
-interface CheckExecution { readonly scenarios: readonly { readonly id: string; readonly observation: DigestNode }[]; readonly issues: readonly ExecutionIssue[] }
+interface CheckExecution { readonly scenarios: readonly { readonly id: string; readonly observation: DigestNode; readonly raw?: unknown }[]; readonly issues: readonly ExecutionIssue[] }
 
-async function executeScenarios(check: CheckDocument, target: CheckTarget, repositoryRoot: string): Promise<CheckExecution> {
+// keepRaw retains normalized observations in memory only, for local value reveal; nothing raw is ever written to disk.
+async function executeScenarios(check: CheckDocument, target: CheckTarget, repositoryRoot: string, keepRaw = false): Promise<CheckExecution> {
   let started: ReturnType<typeof spawn> | undefined;
   try {
     const observesEffects = check.spec.observations.some((category) => category !== "http");
@@ -404,7 +406,7 @@ async function executeScenarios(check: CheckDocument, target: CheckTarget, repos
       await new Promise<void>((complete, reject) => { started!.once("spawn", complete); started!.once("error", (error) => reject(new CheckInfrastructureError(`Could not start ${program}: ${error.message}`))); });
     }
     await waitForReadiness(target);
-    const output: { id: string; observation: DigestNode }[] = []; const issues: ExecutionIssue[] = [];
+    const output: { id: string; observation: DigestNode; raw?: unknown }[] = []; const issues: ExecutionIssue[] = [];
     for (const scenario of check.spec.scenarios) {
       if (target.spec.lifecycle?.reset) {
         const reset = await executeCommand(target.spec.lifecycle.reset, target, repositoryRoot);
@@ -426,10 +428,10 @@ async function executeScenarios(check: CheckDocument, target: CheckTarget, repos
       }
       for (const category of Object.keys(rawRecord)) if (!check.spec.observations.includes(category as ObservationCategory)) issues.push({ scenario: scenario.id, kind: "unmatched", selector: `/${category}`, message: `Target returned undeclared ${category} evidence.` });
       const applicableRules = (check.spec.normalization ?? []).filter((rule) => Object.hasOwn(selected, decodePointer(rule.pointer)[0] ?? ""));
-      try { output.push({ id: scenario.id, observation: summarize(applyNormalization(selected, applicableRules)) }); }
+      try { const normalized = applyNormalization(selected, applicableRules); output.push({ id: scenario.id, observation: summarize(normalized), ...(keepRaw ? { raw: normalized } : {}) }); }
       catch (error) {
         issues.push({ scenario: scenario.id, kind: "normalization", selector: "/normalization", message: error instanceof Error ? error.message : String(error) });
-        output.push({ id: scenario.id, observation: summarize(selected) });
+        output.push({ id: scenario.id, observation: summarize(selected), ...(keepRaw ? { raw: selected } : {}) });
       }
     }
     return { scenarios: output, issues };
@@ -460,7 +462,14 @@ export async function createCheckBaseline(input: { readonly check: CheckDocument
   return baseline;
 }
 
-export async function runMigrationCheck(input: { readonly check: CheckDocument; readonly policy?: CheckPolicy; readonly target: CheckTarget; readonly baseline: CheckBaseline; readonly repositoryRoot: string; readonly repositoryHash: string }): Promise<CheckResult> {
+type RunCheckInput = { readonly check: CheckDocument; readonly policy?: CheckPolicy; readonly target: CheckTarget; readonly baseline: CheckBaseline; readonly repositoryRoot: string; readonly repositoryHash: string };
+
+export async function runMigrationCheck(input: RunCheckInput): Promise<CheckResult> {
+  return (await runMigrationCheckDetailed(input)).result;
+}
+
+// Same as runMigrationCheck, plus the candidate's normalized observations kept in memory for local reveal.
+export async function runMigrationCheckDetailed(input: RunCheckInput & { readonly keepObservations?: boolean }): Promise<{ readonly result: CheckResult; readonly observations: ReadonlyMap<string, unknown> }> {
   const policy = input.policy ?? DEFAULT_POLICY; const mismatches: CheckMismatch[] = [];
   const expectedHashes = hashesFor(input.check, policy, { ...input.target, metadata: { name: input.baseline.target.name } }, input.baseline.hashes.repository);
   for (const key of ["check", "policy", "normalization", "discovery"] as const) if (expectedHashes[key] !== input.baseline.hashes[key]) mismatches.push({ classification: "baseline-stale", scenario: "*", category: "baseline", selector: `/hashes/${key}`, provenance: `baseline:${input.baseline.baselineId}`, repair: "harness" });
@@ -469,7 +478,7 @@ export async function runMigrationCheck(input: { readonly check: CheckDocument; 
   if ((policy.spec.requireCleanBaseline ?? true) && !input.baseline.releasable) violations.push("Policy requires a releasable clean-tree baseline.");
   for (const violation of violations) mismatches.push({ classification: "policy-violation", scenario: "*", category: "policy", selector: "/", provenance: policy.metadata.name, repair: "harness" });
   let execution: CheckExecution = { scenarios: [], issues: [] };
-  if (!mismatches.some((item) => item.classification === "baseline-stale")) execution = await executeScenarios(input.check, input.target, input.repositoryRoot);
+  if (!mismatches.some((item) => item.classification === "baseline-stale")) execution = await executeScenarios(input.check, input.target, input.repositoryRoot, input.keepObservations === true);
   for (const issue of execution.issues) {
     if (issue.kind === "unmatched" && policy.spec.unmatchedEvidence === "report") continue;
     mismatches.push({ classification: issue.kind === "unmatched" ? "policy-violation" : "missing-observation", scenario: issue.scenario, category: issue.kind === "unmatched" ? "policy" : issue.selector.split("/")[1] ?? "observation", selector: issue.selector, provenance: input.target.metadata.name, repair: "harness" });
@@ -485,7 +494,21 @@ export async function runMigrationCheck(input: { readonly check: CheckDocument; 
     policy: { passed: violations.length === 0, violations }, scenarios: scenarioResults, mismatches,
   };
   if (!validateResult(result)) throw validationError("Generated check result", validateResult);
-  return result;
+  return { result, observations: new Map(execution.scenarios.filter((scenario) => scenario.raw !== undefined).map((scenario) => [scenario.id, scenario.raw])) };
+}
+
+// Re-observes selected scenarios on a target (normally the legacy one) for local reveal. Returns the
+// normalized value and its digest so callers can confirm it still matches the approved baseline.
+export async function observeCheckTarget(input: { readonly check: CheckDocument; readonly target: CheckTarget; readonly repositoryRoot: string; readonly scenarioIds: readonly string[] }): Promise<ReadonlyMap<string, { readonly raw: unknown; readonly digest: DigestNode }>> {
+  const wanted = new Set(input.scenarioIds);
+  const check = { ...input.check, spec: { ...input.check.spec, scenarios: input.check.spec.scenarios.filter((scenario) => wanted.has(scenario.id)) } };
+  if (check.spec.scenarios.length === 0) return new Map();
+  const execution = await executeScenarios(check, input.target, input.repositoryRoot, true);
+  return new Map(execution.scenarios.map((scenario) => [scenario.id, { raw: scenario.raw, digest: scenario.observation }]));
+}
+
+export function sameDigest(left: DigestNode | undefined, right: DigestNode | undefined): boolean {
+  return left !== undefined && right !== undefined && canonical(left) === canonical(right);
 }
 
 export async function initializeMigrationCheck(discoveryDirectory: string, capabilityId: string, outputDirectory: string): Promise<string> {

@@ -56,6 +56,44 @@ air check explain RUN/result.json --json
 
 Agents must preserve the exit-code contract: `0` pass, `1` behavioral or policy difference, `2` invalid or stale evidence, and `3` harness or infrastructure failure. They must never repair a failing candidate by modifying the baseline, weakening policy, or adding normalization unless a human explicitly reviews the behavioral change.
 
+## Compact agent mode (`air.dev/agent/v1`)
+
+The full JSON above is the audit format. For a repair loop, agents should use the compact mode instead: it needs no arguments after a one-time profile, stays inside a line budget, and reports progress between runs.
+
+```text
+air check profile --check CHECK --policy POLICY --baseline BASELINE --legacy LEGACY --candidate CANDIDATE --output RUNS
+air check baseline                 # once, from the legacy target in the profile
+air check run --agent --reveal     # repeat until exit 0
+air check status                   # last run summary; executes nothing
+```
+
+`air check run --agent` prints one header line, one block per failing scenario, and a `NEXT` line:
+
+```text
+FAIL 0/1 scenarios · 4 differences · fixed 2, new 0 since last run
+- creates-book
+  /database/rows/0 (3): expected {"state":"created","version":1,...}, got {"state":"draft","version":2,...}
+  /http/status: expected 201, got 200
+NEXT edit candidate code only, then rerun `air check run --agent`.
+```
+
+- Output is deterministic: scenarios follow the check order and selectors are sorted. Three or more differences under one parent collapse into that parent with a count.
+- `--max-lines N` (default 40) caps the report; overflow becomes `...(+N more)`. Infrastructure errors shrink to the first line and the causing error.
+- `--reveal` re-runs the legacy target locally for the failing scenarios only and prints expected and actual values. Values go to stdout only; `result.json` and the baseline keep digests. The legacy re-run must still match the approved baseline digest, otherwise values are withheld with a `NOTE`. A policy can forbid reveal with `reveal: deny`; a legacy target that uses evidence capture requires `reveal: allow`.
+- `fixed`/`new` compare against `.air/last-run.json` for the same baseline, so a repair round reports what it resolved.
+- `--agent --json` returns the same report as JSON with short, stable keys (`v`, `ok`, `passed`, `total`, `differences`, `fixed`, `added`, `diffs[{s,p,k,n,e,a}]`, `omitted`, `notes`, `next`).
+
+In AIR's LLM verification-lift benchmark, this feedback style (compact, value-revealing differences) took Claude Sonnet 5.5 from 0/9 to 9/9 behaviorally correct migrations.
+
+### MCP without extra dependencies
+
+`air mcp` serves four tools over MCP stdio from the same binary: `air_check_status`, `air_check_run` (`reveal`, `maxLines`), `air_check_explain`, and `air_check_baseline`. They wrap the compact mode above.
+
+```bash
+claude mcp add air -- air mcp
+codex mcp add air -- air mcp
+```
+
 ## Why the protocol remains language-neutral
 
 - The wire values are JSON and versioned YAML/JSON documents.
@@ -67,15 +105,8 @@ Agents must preserve the exit-code contract: `0` pass, `1` behavioral or policy 
 
 The v0.12 release proof exercises the same protocol across a Spring/Java/PostgreSQL legacy capability and an agent-written TypeScript/PostgreSQL replacement. The pinned HMCTS proof wraps real Java service classes with a separate harness and compares them with another ordinary replacement. Those examples demonstrate cross-language verification; they do not make Java or TypeScript part of the product contract.
 
-## Recommended prompt for a coding agent
+## Recommended instructions for a coding agent
 
-```text
-Use AIR as the independent verification oracle for this capability. Do not modify
-the approved baseline, check, or policy. Implement or repair the candidate in the
-repository's existing language. Run `air check run ... --json`; when it fails,
-run `air check explain ... --json`. Fix candidate code for candidate differences,
-and report infrastructure or missing-observation failures instead of weakening the
-check. A pass proves equivalence only for the declared scenarios and observations.
-```
+`air agent instructions` prints the canonical repair loop for the installed version. Paste it into `AGENTS.md`, `CLAUDE.md`, or a skill; nothing else needs to be installed. A pass proves equivalence only for the declared scenarios and observations.
 
-Thin MCP servers or agent skills may wrap these commands later, but the CLI protocol remains the compatibility boundary so Codex, Claude, local models, CI systems, and future agents all receive the same evidence.
+The MCP tools and the instructions are thin wrappers: the CLI protocol remains the compatibility boundary, so Codex, Claude, local models, CI systems, and future agents all receive the same evidence.
