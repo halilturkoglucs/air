@@ -1,6 +1,6 @@
 # AIR CLI
 
-**AI writes the migration. AIR proves what changed.** The AIR CLI freezes reviewed legacy behavior and independently checks an agent-written replacement. It also preserves the earlier discovery, Application IR, compiler, provider, and conformance workflows.
+**AI writes the change. AIR proves what changed.** The AIR CLI freezes the reviewed behavior of a service, or of one part of it, and independently checks every change against it: a rewrite in another language, an in-place refactor or upgrade, a service split or merge, or everyday feature work by you or a coding agent. It also preserves the earlier discovery, Application IR, compiler, provider, and conformance workflows.
 
 <!-- AIR_LLM_BENCHMARK:START -->
 ## Does AIR improve an LLM migration?
@@ -59,18 +59,45 @@ air --help
 The current public release is `0.16.0`. For a reproducible installation, use
 `npm install --global @halilturkoglucs/air@0.16.0`.
 
-The `air check` workflow uses stable JSON output and needs no hand-authored Application AIR YAML:
+## What can I use it for?
+
+| Use case | What AIR locks | How you start |
+| --- | --- | --- |
+| Rewrite a service or endpoint in another language | HTTP responses, database effects, messages, outbound calls, ordering, failures | Legacy and candidate targets (command or HTTP) |
+| Refactor or upgrade a service in place (framework, dependencies, internals) | Everything observable stays the same | `air check baseline --at main`: legacy runs from a Git ref, no second deployment |
+| Extract a microservice or merge services into a monolith | External behavior; the new internal boundary is declared, not ignored | `rename` and `internal-boundary` normalizations, `lifecycle.services` |
+| Day-to-day feature work with a coding agent | Behavior you did not mean to change; intended changes are approved per scenario | `air check run --agent --reveal`, then `air check approve <scenario> --reason "..."` |
+| Gate AI-written changes in CI | Approved baseline versus the pull request | `air check run --json` exit codes, `air check coverage --fail-under` |
+| Understand an unfamiliar service before changing it | Endpoints and their data, outbound, and messaging effects | `air discover spring`, `air discover traces`, recorded traffic |
+
+## Ways to start
+
+Scenarios can come from wherever a team already is. None of them needs AIR-generated code or a framework plugin in your service:
+
+- **Recorded traffic, any language:** `air check record --to http://localhost:3000 --output checks/api` puts a recording proxy in front of a running service (or use `--from-har` with a browser or Playwright HAR file). Credentials are dropped unless you keep a header explicitly.
+- **An OpenAPI spec:** `air check init --from-openapi openapi.yaml --output checks/api` writes one reviewable scenario per operation.
+- **OpenTelemetry traces:** `air discover traces traces.json` maps each endpoint to the tables, outbound calls, and messages it touches.
+- **Spring source code:** `air discover spring ./service` builds an evidence-backed map, then `air check init` turns a reviewed capability into a check.
+- **By hand, for any language:** a target is just a command that reads JSON and prints an observation, or an HTTP base URL. Writing one is usually a short script.
+
+Discovering other codebases directly from source (any language, the whole repository or one part of it) is the next roadmap milestone; see [`docs/roadmap.md`](https://github.com/halilturkoglucs/air/blob/main/docs/roadmap.md) §12a.
+
+## The everyday loop
 
 ```bash
-air check validate check.yaml --policy policy.yaml --json
-air check baseline check.yaml --target legacy.target.yaml --policy policy.yaml --output .air/check/baseline --json
-air check run check.yaml --baseline .air/check/baseline --target candidate.target.yaml --policy policy.yaml --output .air/check/run --json
-air check explain .air/check/run/result.json --json
+air check profile --check check.yaml --policy policy.yaml --baseline .air/baseline \
+  --legacy legacy.target.yaml --candidate candidate.target.yaml --output .air/runs --at main
+air check baseline                 # once; legacy runs from the Git ref
+air check run --agent --reveal     # repeat while you or an agent edit the code
+air check approve <scenario> --reason "intended change"
+air check coverage --openapi openapi.yaml --fail-under 80
 ```
 
-Candidate differences exit `1`, invalid or stale input exits `2`, and infrastructure failures exit `3`. Baselines are content-addressed and overwrite-protected; raw observed values and credentials are absent by default.
+`air check run --agent` prints a short, deterministic report (expected versus actual values for each failing scenario, what was fixed since the last run, and the next step). `air mcp` serves the same commands as MCP tools for Claude Code, Codex, and other agents, and `air agent instructions` prints the loop to paste into `AGENTS.md` or `CLAUDE.md`. Nothing else needs to be installed.
 
-See the [from-scratch tutorial](https://github.com/halilturkoglucs/air/blob/main/docs/getting-started-agent-verification.md) for installation, a passing example, a deliberately broken migration, command and HTTP targets, policies, normalization, and CI usage.
+Every `air check` command also supports `--json` for full machine output. Candidate differences exit `1`, invalid or stale input exits `2`, and infrastructure failures exit `3`. Baselines are content-addressed and overwrite-protected; raw observed values and credentials are absent by default, and `--reveal` prints values locally without storing them.
+
+See the [from-scratch tutorial](https://github.com/halilturkoglucs/air/blob/main/docs/getting-started-agent-verification.md) for a passing example, a deliberately broken change, command and HTTP targets, policies, normalization, and CI usage.
 
 Spring discovery requires Java 17 or newer. The npm package includes AIR's pinned OpenRewrite analyzer, so Maven and an AIR source checkout are not required:
 
@@ -80,7 +107,7 @@ air workbench .air/discovery --reviewer alice@example.com
 air discovery report .air/discovery --output .air/report
 ```
 
-In v0.11, discovery and report generation are supported. `air extract`, `air verify-import`, and capability adoption are preserved as experimental workflows.
+Discovery and report generation are supported. `air extract`, `air verify-import`, and capability adoption are preserved as experimental workflows.
 
 Homebrew users can install the same CLI from the project tap:
 

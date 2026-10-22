@@ -3,9 +3,9 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Conformance](https://github.com/halilturkoglucs/air/actions/workflows/conformance.yml/badge.svg)](https://github.com/halilturkoglucs/air/actions/workflows/conformance.yml)
 
-> **AI writes the migration. AIR proves what changed.**
+> **AI writes the change. AIR proves what changed.**
 
-AIR is an open, model-neutral verification layer for capability replacement. Freeze reviewed legacy behavior, let any coding agent write an ordinary replacement in any language, then compare HTTP results, database effects, messages, outbound calls, ordering, and failures independently. AIR proves equivalence only inside the observation boundary you declare—not general correctness.
+AIR is an open, model-neutral behavior lock for code changes. Freeze the reviewed behavior of a service, or of one part of it, then let you or any coding agent change the code: rewrite it in another language, refactor or upgrade it in place, split it into services or merge it back, or build the next feature. AIR compares HTTP results, database effects, messages, outbound calls, ordering, and failures independently, reports exactly what changed, and lets you approve intended changes per scenario. It proves equivalence only inside the observation boundary you declare, not general correctness.
 
 Since v0.12, agent verification is AIR's primary product journey. AIR’s existing Application IR, compiler, providers, discovery, and import commands remain compatible, but coding agents no longer need AIR-generated code or an Application AIR document to verify a replacement.
 
@@ -123,20 +123,47 @@ Continue with the [from-scratch agent verification tutorial](docs/getting-starte
 
 ## What can I use it for?
 
-| Use case | Observation boundary | Typical target setup |
+| Use case | What AIR locks | How you start |
 | --- | --- | --- |
-| Replace a Spring endpoint with TypeScript, Rust, or Python | HTTP response, PostgreSQL changes, emitted messages, vendor calls | Two HTTP targets with disposable fixtures |
-| Refactor a transactional workflow | Database writes, rollback, ordering, failure mapping | Command harness or HTTP observation adapter |
-| Move Kafka/Rabbit behavior to another broker or runtime | Messages, headers represented by the harness, duplication, ordering | Self-hosted evidence adapter |
-| Replace a scheduled job or worker | State changes, outbound calls, messages, retryability | Explicit command target |
-| Review an AI-generated migration in CI | Approved baseline versus candidate result | `air check run --json` with exit-code gating |
-| Map an unfamiliar Spring service before choosing a capability | Source-linked endpoints, persistence, messaging, schedules, opaque boundaries | `air discover spring`, workbench, then `air check init` |
+| Rewrite a service or endpoint in another language | HTTP responses, database effects, messages, outbound calls, ordering, failures | Legacy and candidate targets (command or HTTP) |
+| Refactor or upgrade a service in place (framework, dependencies, internals) | Everything observable stays the same | `air check baseline --at main`: legacy runs from a Git ref, no second deployment |
+| Extract a microservice or merge services into a monolith | External behavior; the new internal boundary is declared, not ignored | `rename` and `internal-boundary` normalizations, `lifecycle.services` |
+| Day-to-day feature work with a coding agent | Behavior you did not mean to change; intended changes are approved per scenario | `air check run --agent --reveal`, then `air check approve <scenario> --reason "..."` |
+| Gate AI-written changes in CI | Approved baseline versus the pull request | `air check run --json` exit codes, `air check coverage --fail-under` |
+| Understand an unfamiliar service before changing it | Endpoints and their data, outbound, and messaging effects | `air discover spring`, `air discover traces`, recorded traffic |
 
-AIR is not a general correctness oracle, fuzzy similarity scorer, load tester, or one-click migration generator. A passing result means that the candidate matched the approved legacy baseline for the declared scenarios and observations.
+### Ways to start
+
+Scenarios can come from wherever a team already is. None of them needs AIR-generated code or a framework plugin in your service:
+
+- **Recorded traffic, any language:** `air check record --to http://localhost:3000 --output checks/api` puts a recording proxy in front of a running service (or use `--from-har` with a browser or Playwright HAR file). Credentials are dropped unless you keep a header explicitly.
+- **An OpenAPI spec:** `air check init --from-openapi openapi.yaml --output checks/api` writes one reviewable scenario per operation.
+- **OpenTelemetry traces:** `air discover traces traces.json` maps each endpoint to the tables, outbound calls, and messages it touches.
+- **Spring source code:** `air discover spring ./service` builds an evidence-backed map, then `air check init` turns a reviewed capability into a check.
+- **By hand, for any language:** a target is just a command that reads JSON and prints an observation, or an HTTP base URL. Writing one is usually a short script.
+
+Discovering other codebases directly from source (any language, the whole repository or one part of it) is the next roadmap milestone; see [`docs/roadmap.md`](docs/roadmap.md) §12a.
+
+### The everyday loop
+
+```bash
+air check profile --check check.yaml --policy policy.yaml --baseline .air/baseline \
+  --legacy legacy.target.yaml --candidate candidate.target.yaml --output .air/runs --at main
+air check baseline                 # once; legacy runs from the Git ref
+air check run --agent --reveal     # repeat while you or an agent edit the code
+air check approve <scenario> --reason "intended change"
+air check coverage --openapi openapi.yaml --fail-under 80
+```
+
+`air check run --agent` prints a short, deterministic report (expected versus actual values for each failing scenario, what was fixed since the last run, and the next step). `air mcp` serves the same commands as MCP tools for Claude Code, Codex, and other agents, and `air agent instructions` prints the loop to paste into `AGENTS.md` or `CLAUDE.md`. Nothing else needs to be installed.
+
+AIR is not a general correctness oracle, fuzzy similarity scorer, load tester, or one-click migration generator. A passing result means that the candidate matched the approved baseline for the declared scenarios and observations.
 
 ## Choose a workflow
 
 - **Prove an agent-written replacement:** follow [Getting started with agent verification](docs/getting-started-agent-verification.md).
+- **Refactor, record traffic, or approve intended changes:** see [refactors, recorded traffic, and intentional changes](docs/language-agnostic-agent-protocol.md#refactors-recorded-traffic-and-intentional-changes).
+- **Extract or merge services:** start from [`examples/extract-service`](examples/extract-service) and the topology normalizations in the [getting-started guide](docs/getting-started-agent-verification.md#9-choose-normalization-carefully).
 - **Understand the security and evidence model:** read [Agent verification](docs/agent-verification.md).
 - **Connect any backend or coding agent:** use the [language-agnostic agent protocol](docs/language-agnostic-agent-protocol.md).
 - **Inventory an enterprise Spring service:** follow [Enterprise discovery and modernization](docs/enterprise-modernization.md).
