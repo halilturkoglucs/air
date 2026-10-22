@@ -13,7 +13,7 @@
       "properties": {
         "requiredScenarios": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
         "requiredObservations": { "type": "array", "uniqueItems": true, "items": { "enum": ["http", "database", "messages", "outbound", "ordering", "failures", "retryability"] } },
-        "allowedNormalizations": { "type": "array", "uniqueItems": true, "items": { "enum": ["ignore", "typed-token", "unordered-array"] } },
+        "allowedNormalizations": { "type": "array", "uniqueItems": true, "items": { "enum": ["ignore", "typed-token", "unordered-array", "rename", "internal-boundary"] } },
         "requireCleanBaseline": { "type": "boolean", "default": true },
         "unmatchedEvidence": { "enum": ["fail", "report"], "default": "fail" },
         "reveal": { "enum": ["allow", "deny"] }

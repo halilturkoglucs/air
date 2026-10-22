@@ -4,6 +4,10 @@ All notable changes are recorded here. AIR follows the pre-1.0 policy in `docs/v
 
 ## Unreleased
 
+- Added `rename` and `internal-boundary` normalizations for topology changes: map data that moved to another service's database, and drop calls or steps that became internal when a service was extracted or merged. Both require a written reason and are policy-controlled.
+- Added `lifecycle.services` to check targets, so a candidate made of several processes is started (with optional readiness URLs) and stopped together.
+- Added `examples/extract-service`, a monolith-to-service split verified by AIR.
+
 ## 0.15.0 - 2026-10-22
 
 - Added `air check baseline --at <ref>` (with `--at-setup`): legacy runs from a clean Git worktree, so refactors and upgrades in place need no second running copy. `run --reveal` uses the same ref.

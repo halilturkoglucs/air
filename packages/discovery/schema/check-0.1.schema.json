@@ -4,59 +4,173 @@
   "title": "AIR migration check",
   "type": "object",
   "additionalProperties": false,
-  "required": ["apiVersion", "kind", "metadata", "spec"],
+  "required": [
+    "apiVersion",
+    "kind",
+    "metadata",
+    "spec"
+  ],
   "properties": {
-    "apiVersion": { "const": "air.dev/check/v0.1" },
-    "kind": { "const": "Check" },
+    "apiVersion": {
+      "const": "air.dev/check/v0.1"
+    },
+    "kind": {
+      "const": "Check"
+    },
     "metadata": {
-      "type": "object", "additionalProperties": false, "required": ["name"],
-      "properties": { "name": { "type": "string", "minLength": 1, "maxLength": 128 } }
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      }
     },
     "spec": {
-      "type": "object", "additionalProperties": false, "required": ["capability", "scenarios", "observations"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "capability",
+        "scenarios",
+        "observations"
+      ],
       "properties": {
         "capability": {
-          "type": "object", "additionalProperties": false, "required": ["id"],
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id"
+          ],
           "properties": {
-            "id": { "type": "string", "minLength": 1 },
-            "discoveryHash": { "$ref": "#/$defs/hash" },
-            "repositoryHash": { "$ref": "#/$defs/hash" }
+            "id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "discoveryHash": {
+              "$ref": "#/$defs/hash"
+            },
+            "repositoryHash": {
+              "$ref": "#/$defs/hash"
+            }
           }
         },
-        "scenarios": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/scenario" } },
-        "observations": {
-          "type": "array", "minItems": 1, "uniqueItems": true,
-          "items": { "enum": ["http", "database", "messages", "outbound", "ordering", "failures", "retryability"] }
+        "scenarios": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/scenario"
+          }
         },
-        "normalization": { "type": "array", "items": { "$ref": "#/$defs/normalization" } }
+        "observations": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "http",
+              "database",
+              "messages",
+              "outbound",
+              "ordering",
+              "failures",
+              "retryability"
+            ]
+          }
+        },
+        "normalization": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/normalization"
+          }
+        }
       }
     }
   },
   "$defs": {
-    "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
     "scenario": {
-      "type": "object", "additionalProperties": false, "required": ["id", "request"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "request"
+      ],
       "properties": {
-        "id": { "type": "string", "minLength": 1, "maxLength": 128 },
-        "description": { "type": "string", "minLength": 1 },
-        "timeoutMs": { "type": "integer", "minimum": 1, "maximum": 600000 },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "timeoutMs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 600000
+        },
         "request": {
           "oneOf": [
             {
-              "type": "object", "additionalProperties": false, "required": ["kind", "method", "path"],
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "kind",
+                "method",
+                "path"
+              ],
               "properties": {
-                "kind": { "const": "http" },
-                "method": { "enum": ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"] },
-                "path": { "type": "string", "pattern": "^/" },
-                "headers": { "type": "object", "additionalProperties": { "type": "string" } },
+                "kind": {
+                  "const": "http"
+                },
+                "method": {
+                  "enum": [
+                    "GET",
+                    "POST",
+                    "PUT",
+                    "PATCH",
+                    "DELETE",
+                    "HEAD"
+                  ]
+                },
+                "path": {
+                  "type": "string",
+                  "pattern": "^/"
+                },
+                "headers": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                },
                 "body": true
               }
             },
             {
-              "type": "object", "additionalProperties": false, "required": ["kind"],
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "kind"
+              ],
               "properties": {
-                "kind": { "const": "command" },
-                "arguments": { "type": "array", "items": { "type": "string" } },
+                "kind": {
+                  "const": "command"
+                },
+                "arguments": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
                 "input": true
               }
             }
@@ -67,19 +181,127 @@
     "normalization": {
       "oneOf": [
         {
-          "type": "object", "additionalProperties": false, "required": ["kind", "pointer", "reason"],
-          "properties": { "kind": { "const": "ignore" }, "pointer": { "$ref": "#/$defs/pointer" }, "reason": { "type": "string", "minLength": 1 } }
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "pointer",
+            "reason"
+          ],
+          "properties": {
+            "kind": {
+              "const": "ignore"
+            },
+            "pointer": {
+              "$ref": "#/$defs/pointer"
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
         },
         {
-          "type": "object", "additionalProperties": false, "required": ["kind", "pointer", "format"],
-          "properties": { "kind": { "const": "typed-token" }, "pointer": { "$ref": "#/$defs/pointer" }, "format": { "enum": ["uuid", "timestamp"] }, "binding": { "type": "string", "minLength": 1 } }
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "pointer",
+            "format"
+          ],
+          "properties": {
+            "kind": {
+              "const": "typed-token"
+            },
+            "pointer": {
+              "$ref": "#/$defs/pointer"
+            },
+            "format": {
+              "enum": [
+                "uuid",
+                "timestamp"
+              ]
+            },
+            "binding": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
         },
         {
-          "type": "object", "additionalProperties": false, "required": ["kind", "pointer", "key"],
-          "properties": { "kind": { "const": "unordered-array" }, "pointer": { "$ref": "#/$defs/pointer" }, "key": { "type": "string", "minLength": 1 } }
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "pointer",
+            "key"
+          ],
+          "properties": {
+            "kind": {
+              "const": "unordered-array"
+            },
+            "pointer": {
+              "$ref": "#/$defs/pointer"
+            },
+            "key": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "pointer",
+            "to",
+            "reason"
+          ],
+          "properties": {
+            "kind": {
+              "const": "rename"
+            },
+            "pointer": {
+              "$ref": "#/$defs/pointer"
+            },
+            "to": {
+              "$ref": "#/$defs/pointer"
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "pointer",
+            "match",
+            "reason"
+          ],
+          "properties": {
+            "kind": {
+              "const": "internal-boundary"
+            },
+            "pointer": {
+              "$ref": "#/$defs/pointer"
+            },
+            "match": true,
+            "reason": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
         }
       ]
     },
-    "pointer": { "type": "string", "pattern": "^(/(?:[^~/]|~[01])*)*$" }
+    "pointer": {
+      "type": "string",
+      "pattern": "^(/(?:[^~/]|~[01])*)*$"
+    }
   }
 }
