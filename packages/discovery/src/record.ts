@@ -67,11 +67,12 @@ export async function recordHttpTraffic(options: { readonly upstream: string; re
         // Only origin-form paths are forwarded, and only to the configured upstream origin: an absolute-form
         // request URL ("http://other/") or a "//host" path must never redirect the proxy elsewhere (SSRF).
         const path = request.url ?? "/";
-        const targetUrl = new URL(path, upstreamBase);
-        if (!path.startsWith("/") || path.startsWith("//") || targetUrl.origin !== upstreamBase.origin) {
+        if (!/^\/(?![/\\])[^\s]*$/u.test(path)) {
           response.writeHead(400, { "content-type": "text/plain" }).end("AIR recorder forwards only paths on the configured upstream.");
           return;
         }
+        // The host always comes from the configured upstream; the request contributes only a validated path.
+        const targetUrl = `${upstreamBase.origin}${path}`;
         const body = await readBody(request);
         const headers = Object.fromEntries(Object.entries(request.headers).filter(([name, value]) => !HOP_HEADERS.has(name) && typeof value === "string") as [string, string][]);
         const upstream = await fetch(targetUrl, { method: request.method ?? "GET", headers, redirect: "manual", ...(body && request.method !== "GET" && request.method !== "HEAD" ? { body } : {}) });
