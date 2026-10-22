@@ -39,7 +39,7 @@ Methodology: `benchmarks/llm-air-lift/README.md`. Code: `scripts/*-llm-benchmark
 `pnpm benchmark:llm` is the only step that spends model credits. Everything else is offline and deterministic. Before any paid step:
 
 1. Run `pnpm benchmark:status`. It is offline and lists completed, resumable, and pending runs, tokens spent, and the exact resume commands.
-2. Resume with the printed command. The runner skips completed runs and continues from per-round checkpoints in `results-batches/<batch>/.checkpoints/`. Never delete checkpoints or batch evidence to "start fresh"; that discards paid work.
+2. Resume with the printed command. The runner skips completed runs and continues from per-round checkpoints in `~/.cache/air-llm-benchmark/<model>/<batch>/`. Never delete checkpoints or batch evidence to "start fresh"; that discards paid work.
 3. Exit code 75 means the agent hit a usage limit. Wait for the reset and rerun the same command.
 4. When 18/18 runs are complete: `pnpm benchmark:merge && pnpm benchmark:verify && pnpm benchmark:render`, then commit `results/` and `badges/`.
 
@@ -51,4 +51,5 @@ Any agent can stop at any time. State lives in Git, in `pnpm benchmark:status`, 
 
 ### Current work
 
-- Suite v1.1.0 (gpt-6-astra, medium reasoning) is ready. The 18 paid runs have not started. v1.0.0 runs (0/12 passed; feedback was digest-only) are archived locally and must not be published.
+- Suite v1.2.0 pins two profiles: `gpt-6-astra` (Codex CLI) and `claude-sonnet-5-5` (Claude Code on the owner's subscription), both medium reasoning. Paid runs started 2026-10-22. Run `pnpm benchmark:status` for progress and the exact resume commands; checkpoints live in `~/.cache/air-llm-benchmark/`. `pnpm benchmark:render` publishes only models where AIR beats control, so render freely once a model reaches 18/18.
+- v1.1.0 Codex checkpoints (0 completed rounds, usage-limited) are archived locally under `archive/v1.1.0-paused/`. v1.0.0 runs (0/12 passed; feedback was digest-only) are archived locally and must not be published.

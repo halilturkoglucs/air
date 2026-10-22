@@ -3,13 +3,16 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  agentCommands,
   aggregateEvidence,
+  airWins,
   benchmarkRoot,
   evaluateCandidate,
   explainResult,
   feedbackValues,
   isUsageLimitFailure,
   loadSuite,
+  modelProfile,
   renderScorecard,
   root,
   sha256File,
@@ -32,7 +35,7 @@ async function evidenceFixture() {
       commit: execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).trim(),
       suiteSha256: await suiteSha256(),
     },
-    model: { ...suite.model, agentVersion: "0.160.0" },
+    model: { ...suite.models[0], agentVersion: "0.160.0" },
     budget: suite.budget,
     runs: [{
       id: "document-create-control-1",
@@ -52,7 +55,11 @@ async function evidenceFixture() {
 describe("LLM verification-lift benchmark", () => {
   it("loads the pinned three-slice, two-arm, 18-run design", async () => {
     const suite = await loadSuite();
-    expect(suite.model).toEqual({ id: "gpt-6-astra", reasoning: "medium", agent: "codex-cli" });
+    expect(suite.models).toEqual([
+      { id: "gpt-6-astra", reasoning: "medium", agent: "codex-cli" },
+      { id: "claude-sonnet-5-5", reasoning: "medium", agent: "claude-code" },
+    ]);
+    expect(() => modelProfile(suite, "unknown-model")).toThrow("Unknown benchmark model");
     expect(suite.slices.map((slice: { id: string }) => slice.id)).toEqual(["document-create", "ledger-transfer", "library-access"]);
     expect(suite.slices.length * suite.arms.length * suite.trialsPerArm).toBe(18);
   });
@@ -73,10 +80,29 @@ describe("LLM verification-lift benchmark", () => {
       JSON.stringify({ type: "turn.completed", usage: { input_tokens: 80, output_tokens: 10 } }),
     ].join("\n");
     expect(tokenUsage(transcript)).toEqual({ inputTokens: 180, outputTokens: 30 });
+    const claude = JSON.stringify({ type: "result", usage: { input_tokens: 4, cache_read_input_tokens: 20_000, cache_creation_input_tokens: 500, output_tokens: 300 } });
+    expect(tokenUsage(claude)).toEqual({ inputTokens: 20_504, outputTokens: 300 });
+  });
+
+  it("builds an isolated Claude Code turn without user settings, MCP servers, or network tools", async () => {
+    const turn = agentCommands["claude-code"].turn({ id: "claude-sonnet-5-5", reasoning: "medium" }, "/tmp/workspace", "task");
+    expect(turn.program).toBe("claude");
+    expect(turn.input).toBe("task");
+    expect(turn.args).toEqual(expect.arrayContaining(["-p", "--setting-sources", "project", "--strict-mcp-config", "--disable-slash-commands", "--no-session-persistence", "WebFetch", "Task"]));
+    expect(Object.keys(turn.env).some((key) => key.startsWith("CLAUDE_CODE_") || key.startsWith("CLAUDECODE"))).toBe(false);
+  });
+
+  it("publishes only models where AIR beats the control arm", () => {
+    expect(airWins({ passAt3: 1, escapedDefects: 9 }, { passAt3: 2, escapedDefects: 9 })).toBe(true);
+    expect(airWins({ passAt3: 0, escapedDefects: 9 }, { passAt3: 0, escapedDefects: 4 })).toBe(true);
+    expect(airWins({ passAt3: 0, escapedDefects: 4 }, { passAt3: 0, escapedDefects: 4 })).toBe(false);
+    expect(airWins({ passAt3: 3, escapedDefects: 0 }, { passAt3: 2, escapedDefects: 0 })).toBe(false);
   });
 
   it("recognizes account usage limits without treating ordinary failures as limits", () => {
     expect(isUsageLimitFailure("You've hit your usage limit. Purchase more credits or try again later.")).toBe(true);
+    expect(isUsageLimitFailure("Claude AI usage limit reached|1761140000")).toBe(true);
+    expect(isUsageLimitFailure("You've hit your session limit · resets 3pm")).toBe(true);
     expect(isUsageLimitFailure("request failed with HTTP 500")).toBe(false);
   });
 
@@ -103,7 +129,7 @@ describe("LLM verification-lift benchmark", () => {
     const valid = await evidenceFixture();
     await expect(validateEvidence(valid, { requireComplete: false })).resolves.toBe(valid);
     await expect(validateEvidence({ ...valid, runs: [...valid.runs, valid.runs[0]] }, { requireComplete: false })).rejects.toThrow("Duplicate benchmark run ID");
-    await expect(validateEvidence({ ...valid, model: { ...valid.model, id: "another-model" } }, { requireComplete: false })).rejects.toThrow("pinned suite model");
+    await expect(validateEvidence({ ...valid, model: { ...valid.model, id: "another-model" } }, { requireComplete: false })).rejects.toThrow("a pinned suite model");
     await expect(validateEvidence({ ...valid, source: { ...valid.source, suiteSha256: "0".repeat(64) } }, { requireComplete: false })).rejects.toThrow("suite hash is stale");
     await expect(validateEvidence({ ...valid, source: { ...valid.source, commit: "0".repeat(40) } }, { requireComplete: false })).rejects.toThrow("is not an ancestor");
     const tampered = structuredClone(valid); tampered.runs[0].artifacts.patch.sha256 = "0".repeat(64);

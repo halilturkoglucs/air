@@ -2,7 +2,9 @@ import { execFileSync } from "node:child_process";
 import { cp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { relative, resolve } from "node:path";
 import {
+  agentCommands,
   benchmarkRoot,
+  checkpointRoot,
   createRunWorkspace,
   ensureDirectory,
   evaluateCandidate,
@@ -11,6 +13,8 @@ import {
   isUsageLimitFailure,
   loadSuite,
   measurementFromResult,
+  modelProfile,
+  resultRoot as resultDirectoryFor,
   root,
   runProcess,
   scrubTranscript,
@@ -29,18 +33,19 @@ const selectedArm = option("--arm");
 const selectedSlice = option("--slice");
 const selectedTrial = option("--trial") ? Number(option("--trial")) : undefined;
 const batch = option("--batch");
-const model = option("--model") ?? suite.model.id;
-const reasoning = option("--reasoning") ?? suite.model.reasoning;
-if (model !== suite.model.id || reasoning !== suite.model.reasoning) throw new Error(`Published suite is pinned to ${suite.model.id} with ${suite.model.reasoning} reasoning.`);
+const profile = modelProfile(suite, option("--model"));
+const agent = agentCommands[profile.agent];
+const model = profile.id;
+const reasoning = profile.reasoning;
 if (selectedArm && !suite.arms.includes(selectedArm)) throw new Error(`Unknown arm ${selectedArm}.`);
 if (selectedSlice && !suite.slices.some((slice) => slice.id === selectedSlice)) throw new Error(`Unknown slice ${selectedSlice}.`);
 if (selectedTrial !== undefined && (!Number.isInteger(selectedTrial) || selectedTrial < 1 || selectedTrial > suite.trialsPerArm)) throw new Error(`Trial must be 1-${suite.trialsPerArm}.`);
 if (batch && !/^[a-z0-9-]+$/u.test(batch)) throw new Error("Batch name must contain lowercase letters, numbers, and hyphens only.");
 
 const sourceCommit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).trim();
-const agentVersion = execFileSync("codex", ["--version"], { encoding: "utf8" }).trim().replace(/^codex-cli\s+/u, "");
+const agentVersion = agent.version();
 const currentSuiteHash = await suiteSha256();
-const resultRoot = resolve(benchmarkRoot, batch ? `results-batches/${batch}` : "results");
+const resultRoot = resultDirectoryFor(model, batch);
 const evidencePath = resolve(resultRoot, "evidence.json");
 let existingRuns = [];
 try {
@@ -83,7 +88,7 @@ for (const target of targets) {
     continue;
   }
 
-  const checkpointDirectory = resolve(resultRoot, ".checkpoints", target.id);
+  const checkpointDirectory = resolve(checkpointRoot, model, batch ?? "main", target.id);
   const checkpointPath = resolve(checkpointDirectory, "checkpoint.json");
   const workspace = resolve(checkpointDirectory, "workspace");
   const beforeRoundPath = resolve(checkpointDirectory, "candidate.before-round.mjs");
@@ -144,14 +149,12 @@ for (const target of targets) {
       let agentCompleted = false;
       for (let attempt = 1; attempt <= 2; attempt += 1) {
         const attemptStartedAt = Date.now();
-        const run = await runProcess("codex", [
-          "exec", "--ephemeral", "--ignore-user-config", "--ignore-rules", "--approve-for-me",
-          "--model", model,
-          "--config", `model_reasoning_effort=\"${reasoning}\"`, "--cd", workspace,
-          "--json", prompt,
-        ], {
+        const turn = agent.turn(profile, workspace, prompt);
+        const run = await runProcess(turn.program, turn.args, {
           cwd: workspace,
-          onStdout: (chunk) => process.stdout.write(chunk.includes("turn.completed") ? "." : ""),
+          env: turn.env,
+          input: turn.input,
+          onStdout: (chunk) => process.stdout.write(agent.finished(chunk) ? "." : ""),
           onStderr: (chunk) => process.stderr.write(chunk),
         });
         state.durationMs += Date.now() - attemptStartedAt;
@@ -244,7 +247,7 @@ for (const target of targets) {
     suiteVersion: suite.version,
     generatedAt: new Date().toISOString(),
     source: { commit: sourceCommit, suiteSha256: currentSuiteHash },
-    model: { ...suite.model, agentVersion },
+    model: { ...profile, agentVersion },
     budget: suite.budget,
     runs: existingRuns,
   };
@@ -262,7 +265,7 @@ if (paused) {
     await validateEvidence(finalEvidence, { requireComplete: !batch && selectedArm === undefined && selectedSlice === undefined && selectedTrial === undefined });
     console.log(`Evidence: ${relative(root, evidencePath)} (${finalEvidence.runs.length}/18 runs)`);
   } catch (error) {
-    if (error?.code === "ENOENT") console.log(`Evidence: no completed runs yet; checkpoints are under ${relative(root, resolve(resultRoot, ".checkpoints"))}`);
+    if (error?.code === "ENOENT") console.log(`Evidence: no completed runs yet; checkpoints are under ${resolve(checkpointRoot, model)}`);
     else throw error;
   }
 }

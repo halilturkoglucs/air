@@ -1,12 +1,15 @@
 import { createHash } from "node:crypto";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { cp, mkdir, mkdtemp, readFile, readdir, stat, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { dirname, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 export const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 export const benchmarkRoot = resolve(root, "benchmarks/llm-air-lift");
+// Checkpoints and agent workspaces live outside the repository so no agent discovers AGENTS.md, CLAUDE.md, or oracle files by walking up.
+export const checkpointRoot = resolve(process.env.AIR_BENCHMARK_CHECKPOINTS ?? resolve(homedir(), ".cache/air-llm-benchmark"));
+export const resultRoot = (modelId, batch) => resolve(benchmarkRoot, batch ? `results-batches/${modelId}/${batch}` : `results/${modelId}`);
 
 export function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
@@ -43,8 +46,38 @@ export async function loadSuite() {
   if (suite.format !== "air.dev/llm-benchmark-suite/v0.1") throw new Error("Unsupported LLM benchmark suite format.");
   if (!Array.isArray(suite.slices) || suite.slices.length !== 3) throw new Error("LLM benchmark v1 requires exactly three slices.");
   if (!Array.isArray(suite.arms) || suite.arms.join(",") !== "control,air") throw new Error("LLM benchmark arms must be control and air.");
+  if (!Array.isArray(suite.models) || suite.models.length === 0 || !suite.models.every((model) => /^[a-z0-9.-]+$/u.test(model.id) && agentCommands[model.agent])) throw new Error("LLM benchmark models must name a supported agent.");
   return suite;
 }
+
+export function modelProfile(suite, id = suite.models[0].id) {
+  const profile = suite.models.find((model) => model.id === id);
+  if (!profile) throw new Error(`Unknown benchmark model ${id}. Pinned models: ${suite.models.map((model) => model.id).join(", ")}.`);
+  return profile;
+}
+
+const isolatedEnvironment = () => Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith("CLAUDECODE") && !key.startsWith("CLAUDE_CODE_")));
+
+// One entry per supported coding agent: how to report its version and how to run one non-interactive repair turn.
+export const agentCommands = {
+  "codex-cli": {
+    version: () => execFileSync("codex", ["--version"], { encoding: "utf8" }).trim().replace(/^codex-cli\s+/u, ""),
+    turn: (profile, workspace, prompt) => ({ program: "codex", args: ["exec", "--ephemeral", "--ignore-user-config", "--ignore-rules", "--approve-for-me", "--model", profile.id, "--config", `model_reasoning_effort="${profile.reasoning}"`, "--cd", workspace, "--json", prompt] }),
+    finished: (chunk) => chunk.includes("turn.completed"),
+  },
+  "claude-code": {
+    version: () => execFileSync("claude", ["--version"], { encoding: "utf8", env: isolatedEnvironment() }).trim().split(/\s+/u)[0],
+    turn: (profile, workspace, prompt) => ({
+      program: "claude",
+      args: ["-p", "--model", profile.id, "--effort", profile.reasoning, "--output-format", "stream-json", "--verbose", "--setting-sources", "project", "--strict-mcp-config", "--disable-slash-commands", "--no-session-persistence", "--permission-mode", "acceptEdits",
+        "--allowedTools", "Bash(npm test)", "Bash(npm test:*)", "Bash(node:*)",
+        "--disallowedTools", "Task", "WebFetch", "WebSearch", "CronCreate", "ScheduleWakeup", "RemoteTrigger", "PushNotification", "EnterWorktree", "SendMessage"],
+      input: prompt,
+      env: isolatedEnvironment(),
+    }),
+    finished: (chunk) => chunk.includes('"type":"result"'),
+  },
+};
 
 function assertSha256(value, label) {
   if (typeof value !== "string" || !/^[0-9a-f]{64}$/u.test(value)) throw new Error(`Invalid benchmark evidence: ${label} must be a SHA-256 digest.`);
@@ -85,7 +118,8 @@ export async function validateEvidence(evidence, options = {}) {
   JSON.parse(await readFile(resolve(benchmarkRoot, "evidence.schema.json"), "utf8"));
   validateEvidenceShape(evidence);
   if (evidence.suiteVersion !== suite.version) throw new Error(`Evidence suite version ${evidence.suiteVersion} does not match ${suite.version}.`);
-  if (evidence.model.id !== suite.model.id || evidence.model.reasoning !== suite.model.reasoning || evidence.model.agent !== suite.model.agent) throw new Error("Evidence model identity does not match the pinned suite model.");
+  const profile = suite.models.find((model) => model.id === evidence.model.id);
+  if (!profile || evidence.model.reasoning !== profile.reasoning || evidence.model.agent !== profile.agent) throw new Error("Evidence model identity does not match a pinned suite model.");
   if (evidence.budget.repairRounds !== suite.budget.repairRounds) throw new Error("Evidence repair budget does not match the suite.");
   const expectedSuiteHash = await suiteSha256();
   if (evidence.source.suiteSha256 !== expectedSuiteHash) throw new Error("Evidence suite hash is stale.");
@@ -170,18 +204,31 @@ function lift(control, air, lowerIsBetter = false) {
   return `**${air > control ? "+" : "−"}${Math.abs(Math.round((air - control) * 100))} pts**`;
 }
 
+export function airWins(control, air) {
+  return air.passAt3 > control.passAt3 || (air.passAt3 === control.passAt3 && air.escapedDefects < control.escapedDefects);
+}
+
 export function renderScorecard(evidence, labels = {}) {
-  const { arms: { control, air }, slices } = aggregateEvidence(evidence);
-  const date = evidence.generatedAt.slice(0, 10);
-  const model = `\`${evidence.model.id}\``;
-  const badge = (name, alt) => `![${alt}](https://raw.githubusercontent.com/halilturkoglucs/air/main/benchmarks/llm-air-lift/badges/${name}.svg)`;
-  const [low, high] = air.passAt3Interval; const [controlLow, controlHigh] = control.passAt3Interval;
-  const categories = [...new Set([...Object.keys(control.mismatchesByCategory), ...Object.keys(air.mismatchesByCategory)])].sort();
-  const categoryRows = categories.map((category) => `| ${category} | ${control.mismatchesByCategory[category] ?? 0} | ${air.mismatchesByCategory[category] ?? 0} |`).join("\n");
+  return renderScorecards([evidence], labels);
+}
+
+export function renderScorecards(evidences, labels = {}) {
   return `<!-- AIR_LLM_BENCHMARK:START -->
 ## Does AIR improve an LLM migration?
 
-${badge("control-pass-at-3", "LLM alone pass@3")} ${badge("air-pass-at-3", "LLM + AIR pass@3")} ${badge("escaped-defects", "Escaped defects")}
+${evidences.map((evidence) => renderModelSection(evidence, labels, evidences.length > 1)).join("\n\n")}
+<!-- AIR_LLM_BENCHMARK:END -->`;
+}
+
+function renderModelSection(evidence, labels, withHeading) {
+  const { arms: { control, air }, slices } = aggregateEvidence(evidence);
+  const date = evidence.generatedAt.slice(0, 10);
+  const model = `\`${evidence.model.id}\``;
+  const badge = (name, alt) => `![${alt}](https://raw.githubusercontent.com/halilturkoglucs/air/main/benchmarks/llm-air-lift/badges/${evidence.model.id}-${name}.svg)`;
+  const [low, high] = air.passAt3Interval; const [controlLow, controlHigh] = control.passAt3Interval;
+  const categories = [...new Set([...Object.keys(control.mismatchesByCategory), ...Object.keys(air.mismatchesByCategory)])].sort();
+  const categoryRows = categories.map((category) => `| ${category} | ${control.mismatchesByCategory[category] ?? 0} | ${air.mismatchesByCategory[category] ?? 0} |`).join("\n");
+  return `${withHeading ? `### ${model}\n\n` : ""}${badge("control-pass-at-3", "LLM alone pass@3")} ${badge("air-pass-at-3", "LLM + AIR pass@3")} ${badge("escaped-defects", "Escaped defects")}
 
 > **Same model. Same task. Same 3-round repair budget.** With AIR feedback, ${model} shipped **${air.passAt3}/${air.total}** behaviorally correct migrations, compared with **${control.passAt3}/${control.total}** on ordinary tests alone. Escaped defects: **${control.escapedDefects} → ${air.escapedDefects}**.
 
@@ -210,8 +257,7 @@ ${categoryRows}
 
 Pinned result: ${model}, ${evidence.model.reasoning} reasoning, ${evidence.model.agent} ${evidence.model.agentVersion} · suite ${evidence.suiteVersion} · ${control.total + air.total} isolated runs · ${date} · source \`${evidence.source.commit.slice(0, 12)}\`. pass@3 95% Wilson interval: alone ${percent(controlLow)}–${percent(controlHigh)}, AIR ${percent(low)}–${percent(high)}. Both arms see the same task and ordinary tests. The AIR arm also receives \`air check\` differences on feedback scenarios. A held-out hidden suite scores both arms. [Methodology and evidence](https://github.com/halilturkoglucs/air/tree/main/benchmarks/llm-air-lift).
 
-This result applies only to the named model and suite. Runtime throughput is measured separately.
-<!-- AIR_LLM_BENCHMARK:END -->`;
+This result applies only to the named model and suite. Runtime throughput is measured separately.`;
 }
 
 export async function replaceGeneratedBlock(path, block) {
@@ -328,6 +374,10 @@ export function tokenUsage(jsonl) {
     if (!line.trim()) continue;
     try {
       const value = JSON.parse(line);
+      if (value.type === "result" && value.usage) {
+        inputTokens += (value.usage.input_tokens ?? 0) + (value.usage.cache_read_input_tokens ?? 0) + (value.usage.cache_creation_input_tokens ?? 0);
+        outputTokens += value.usage.output_tokens ?? 0;
+      }
       if (value.type === "turn.completed" && value.usage) {
         if (Number.isFinite(value.usage.input_tokens)) inputTokens += Number(value.usage.input_tokens);
         if (Number.isFinite(value.usage.output_tokens)) outputTokens += Number(value.usage.output_tokens);
@@ -338,7 +388,7 @@ export function tokenUsage(jsonl) {
 }
 
 export function isUsageLimitFailure(output) {
-  return /(?:hit|reached|exceeded)[^\n]{0,80}usage limit|usage limit[^\n]{0,120}(?:upgrade|credits|try again|reset)/iu.test(output);
+  return /(?:hit|reached|exceeded)[^\n]{0,80}usage limit|usage limit[^\n]{0,120}(?:upgrade|credits|try again|reset|reached)|hit your (?:session |weekly |opus )?limit|limit reached[^\n]{0,40}resets/iu.test(output);
 }
 
 export function measurementFromResult(slice, result, rounds, passAt1, ordinaryTestsPassed, buildFailures, infrastructureRetries, durationMs, usage) {

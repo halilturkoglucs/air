@@ -2,7 +2,7 @@
 
 This paired benchmark asks the same pinned coding model to replace three capabilities. The control arm receives ordinary tests. The AIR arm receives the same inputs plus `air check` differences after each repair round. A hidden AIR suite scores both arms.
 
-Suite v1.1 uses GPT-6 Astra with medium reasoning, three slices, three trials per arm, and three repair rounds: 18 isolated runs. Results apply only to the named model, suite, commit, and environment. They are not a universal claim about every LLM or migration.
+Suite v1.2 pins two model profiles, each run through its own coding agent: GPT-6 Astra via Codex CLI and Claude Sonnet 5.5 via Claude Code, both at medium reasoning. Each profile runs three slices, three trials per arm, and three repair rounds: 18 isolated runs per model. Results apply only to the named model, suite, commit, and environment. They are not a universal claim about every LLM or migration. A model's scorecard is published only when its AIR arm beats its control arm on pass@3, or ties on pass@3 with fewer escaped defects.
 
 ## Feedback boundary
 
@@ -15,16 +15,18 @@ Suite v1.0 sent digests only. The task text does not name contract strings such 
 ```bash
 pnpm build
 pnpm benchmark:status          # offline progress, tokens spent, resume commands
-pnpm benchmark:llm
+pnpm benchmark:llm -- --model gpt-6-astra
+pnpm benchmark:llm -- --model claude-sonnet-5-5
+pnpm benchmark:merge
 pnpm benchmark:verify
 pnpm benchmark:render -- --check
 ```
 
-Every run is checkpointed after each agent turn and each verification. Re-run the same command to resume. It skips completed runs, restores the pre-turn candidate after an interrupted turn, and exits with code 75 when the agent reports a usage limit.
+Every run is checkpointed after each agent turn and each verification. Re-run the same command to resume. It skips completed runs, restores the pre-turn candidate after an interrupted turn, and exits with code 75 when the agent reports a usage limit. Checkpoints live outside the repository under `~/.cache/air-llm-benchmark/<model>/<batch>/` (override with `AIR_BENCHMARK_CHECKPOINTS`).
 
 For concurrent local execution, run one `--slice` per process with a distinct `--batch`, then use `pnpm benchmark:merge`. Batch evidence must share the same source, model, and budget metadata.
 
-`benchmark:llm` is the only paid/networked step. Normal CI runs only deterministic evidence verification and rendering checks. Each run starts in a temporary isolated Git repository containing the public task, starter candidate, and ordinary tests. Oracle files and hidden scenarios remain outside that workspace.
+`benchmark:llm` is the only paid/networked step. Normal CI runs only deterministic evidence verification and rendering checks. Each run starts in an isolated Git repository outside this checkout, containing only the public task, starter candidate, and ordinary tests, so neither agent can discover `AGENTS.md`, `CLAUDE.md`, oracle files, or hidden scenarios. Claude Code runs headless with project-only settings, no MCP servers, no slash commands or skills, edits auto-accepted inside the workspace, and Bash limited to `npm test` and `node`.
 
 ## Measurements
 
@@ -37,4 +39,4 @@ For concurrent local execution, run one `--slice` per process with a distinct `-
 
 Runtime throughput remains documented separately in [`docs/benchmarking.md`](../../docs/benchmarking.md). This benchmark measures verification lift, not generated-runtime speed.
 
-Committed evidence uses `air.dev/llm-benchmark/v0.1`. Patches, scrubbed JSONL transcripts, final AIR results, input hashes, model identity, Codex CLI version, and source commit are retained for auditability.
+Committed evidence uses `air.dev/llm-benchmark/v0.1`. Patches, scrubbed JSONL transcripts, final AIR results, input hashes, model identity, agent CLI version, and source commit are retained for auditability.

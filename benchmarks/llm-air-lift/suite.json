@@ -1,11 +1,10 @@
 {
   "format": "air.dev/llm-benchmark-suite/v0.1",
-  "version": "1.1.0",
-  "model": {
-    "id": "gpt-6-astra",
-    "reasoning": "medium",
-    "agent": "codex-cli"
-  },
+  "version": "1.2.0",
+  "models": [
+    { "id": "gpt-6-astra", "reasoning": "medium", "agent": "codex-cli" },
+    { "id": "claude-sonnet-5-5", "reasoning": "medium", "agent": "claude-code" }
+  ],
   "budget": {
     "repairRounds": 3
   },
