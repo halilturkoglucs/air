@@ -77,5 +77,5 @@ Any agent can stop at any time. State lives in Git, in `pnpm benchmark:status`, 
 
 - v0.13.0 is released (npmjs, GitHub Packages, GitHub release, Homebrew `air-ir`).
 - Agent protocol `air.dev/agent/v1` (`air check run --agent --reveal`, `air mcp`) is in PR #36.
-- Benchmark suite v1.4.0 (branch `feat/benchmark-v1.4-agent-cli`, stacked on #36) feeds the AIR arm the exact `air check run --agent --reveal` output. The 18-run `claude-sonnet-5-5` rerun started 2026-10-22 and may pause on usage limits (exit 75). To continue: `pnpm build && pnpm benchmark:status`, then rerun the three printed `pnpm benchmark:llm -- --model claude-sonnet-5-5 --slice … --batch …` commands (they skip completed runs and resume checkpoints). At 18/18: `pnpm benchmark:merge && pnpm benchmark:verify && pnpm benchmark:render`, commit `results/` and `badges/` on this branch, and push. Until then, the README still shows the v1.3 results; `benchmark:verify` fails on this branch because the suite hash changed.
+- Benchmark suite v1.4.0 is complete and published on `feat/benchmark-v1.4-agent-cli` (stacked on #36): with the shipped `air check run --agent --reveal` feedback, `claude-sonnet-5-5` reached pass@3 9/9 vs 0/9 alone, escaped defects 218 -> 0. Merge after #36.
 - v1.3 batches are archived locally under `benchmarks/llm-air-lift/archive/v1.3.0/`.

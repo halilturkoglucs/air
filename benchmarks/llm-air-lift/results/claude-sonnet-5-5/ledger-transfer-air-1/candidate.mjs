@@ -3,18 +3,17 @@ for await (const chunk of process.stdin) source += chunk;
 const input = JSON.parse(source || "{}");
 
 const json = { "content-type": "application/json" };
-const unchanged = [
-  { id: input.fromId, balance: input.fromBalance, version: input.fromVersion },
-  { id: input.toId, balance: input.toBalance, version: input.toVersion }
-];
+const { fromId, toId, amount, transferId, idempotencyKey } = input;
+const fromVersion = input.fromVersion;
+const toVersion = input.toVersion;
 
-function emit(status, body, { accounts = unchanged, committed = false, replayed = false, messages = [], ordering = [], failures = [], retryability = false } = {}) {
+function out(status, body, accounts, committed, messages, ordering, failures, retryability, replayed = false) {
   console.log(JSON.stringify({
     http: { status, headers: json, body },
     database: {
       accounts,
       transaction: { committed, rollsBackOnFailure: true },
-      idempotency: { key: input.idempotencyKey, replayed }
+      idempotency: { key: idempotencyKey, replayed }
     },
     messages,
     ordering,
@@ -23,53 +22,57 @@ function emit(status, body, { accounts = unchanged, committed = false, replayed 
   }));
 }
 
-function fail(status, code, retryable, ordering) {
-  emit(status, { error: { code, retryable } }, {
-    ordering,
-    failures: [{ code, status, retryable }],
-    retryability: retryable
-  });
+const unchanged = [
+  { id: fromId, balance: input.fromBalance, version: fromVersion },
+  { id: toId, balance: input.toBalance, version: toVersion }
+];
+
+function applied() {
+  const fromBalance = input.fromBalance - amount;
+  const toBalance = input.toBalance + amount;
+  return {
+    fromBalance,
+    toBalance,
+    accounts: [
+      { id: fromId, balance: fromBalance, version: fromVersion + 1 },
+      { id: toId, balance: toBalance, version: toVersion + 1 }
+    ]
+  };
 }
 
-const seen = Array.isArray(input.processedKeys) ? input.processedKeys : [];
+function fail(status, code, retryable, ordering) {
+  out(status, { error: { code, retryable } }, unchanged, false, [], ordering,
+    [{ code, status, retryable }], retryable);
+}
 
-function versionConflict() {
-  if (input.versionConflict === true || input.conflict === true) return true;
+function conflict() {
   for (const [k, v] of Object.entries(input)) {
-    if (!/version/i.test(k) || !/(expect|current|actual|stored|latest|stale)/i.test(k) || typeof v !== "number") continue;
-    if (/from/i.test(k) && v !== input.fromVersion) return true;
-    if (/to/i.test(k) && !/from/i.test(k) && v !== input.toVersion) return true;
+    if (/conflict/i.test(k) && v === true) return true;
+    if (/version/i.test(k) && k !== "fromVersion" && k !== "toVersion" && typeof v === "number") {
+      if (/from|source|debit/i.test(k) && v !== fromVersion) return true;
+      if (/to|target|dest|credit/i.test(k) && !/from/i.test(k) && v !== toVersion) return true;
+    }
   }
   return false;
 }
 
-const fromBalance = input.fromBalance - input.amount;
-const toBalance = input.toBalance + input.amount;
-const fromVersion = input.fromVersion + 1;
-const toVersion = input.toVersion + 1;
-const applied = [
-  { id: input.fromId, balance: fromBalance, version: fromVersion },
-  { id: input.toId, balance: toBalance, version: toVersion }
-];
+const prior = input.existingTransfer ?? input.priorTransfer ?? (input.replay === true ? input.previousResult : undefined);
+const isReplay = input.replay === true || input.idempotentReplay === true || prior !== undefined;
 
-if (input.replay === true || seen.includes(input.idempotencyKey)) {
-  emit(200, { transferId: input.transferId, fromBalance, toBalance, outcome: "replayed" }, {
-    accounts: applied,
-    committed: true,
-    replayed: true,
-    ordering: ["idempotency-read", "response"]
-  });
-} else if (versionConflict()) {
+if (isReplay) {
+  const a = applied();
+  out(200, { transferId, fromBalance: a.fromBalance, toBalance: a.toBalance, outcome: "replayed" },
+    a.accounts, true, [], ["idempotency-read", "response"], [], false, true);
+} else if (conflict()) {
   fail(409, "version-conflict", true, ["lock", "version-check", "rollback"]);
-} else if (!Number.isFinite(input.amount) || input.amount <= 0) {
-  fail(400, "invalid-amount", false, ["validate"]);
-} else if (input.fromBalance < input.amount) {
+} else if (!Number.isFinite(amount) || amount <= 0) {
+  fail(400, "invalid-amount", false, ["lock", "validate", "rollback"]);
+} else if (input.fromBalance < amount) {
   fail(422, "insufficient-funds", false, ["lock", "balance-check", "rollback"]);
 } else {
-  emit(201, { transferId: input.transferId, fromBalance, toBalance, outcome: "committed" }, {
-    accounts: applied,
-    committed: true,
-    messages: [{ type: "ledger.transfer-completed", transferId: input.transferId, amount: input.amount }],
-    ordering: ["lock", "debit", "credit", "idempotency-write", "message", "commit"]
-  });
+  const a = applied();
+  out(201, { transferId, fromBalance: a.fromBalance, toBalance: a.toBalance, outcome: "committed" },
+    a.accounts, true,
+    [{ type: "ledger.transfer-completed", transferId, amount }],
+    ["lock", "debit", "credit", "idempotency-write", "message", "commit"], [], false);
 }

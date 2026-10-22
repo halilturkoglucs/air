@@ -1,8 +1,8 @@
 {
   "apiVersion": "air.dev/check-result/v0.1",
   "kind": "CheckResult",
-  "generatedAt": "2026-10-22T08:41:32.240Z",
-  "baselineId": "33dbac5c8a5fe2a232de891442295493d2662f4d39df32d0457aa01bb497f0b8",
+  "generatedAt": "2026-10-22T11:30:20.580Z",
+  "baselineId": "a7ac6c5d3a45aed28a6d951ed4b0a2467129085d7e98bcd3cae03037bb58d330",
   "candidate": {
     "name": "candidate",
     "targetHash": "665b2ecdd0ef2157bebeda0f24ae2012786e516d13d79b610d22592207a78d58"
@@ -51,19 +51,6 @@
       },
       "provenance": "baseline:creates-document/database/idempotency",
       "repair": "harness"
-    },
-    {
-      "classification": "candidate-difference",
-      "scenario": "creates-document",
-      "category": "database",
-      "selector": "/database/rows/0/idempotencyKey",
-      "actual": {
-        "type": "string",
-        "bytes": 10,
-        "sha256": "f7f28a9a5252cbd5f68f672b7fc20d28ab8e4f3535cb4b3873edb8e11f6bea70"
-      },
-      "provenance": "baseline:creates-document/database/rows/0/idempotencyKey",
-      "repair": "candidate-code"
     },
     {
       "classification": "missing-observation",
@@ -199,8 +186,8 @@
       },
       "actual": {
         "type": "string",
-        "bytes": 17,
-        "sha256": "bc14a2af3930adc1b907e264048aacc22f1f3930ce182d60e7e665e0c8416864"
+        "bytes": 11,
+        "sha256": "13a2abbdfcc75451c958e8246d06b52c595a7953f4dfe11c5b6edf28ec2e5ca9"
       },
       "provenance": "baseline:creates-document/ordering/2",
       "repair": "candidate-code"
@@ -217,23 +204,10 @@
       },
       "actual": {
         "type": "string",
-        "bytes": 26,
-        "sha256": "e879c3c2ca0326e90a7b72a1a58fb464ad8a0d4acf3f1683af8b8f8e547bdf19"
+        "bytes": 12,
+        "sha256": "5de2c2a5521e3dbec93046df08b512ec88305f06bcb593bfca9ab3e779cb5770"
       },
       "provenance": "baseline:creates-document/ordering/3",
-      "repair": "candidate-code"
-    },
-    {
-      "classification": "candidate-difference",
-      "scenario": "creates-document",
-      "category": "outbound",
-      "selector": "/outbound/0/action",
-      "actual": {
-        "type": "string",
-        "bytes": 11,
-        "sha256": "71d4092d6f6d5b91727cbd1c0d0b7da8efe5a923f5588254fdda650ae29553cf"
-      },
-      "provenance": "baseline:creates-document/outbound/0/action",
       "repair": "candidate-code"
     },
     {
@@ -279,26 +253,13 @@
       "classification": "candidate-difference",
       "scenario": "creates-document",
       "category": "outbound",
-      "selector": "/outbound/0/service",
+      "selector": "/outbound/0/vendor",
       "actual": {
         "type": "string",
-        "bytes": 8,
-        "sha256": "119cf409dd60a030b1aea777ffd85ca22532de05e5f4e6d55d47fbb60e05cf22"
+        "bytes": 11,
+        "sha256": "71d4092d6f6d5b91727cbd1c0d0b7da8efe5a923f5588254fdda650ae29553cf"
       },
-      "provenance": "baseline:creates-document/outbound/0/service",
-      "repair": "candidate-code"
-    },
-    {
-      "classification": "candidate-difference",
-      "scenario": "creates-document",
-      "category": "outbound",
-      "selector": "/outbound/1/action",
-      "actual": {
-        "type": "string",
-        "bytes": 7,
-        "sha256": "8a76c15acafa28c88578c73027916c210ff030f193fa787b2affa93b6286bed3"
-      },
-      "provenance": "baseline:creates-document/outbound/1/action",
+      "provenance": "baseline:creates-document/outbound/0/vendor",
       "repair": "candidate-code"
     },
     {
@@ -344,19 +305,6 @@
       "classification": "candidate-difference",
       "scenario": "creates-document",
       "category": "outbound",
-      "selector": "/outbound/1/service",
-      "actual": {
-        "type": "string",
-        "bytes": 8,
-        "sha256": "119cf409dd60a030b1aea777ffd85ca22532de05e5f4e6d55d47fbb60e05cf22"
-      },
-      "provenance": "baseline:creates-document/outbound/1/service",
-      "repair": "candidate-code"
-    },
-    {
-      "classification": "candidate-difference",
-      "scenario": "creates-document",
-      "category": "outbound",
       "selector": "/outbound/1/status",
       "expected": {
         "type": "number",
@@ -369,6 +317,32 @@
         "sha256": "27badc983df1780b60c2b3fa9d3a19a00e46aac798451f0febdca52920faaddf"
       },
       "provenance": "baseline:creates-document/outbound/1/status",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "creates-document",
+      "category": "outbound",
+      "selector": "/outbound/1/title",
+      "actual": {
+        "type": "string",
+        "bytes": 18,
+        "sha256": "1591ba193cb655f780baf5c29246229ddc27eb0ae6c2ba3da3db2cd1bab1c50f"
+      },
+      "provenance": "baseline:creates-document/outbound/1/title",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "creates-document",
+      "category": "outbound",
+      "selector": "/outbound/1/vendor",
+      "actual": {
+        "type": "string",
+        "bytes": 7,
+        "sha256": "8a76c15acafa28c88578c73027916c210ff030f193fa787b2affa93b6286bed3"
+      },
+      "provenance": "baseline:creates-document/outbound/1/vendor",
       "repair": "candidate-code"
     },
     {
@@ -385,19 +359,6 @@
       "repair": "harness"
     },
     {
-      "classification": "candidate-difference",
-      "scenario": "maps-vendor-failure",
-      "category": "database",
-      "selector": "/database/transaction/rolledBack",
-      "actual": {
-        "type": "boolean",
-        "bytes": 4,
-        "sha256": "b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b"
-      },
-      "provenance": "baseline:maps-vendor-failure/database/transaction/rolledBack",
-      "repair": "candidate-code"
-    },
-    {
       "classification": "missing-observation",
       "scenario": "maps-vendor-failure",
       "category": "database",
@@ -411,7 +372,7 @@
       "repair": "harness"
     },
     {
-      "classification": "missing-observation",
+      "classification": "candidate-difference",
       "scenario": "maps-vendor-failure",
       "category": "failures",
       "selector": "/failures/0/code",
@@ -420,8 +381,13 @@
         "bytes": 20,
         "sha256": "d5eb132eaa5445c98043392e6f77e1a7af11a2a16d43e3c8452115bcef0f8b81"
       },
+      "actual": {
+        "type": "string",
+        "bytes": 20,
+        "sha256": "96eb11c0fa0b9ec85b0acc32493e39d94bb7b94a947b951110ebcb72be0409d5"
+      },
       "provenance": "baseline:maps-vendor-failure/failures/0/code",
-      "repair": "harness"
+      "repair": "candidate-code"
     },
     {
       "classification": "missing-observation",
@@ -435,37 +401,6 @@
       },
       "provenance": "baseline:maps-vendor-failure/failures/0/retryable",
       "repair": "harness"
-    },
-    {
-      "classification": "candidate-difference",
-      "scenario": "maps-vendor-failure",
-      "category": "failures",
-      "selector": "/failures/0/status",
-      "expected": {
-        "type": "number",
-        "bytes": 3,
-        "sha256": "7182dd431b5c8833ed3c8a02c8615780df8dca7d83ed4166962b207f45a656b5"
-      },
-      "actual": {
-        "type": "number",
-        "bytes": 3,
-        "sha256": "5344c4110f483793dc352c388e67776724c36b4bea3ffda6cab7c75b9c65aceb"
-      },
-      "provenance": "baseline:maps-vendor-failure/failures/0/status",
-      "repair": "candidate-code"
-    },
-    {
-      "classification": "candidate-difference",
-      "scenario": "maps-vendor-failure",
-      "category": "failures",
-      "selector": "/failures/0/type",
-      "actual": {
-        "type": "string",
-        "bytes": 8,
-        "sha256": "119cf409dd60a030b1aea777ffd85ca22532de05e5f4e6d55d47fbb60e05cf22"
-      },
-      "provenance": "baseline:maps-vendor-failure/failures/0/type",
-      "repair": "candidate-code"
     },
     {
       "classification": "candidate-difference",
@@ -492,54 +427,10 @@
       },
       "actual": {
         "type": "string",
-        "bytes": 16,
-        "sha256": "321efdc98989e56e4e7d45aa2da019ab55474112cfc64d6779cd16bfb010dce8"
+        "bytes": 20,
+        "sha256": "96eb11c0fa0b9ec85b0acc32493e39d94bb7b94a947b951110ebcb72be0409d5"
       },
       "provenance": "baseline:maps-vendor-failure/http/body/error",
-      "repair": "candidate-code"
-    },
-    {
-      "classification": "candidate-difference",
-      "scenario": "maps-vendor-failure",
-      "category": "http",
-      "selector": "/http/status",
-      "expected": {
-        "type": "number",
-        "bytes": 3,
-        "sha256": "7182dd431b5c8833ed3c8a02c8615780df8dca7d83ed4166962b207f45a656b5"
-      },
-      "actual": {
-        "type": "number",
-        "bytes": 3,
-        "sha256": "5344c4110f483793dc352c388e67776724c36b4bea3ffda6cab7c75b9c65aceb"
-      },
-      "provenance": "baseline:maps-vendor-failure/http/status",
-      "repair": "candidate-code"
-    },
-    {
-      "classification": "missing-observation",
-      "scenario": "maps-vendor-failure",
-      "category": "ordering",
-      "selector": "/ordering/1",
-      "expected": {
-        "type": "string",
-        "bytes": 10,
-        "sha256": "3770b198a03f18cbf37a3bfd4eba2fbbab9ea2eb9795b207678b45c957a6ce18"
-      },
-      "provenance": "baseline:maps-vendor-failure/ordering/1",
-      "repair": "harness"
-    },
-    {
-      "classification": "candidate-difference",
-      "scenario": "maps-vendor-failure",
-      "category": "outbound",
-      "selector": "/outbound/0/action",
-      "actual": {
-        "type": "string",
-        "bytes": 11,
-        "sha256": "71d4092d6f6d5b91727cbd1c0d0b7da8efe5a923f5588254fdda650ae29553cf"
-      },
-      "provenance": "baseline:maps-vendor-failure/outbound/0/action",
       "repair": "candidate-code"
     },
     {
@@ -585,13 +476,13 @@
       "classification": "candidate-difference",
       "scenario": "maps-vendor-failure",
       "category": "outbound",
-      "selector": "/outbound/0/service",
+      "selector": "/outbound/0/vendor",
       "actual": {
         "type": "string",
-        "bytes": 8,
-        "sha256": "119cf409dd60a030b1aea777ffd85ca22532de05e5f4e6d55d47fbb60e05cf22"
+        "bytes": 11,
+        "sha256": "71d4092d6f6d5b91727cbd1c0d0b7da8efe5a923f5588254fdda650ae29553cf"
       },
-      "provenance": "baseline:maps-vendor-failure/outbound/0/service",
+      "provenance": "baseline:maps-vendor-failure/outbound/0/vendor",
       "repair": "candidate-code"
     },
     {
@@ -621,24 +512,6 @@
       "repair": "harness"
     },
     {
-      "classification": "candidate-difference",
-      "scenario": "replays-idempotently",
-      "category": "database",
-      "selector": "/database/transaction/committed",
-      "expected": {
-        "type": "boolean",
-        "bytes": 4,
-        "sha256": "b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b"
-      },
-      "actual": {
-        "type": "boolean",
-        "bytes": 5,
-        "sha256": "fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa"
-      },
-      "provenance": "baseline:replays-idempotently/database/transaction/committed",
-      "repair": "candidate-code"
-    },
-    {
       "classification": "missing-observation",
       "scenario": "replays-idempotently",
       "category": "database",
@@ -650,19 +523,6 @@
       },
       "provenance": "baseline:replays-idempotently/database/transaction/rollsBackOnFailure",
       "repair": "harness"
-    },
-    {
-      "classification": "candidate-difference",
-      "scenario": "replays-idempotently",
-      "category": "database",
-      "selector": "/database/transaction/writes",
-      "actual": {
-        "type": "number",
-        "bytes": 1,
-        "sha256": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9"
-      },
-      "provenance": "baseline:replays-idempotently/database/transaction/writes",
-      "repair": "candidate-code"
     },
     {
       "classification": "missing-observation",
@@ -693,6 +553,37 @@
     {
       "classification": "candidate-difference",
       "scenario": "replays-idempotently",
+      "category": "http",
+      "selector": "/http/status",
+      "expected": {
+        "type": "number",
+        "bytes": 3,
+        "sha256": "27badc983df1780b60c2b3fa9d3a19a00e46aac798451f0febdca52920faaddf"
+      },
+      "actual": {
+        "type": "number",
+        "bytes": 3,
+        "sha256": "43974ed74066b207c30ffd0fed5146762e6c60745ac977004bc14507c7c42b50"
+      },
+      "provenance": "baseline:replays-idempotently/http/status",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "replays-idempotently",
+      "category": "messages",
+      "selector": "/messages/0",
+      "actual": {
+        "type": "object",
+        "bytes": 546,
+        "sha256": "f0f4074e2ddd2a99fe088d83205186f93cc80e19cae87026cd2a1c0469466bc5"
+      },
+      "provenance": "baseline:replays-idempotently/messages/0",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "replays-idempotently",
       "category": "ordering",
       "selector": "/ordering/0",
       "expected": {
@@ -702,14 +593,14 @@
       },
       "actual": {
         "type": "string",
-        "bytes": 8,
-        "sha256": "2aa310588c26f507b89c938ebd02d51af164bb3dede5b25c1a1c3264b31d9f07"
+        "bytes": 18,
+        "sha256": "8d163539adcc8ed42457909247ba0f88ced4cef938074e4eaeff0f1903e4d6ac"
       },
       "provenance": "baseline:replays-idempotently/ordering/0",
       "repair": "candidate-code"
     },
     {
-      "classification": "missing-observation",
+      "classification": "candidate-difference",
       "scenario": "replays-idempotently",
       "category": "ordering",
       "selector": "/ordering/1",
@@ -718,8 +609,78 @@
         "bytes": 10,
         "sha256": "9e2600195d657991fb57288e7458a0cc17a0c0fea215c849b16df7ca65ee9a7c"
       },
+      "actual": {
+        "type": "string",
+        "bytes": 14,
+        "sha256": "5312c7f9e0658114368c1e1b457a0fb1105bfcae9d66838f6e01d2b92bfd287b"
+      },
       "provenance": "baseline:replays-idempotently/ordering/1",
-      "repair": "harness"
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "replays-idempotently",
+      "category": "ordering",
+      "selector": "/ordering/2",
+      "actual": {
+        "type": "string",
+        "bytes": 11,
+        "sha256": "13a2abbdfcc75451c958e8246d06b52c595a7953f4dfe11c5b6edf28ec2e5ca9"
+      },
+      "provenance": "baseline:replays-idempotently/ordering/2",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "replays-idempotently",
+      "category": "ordering",
+      "selector": "/ordering/3",
+      "actual": {
+        "type": "string",
+        "bytes": 12,
+        "sha256": "5de2c2a5521e3dbec93046df08b512ec88305f06bcb593bfca9ab3e779cb5770"
+      },
+      "provenance": "baseline:replays-idempotently/ordering/3",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "replays-idempotently",
+      "category": "ordering",
+      "selector": "/ordering/4",
+      "actual": {
+        "type": "string",
+        "bytes": 8,
+        "sha256": "2aa310588c26f507b89c938ebd02d51af164bb3dede5b25c1a1c3264b31d9f07"
+      },
+      "provenance": "baseline:replays-idempotently/ordering/4",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "replays-idempotently",
+      "category": "outbound",
+      "selector": "/outbound/0",
+      "actual": {
+        "type": "object",
+        "bytes": 416,
+        "sha256": "ef8df14f22ae181bcaa4211671c49fa216156fd94dd6a971428ad9287251e6c6"
+      },
+      "provenance": "baseline:replays-idempotently/outbound/0",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "replays-idempotently",
+      "category": "outbound",
+      "selector": "/outbound/1",
+      "actual": {
+        "type": "object",
+        "bytes": 542,
+        "sha256": "d1baaf5e3b4a65411e66a87e77295674eaae55e4b476597f8d75ba197ca16058"
+      },
+      "provenance": "baseline:replays-idempotently/outbound/1",
+      "repair": "candidate-code"
     },
     {
       "classification": "missing-observation",
@@ -733,19 +694,6 @@
       },
       "provenance": "baseline:creates-document-holdout/database/idempotency",
       "repair": "harness"
-    },
-    {
-      "classification": "candidate-difference",
-      "scenario": "creates-document-holdout",
-      "category": "database",
-      "selector": "/database/rows/0/idempotencyKey",
-      "actual": {
-        "type": "string",
-        "bytes": 10,
-        "sha256": "1bf6557e014209af7078c88c7725606b4b187419401e8c12c65c2f13e3e1a5f1"
-      },
-      "provenance": "baseline:creates-document-holdout/database/rows/0/idempotencyKey",
-      "repair": "candidate-code"
     },
     {
       "classification": "missing-observation",
@@ -881,8 +829,8 @@
       },
       "actual": {
         "type": "string",
-        "bytes": 17,
-        "sha256": "bc14a2af3930adc1b907e264048aacc22f1f3930ce182d60e7e665e0c8416864"
+        "bytes": 11,
+        "sha256": "13a2abbdfcc75451c958e8246d06b52c595a7953f4dfe11c5b6edf28ec2e5ca9"
       },
       "provenance": "baseline:creates-document-holdout/ordering/2",
       "repair": "candidate-code"
@@ -899,23 +847,10 @@
       },
       "actual": {
         "type": "string",
-        "bytes": 26,
-        "sha256": "e879c3c2ca0326e90a7b72a1a58fb464ad8a0d4acf3f1683af8b8f8e547bdf19"
+        "bytes": 12,
+        "sha256": "5de2c2a5521e3dbec93046df08b512ec88305f06bcb593bfca9ab3e779cb5770"
       },
       "provenance": "baseline:creates-document-holdout/ordering/3",
-      "repair": "candidate-code"
-    },
-    {
-      "classification": "candidate-difference",
-      "scenario": "creates-document-holdout",
-      "category": "outbound",
-      "selector": "/outbound/0/action",
-      "actual": {
-        "type": "string",
-        "bytes": 11,
-        "sha256": "71d4092d6f6d5b91727cbd1c0d0b7da8efe5a923f5588254fdda650ae29553cf"
-      },
-      "provenance": "baseline:creates-document-holdout/outbound/0/action",
       "repair": "candidate-code"
     },
     {
@@ -961,26 +896,13 @@
       "classification": "candidate-difference",
       "scenario": "creates-document-holdout",
       "category": "outbound",
-      "selector": "/outbound/0/service",
+      "selector": "/outbound/0/vendor",
       "actual": {
         "type": "string",
-        "bytes": 8,
-        "sha256": "119cf409dd60a030b1aea777ffd85ca22532de05e5f4e6d55d47fbb60e05cf22"
+        "bytes": 11,
+        "sha256": "71d4092d6f6d5b91727cbd1c0d0b7da8efe5a923f5588254fdda650ae29553cf"
       },
-      "provenance": "baseline:creates-document-holdout/outbound/0/service",
-      "repair": "candidate-code"
-    },
-    {
-      "classification": "candidate-difference",
-      "scenario": "creates-document-holdout",
-      "category": "outbound",
-      "selector": "/outbound/1/action",
-      "actual": {
-        "type": "string",
-        "bytes": 7,
-        "sha256": "8a76c15acafa28c88578c73027916c210ff030f193fa787b2affa93b6286bed3"
-      },
-      "provenance": "baseline:creates-document-holdout/outbound/1/action",
+      "provenance": "baseline:creates-document-holdout/outbound/0/vendor",
       "repair": "candidate-code"
     },
     {
@@ -1026,19 +948,6 @@
       "classification": "candidate-difference",
       "scenario": "creates-document-holdout",
       "category": "outbound",
-      "selector": "/outbound/1/service",
-      "actual": {
-        "type": "string",
-        "bytes": 8,
-        "sha256": "119cf409dd60a030b1aea777ffd85ca22532de05e5f4e6d55d47fbb60e05cf22"
-      },
-      "provenance": "baseline:creates-document-holdout/outbound/1/service",
-      "repair": "candidate-code"
-    },
-    {
-      "classification": "candidate-difference",
-      "scenario": "creates-document-holdout",
-      "category": "outbound",
       "selector": "/outbound/1/status",
       "expected": {
         "type": "number",
@@ -1051,6 +960,32 @@
         "sha256": "27badc983df1780b60c2b3fa9d3a19a00e46aac798451f0febdca52920faaddf"
       },
       "provenance": "baseline:creates-document-holdout/outbound/1/status",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "creates-document-holdout",
+      "category": "outbound",
+      "selector": "/outbound/1/title",
+      "actual": {
+        "type": "string",
+        "bytes": 14,
+        "sha256": "db6852b7fcde076f22a3b8d3372b20e4d094efa4657f706e15adb4be6339b651"
+      },
+      "provenance": "baseline:creates-document-holdout/outbound/1/title",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "creates-document-holdout",
+      "category": "outbound",
+      "selector": "/outbound/1/vendor",
+      "actual": {
+        "type": "string",
+        "bytes": 7,
+        "sha256": "8a76c15acafa28c88578c73027916c210ff030f193fa787b2affa93b6286bed3"
+      },
+      "provenance": "baseline:creates-document-holdout/outbound/1/vendor",
       "repair": "candidate-code"
     },
     {
@@ -1067,19 +1002,6 @@
       "repair": "harness"
     },
     {
-      "classification": "candidate-difference",
-      "scenario": "maps-vendor-failure-holdout",
-      "category": "database",
-      "selector": "/database/transaction/rolledBack",
-      "actual": {
-        "type": "boolean",
-        "bytes": 4,
-        "sha256": "b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b"
-      },
-      "provenance": "baseline:maps-vendor-failure-holdout/database/transaction/rolledBack",
-      "repair": "candidate-code"
-    },
-    {
       "classification": "missing-observation",
       "scenario": "maps-vendor-failure-holdout",
       "category": "database",
@@ -1093,7 +1015,7 @@
       "repair": "harness"
     },
     {
-      "classification": "missing-observation",
+      "classification": "candidate-difference",
       "scenario": "maps-vendor-failure-holdout",
       "category": "failures",
       "selector": "/failures/0/code",
@@ -1102,8 +1024,13 @@
         "bytes": 20,
         "sha256": "d5eb132eaa5445c98043392e6f77e1a7af11a2a16d43e3c8452115bcef0f8b81"
       },
+      "actual": {
+        "type": "string",
+        "bytes": 20,
+        "sha256": "96eb11c0fa0b9ec85b0acc32493e39d94bb7b94a947b951110ebcb72be0409d5"
+      },
       "provenance": "baseline:maps-vendor-failure-holdout/failures/0/code",
-      "repair": "harness"
+      "repair": "candidate-code"
     },
     {
       "classification": "missing-observation",
@@ -1117,37 +1044,6 @@
       },
       "provenance": "baseline:maps-vendor-failure-holdout/failures/0/retryable",
       "repair": "harness"
-    },
-    {
-      "classification": "candidate-difference",
-      "scenario": "maps-vendor-failure-holdout",
-      "category": "failures",
-      "selector": "/failures/0/status",
-      "expected": {
-        "type": "number",
-        "bytes": 3,
-        "sha256": "7182dd431b5c8833ed3c8a02c8615780df8dca7d83ed4166962b207f45a656b5"
-      },
-      "actual": {
-        "type": "number",
-        "bytes": 3,
-        "sha256": "5344c4110f483793dc352c388e67776724c36b4bea3ffda6cab7c75b9c65aceb"
-      },
-      "provenance": "baseline:maps-vendor-failure-holdout/failures/0/status",
-      "repair": "candidate-code"
-    },
-    {
-      "classification": "candidate-difference",
-      "scenario": "maps-vendor-failure-holdout",
-      "category": "failures",
-      "selector": "/failures/0/type",
-      "actual": {
-        "type": "string",
-        "bytes": 8,
-        "sha256": "119cf409dd60a030b1aea777ffd85ca22532de05e5f4e6d55d47fbb60e05cf22"
-      },
-      "provenance": "baseline:maps-vendor-failure-holdout/failures/0/type",
-      "repair": "candidate-code"
     },
     {
       "classification": "candidate-difference",
@@ -1174,54 +1070,10 @@
       },
       "actual": {
         "type": "string",
-        "bytes": 16,
-        "sha256": "321efdc98989e56e4e7d45aa2da019ab55474112cfc64d6779cd16bfb010dce8"
+        "bytes": 20,
+        "sha256": "96eb11c0fa0b9ec85b0acc32493e39d94bb7b94a947b951110ebcb72be0409d5"
       },
       "provenance": "baseline:maps-vendor-failure-holdout/http/body/error",
-      "repair": "candidate-code"
-    },
-    {
-      "classification": "candidate-difference",
-      "scenario": "maps-vendor-failure-holdout",
-      "category": "http",
-      "selector": "/http/status",
-      "expected": {
-        "type": "number",
-        "bytes": 3,
-        "sha256": "7182dd431b5c8833ed3c8a02c8615780df8dca7d83ed4166962b207f45a656b5"
-      },
-      "actual": {
-        "type": "number",
-        "bytes": 3,
-        "sha256": "5344c4110f483793dc352c388e67776724c36b4bea3ffda6cab7c75b9c65aceb"
-      },
-      "provenance": "baseline:maps-vendor-failure-holdout/http/status",
-      "repair": "candidate-code"
-    },
-    {
-      "classification": "missing-observation",
-      "scenario": "maps-vendor-failure-holdout",
-      "category": "ordering",
-      "selector": "/ordering/1",
-      "expected": {
-        "type": "string",
-        "bytes": 10,
-        "sha256": "3770b198a03f18cbf37a3bfd4eba2fbbab9ea2eb9795b207678b45c957a6ce18"
-      },
-      "provenance": "baseline:maps-vendor-failure-holdout/ordering/1",
-      "repair": "harness"
-    },
-    {
-      "classification": "candidate-difference",
-      "scenario": "maps-vendor-failure-holdout",
-      "category": "outbound",
-      "selector": "/outbound/0/action",
-      "actual": {
-        "type": "string",
-        "bytes": 11,
-        "sha256": "71d4092d6f6d5b91727cbd1c0d0b7da8efe5a923f5588254fdda650ae29553cf"
-      },
-      "provenance": "baseline:maps-vendor-failure-holdout/outbound/0/action",
       "repair": "candidate-code"
     },
     {
@@ -1267,13 +1119,13 @@
       "classification": "candidate-difference",
       "scenario": "maps-vendor-failure-holdout",
       "category": "outbound",
-      "selector": "/outbound/0/service",
+      "selector": "/outbound/0/vendor",
       "actual": {
         "type": "string",
-        "bytes": 8,
-        "sha256": "119cf409dd60a030b1aea777ffd85ca22532de05e5f4e6d55d47fbb60e05cf22"
+        "bytes": 11,
+        "sha256": "71d4092d6f6d5b91727cbd1c0d0b7da8efe5a923f5588254fdda650ae29553cf"
       },
-      "provenance": "baseline:maps-vendor-failure-holdout/outbound/0/service",
+      "provenance": "baseline:maps-vendor-failure-holdout/outbound/0/vendor",
       "repair": "candidate-code"
     },
     {
@@ -1303,24 +1155,6 @@
       "repair": "harness"
     },
     {
-      "classification": "candidate-difference",
-      "scenario": "replays-idempotently-holdout",
-      "category": "database",
-      "selector": "/database/transaction/committed",
-      "expected": {
-        "type": "boolean",
-        "bytes": 4,
-        "sha256": "b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b"
-      },
-      "actual": {
-        "type": "boolean",
-        "bytes": 5,
-        "sha256": "fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa"
-      },
-      "provenance": "baseline:replays-idempotently-holdout/database/transaction/committed",
-      "repair": "candidate-code"
-    },
-    {
       "classification": "missing-observation",
       "scenario": "replays-idempotently-holdout",
       "category": "database",
@@ -1332,19 +1166,6 @@
       },
       "provenance": "baseline:replays-idempotently-holdout/database/transaction/rollsBackOnFailure",
       "repair": "harness"
-    },
-    {
-      "classification": "candidate-difference",
-      "scenario": "replays-idempotently-holdout",
-      "category": "database",
-      "selector": "/database/transaction/writes",
-      "actual": {
-        "type": "number",
-        "bytes": 1,
-        "sha256": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9"
-      },
-      "provenance": "baseline:replays-idempotently-holdout/database/transaction/writes",
-      "repair": "candidate-code"
     },
     {
       "classification": "missing-observation",
@@ -1375,6 +1196,37 @@
     {
       "classification": "candidate-difference",
       "scenario": "replays-idempotently-holdout",
+      "category": "http",
+      "selector": "/http/status",
+      "expected": {
+        "type": "number",
+        "bytes": 3,
+        "sha256": "27badc983df1780b60c2b3fa9d3a19a00e46aac798451f0febdca52920faaddf"
+      },
+      "actual": {
+        "type": "number",
+        "bytes": 3,
+        "sha256": "43974ed74066b207c30ffd0fed5146762e6c60745ac977004bc14507c7c42b50"
+      },
+      "provenance": "baseline:replays-idempotently-holdout/http/status",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "replays-idempotently-holdout",
+      "category": "messages",
+      "selector": "/messages/0",
+      "actual": {
+        "type": "object",
+        "bytes": 546,
+        "sha256": "b6498cba814c7d6021108a7f52b1931c95e647bbc7bbc81d168c100e5e153f12"
+      },
+      "provenance": "baseline:replays-idempotently-holdout/messages/0",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "replays-idempotently-holdout",
       "category": "ordering",
       "selector": "/ordering/0",
       "expected": {
@@ -1384,14 +1236,14 @@
       },
       "actual": {
         "type": "string",
-        "bytes": 8,
-        "sha256": "2aa310588c26f507b89c938ebd02d51af164bb3dede5b25c1a1c3264b31d9f07"
+        "bytes": 18,
+        "sha256": "8d163539adcc8ed42457909247ba0f88ced4cef938074e4eaeff0f1903e4d6ac"
       },
       "provenance": "baseline:replays-idempotently-holdout/ordering/0",
       "repair": "candidate-code"
     },
     {
-      "classification": "missing-observation",
+      "classification": "candidate-difference",
       "scenario": "replays-idempotently-holdout",
       "category": "ordering",
       "selector": "/ordering/1",
@@ -1400,8 +1252,78 @@
         "bytes": 10,
         "sha256": "9e2600195d657991fb57288e7458a0cc17a0c0fea215c849b16df7ca65ee9a7c"
       },
+      "actual": {
+        "type": "string",
+        "bytes": 14,
+        "sha256": "5312c7f9e0658114368c1e1b457a0fb1105bfcae9d66838f6e01d2b92bfd287b"
+      },
       "provenance": "baseline:replays-idempotently-holdout/ordering/1",
-      "repair": "harness"
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "replays-idempotently-holdout",
+      "category": "ordering",
+      "selector": "/ordering/2",
+      "actual": {
+        "type": "string",
+        "bytes": 11,
+        "sha256": "13a2abbdfcc75451c958e8246d06b52c595a7953f4dfe11c5b6edf28ec2e5ca9"
+      },
+      "provenance": "baseline:replays-idempotently-holdout/ordering/2",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "replays-idempotently-holdout",
+      "category": "ordering",
+      "selector": "/ordering/3",
+      "actual": {
+        "type": "string",
+        "bytes": 12,
+        "sha256": "5de2c2a5521e3dbec93046df08b512ec88305f06bcb593bfca9ab3e779cb5770"
+      },
+      "provenance": "baseline:replays-idempotently-holdout/ordering/3",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "replays-idempotently-holdout",
+      "category": "ordering",
+      "selector": "/ordering/4",
+      "actual": {
+        "type": "string",
+        "bytes": 8,
+        "sha256": "2aa310588c26f507b89c938ebd02d51af164bb3dede5b25c1a1c3264b31d9f07"
+      },
+      "provenance": "baseline:replays-idempotently-holdout/ordering/4",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "replays-idempotently-holdout",
+      "category": "outbound",
+      "selector": "/outbound/0",
+      "actual": {
+        "type": "object",
+        "bytes": 416,
+        "sha256": "29ed217d150ba9beb4145beeaca4c4da47d61f8cf629e0acf2725a77a40c7ce0"
+      },
+      "provenance": "baseline:replays-idempotently-holdout/outbound/0",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "replays-idempotently-holdout",
+      "category": "outbound",
+      "selector": "/outbound/1",
+      "actual": {
+        "type": "object",
+        "bytes": 542,
+        "sha256": "25ea0f69a5a09b5ec8001e3537ae8ae1a62abfa9da77614d0c9afeab5f317819"
+      },
+      "provenance": "baseline:replays-idempotently-holdout/outbound/1",
+      "repair": "candidate-code"
     }
   ]
 }

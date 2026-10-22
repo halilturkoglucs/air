@@ -1,83 +1,71 @@
-import { randomUUID } from "node:crypto";
-
 let source = "";
 for await (const chunk of process.stdin) source += chunk;
 const input = JSON.parse(source || "{}");
 
-const id = input.documentId ?? randomUUID();
-const timestamp = input.timestamp ?? new Date().toISOString();
-const key = input.idempotencyKey ?? null;
+const id = input.documentId;
+const title = input.title;
+const timestamp = input.timestamp;
+const key = input.idempotencyKey;
 const vendorStatus = input.vendorStatus ?? 200;
 const headers = { "content-type": "application/json" };
-const doc = { id, title: input.title, createdAt: timestamp };
 
-const out = (http, rest = {}) => ({
-  http,
-  database: {
-    rows: [],
-    idempotency: { key, replayed: false },
-    transaction: { committed: false, rollsBackOnFailure: true },
-  },
-  messages: [],
-  outbound: [],
-  ordering: [],
-  failures: [],
-  retryability: false,
-  ...rest,
-});
-
-let result;
-const replay = input.replay === true || Number(input.attempt ?? 1) > 1 || input.existing != null;
-
-if (typeof input.title !== "string" || input.title.trim() === "") {
-  result = out(
-    { status: 400, headers, body: { error: "invalid_title" } },
-    { failures: [{ type: "validation", field: "title" }] }
-  );
-} else if (replay) {
-  const existing = input.existing ?? doc;
-  result = out(
-    { status: 200, headers, body: { id: existing.id, title: existing.title, createdAt: existing.createdAt, outcome: "replayed" } },
-    {
-      database: {
-        rows: [{ id: existing.id, createdAt: existing.createdAt, title: existing.title, state: "created" }],
-        idempotency: { key, replayed: true },
-        transaction: { committed: true, rollsBackOnFailure: true },
-      },
-      ordering: ["idempotency-read", "response"],
-    }
-  );
-} else if (vendorStatus >= 200 && vendorStatus < 300) {
-  result = out(
-    { status: 201, headers, body: { ...doc, outcome: "created" } },
-    {
-      database: {
-        rows: [{ id, createdAt: timestamp, title: input.title, state: "created" }],
-        idempotency: { key, replayed: false },
-        transaction: { committed: true, rollsBackOnFailure: true },
-      },
-      messages: [{ type: "document.created", id, createdAt: timestamp }],
-      outbound: [
-        { operation: "vendor.authorize", id, status: vendorStatus },
-        { operation: "vendor.index", id, status: 202 },
-      ],
-      ordering: ["vendor.authorize", "database", "vendor.index", "message"],
-    }
-  );
-} else {
-  const retryable = vendorStatus >= 500 || vendorStatus === 429 || vendorStatus === 408;
-  const auth = vendorStatus === 401 || vendorStatus === 403;
-  const status = retryable ? 503 : 502;
-  const code = retryable ? "vendor-unavailable" : auth ? "vendor-unauthorized" : "vendor-rejected";
-  result = out(
-    { status, headers, body: { error: { code, retryable } } },
-    {
-      outbound: [{ operation: "vendor.authorize", id, status: vendorStatus }],
-      ordering: ["vendor.authorize", "rollback"],
-      failures: [{ code, status, retryable }],
-      retryability: retryable,
-    }
-  );
+function emit(o) {
+  console.log(JSON.stringify({
+    http: o.http,
+    database: o.database ?? { rows: [], transaction: { committed: false, rollsBackOnFailure: true }, idempotency: { key, replayed: false } },
+    messages: o.messages ?? [],
+    outbound: o.outbound ?? [],
+    ordering: o.ordering ?? [],
+    failures: o.failures ?? [],
+    retryability: o.retryability ?? false
+  }));
 }
 
-console.log(JSON.stringify(result));
+if (typeof title !== "string" || title.trim() === "" || !id) {
+  emit({
+    http: { status: 400, headers, body: { error: { code: "invalid-request", retryable: false } } },
+    failures: [{ code: "invalid-request", status: 400, retryable: false }]
+  });
+} else if (input.replay || input.existing) {
+  const prior = input.existing ?? {};
+  const doc = { id: prior.id ?? id, title: prior.title ?? title, createdAt: prior.createdAt ?? timestamp };
+  emit({
+    http: { status: 200, headers, body: { ...doc, outcome: "replayed" } },
+    database: {
+      rows: [{ ...doc, state: "created" }],
+      transaction: { committed: true, rollsBackOnFailure: true },
+      idempotency: { key, replayed: true }
+    },
+    ordering: ["idempotency-read", "response"]
+  });
+} else {
+  const outbound = [{ operation: "vendor.authorize", id, status: vendorStatus }];
+  const ordering = ["vendor.authorize"];
+  if (vendorStatus >= 400) {
+    const retry = vendorStatus === 429 || vendorStatus >= 500;
+    const code = retry ? "vendor-unavailable" : "vendor-rejected";
+    const status = retry ? 503 : 502;
+    ordering.push("rollback");
+    emit({
+      http: { status, headers, body: { error: { code, retryable: retry } } },
+      outbound,
+      ordering,
+      failures: [{ code, status, retryable: retry }],
+      retryability: retry
+    });
+  } else {
+    outbound.push({ operation: "vendor.index", id, status: 202 });
+    ordering.push("database", "vendor.index", "message");
+    emit({
+      http: { status: 201, headers, body: { id, title, createdAt: timestamp, outcome: "created" } },
+      database: {
+        rows: [{ id, title, createdAt: timestamp, state: "created" }],
+        transaction: { committed: true, rollsBackOnFailure: true },
+        idempotency: { key, replayed: false }
+      },
+      messages: [{ type: "document.created", id, createdAt: timestamp }],
+      outbound,
+      ordering
+    });
+  }
+}
