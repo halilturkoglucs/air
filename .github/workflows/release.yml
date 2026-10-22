@@ -14,6 +14,7 @@ on:
 permissions:
   contents: write
   id-token: write
+  packages: write
 
 jobs:
   clean-install:
@@ -148,6 +149,23 @@ jobs:
         working-directory: packages/cli
         run: |
           npm publish --access public --provenance
+      # Mirror to GitHub Packages so the repository's Packages panel lists the release. npmjs stays the primary registry.
+      - name: Publish to GitHub Packages
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.release_tag != ''
+        env:
+          NODE_AUTH_TOKEN: ${{ github.token }}
+        run: |
+          userconfig="${RUNNER_TEMP}/github-packages.npmrc"
+          printf '@halilturkoglucs:registry=https://npm.pkg.github.com\n//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}\n' > "$userconfig"
+          for directory in packages/plugin-sdk packages/cli; do
+            package_name="$(node --print "require('./${directory}/package.json').name")"
+            package_version="$(node --print "require('./${directory}/package.json').version")"
+            if npm view "${package_name}@${package_version}" version --userconfig "$userconfig" >/dev/null 2>&1; then
+              echo "${package_name}@${package_version} already on GitHub Packages"
+            else
+              (cd "$directory" && npm publish --userconfig "$userconfig" --registry https://npm.pkg.github.com)
+            fi
+          done
       - name: Publish GitHub release
         if: startsWith(github.ref, 'refs/tags/v') || inputs.release_tag != ''
         env:

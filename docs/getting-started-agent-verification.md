@@ -20,12 +20,12 @@ You need:
 
 - Git;
 - Node.js 22 or newer;
-- AIR v0.12.
+- AIR v0.13.
 
 Install AIR, then clone the repository for the tutorial fixtures:
 
 ```bash
-npm install --global @halilturkoglucs/air@0.12.0
+npm install --global @halilturkoglucs/air@0.13.0
 git clone https://github.com/halilturkoglucs/air.git
 cd air
 air --version
