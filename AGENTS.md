@@ -75,7 +75,5 @@ Any agent can stop at any time. State lives in Git, in `pnpm benchmark:status`, 
 
 ### Current work
 
-- v0.13.0 is released (npmjs, GitHub Packages, GitHub release, Homebrew `air-ir`).
-- Agent protocol `air.dev/agent/v1` (`air check run --agent --reveal`, `air mcp`) is in PR #36.
-- Benchmark suite v1.4.0 is complete and published on `feat/benchmark-v1.4-agent-cli` (stacked on #36): with the shipped `air check run --agent --reveal` feedback, `claude-sonnet-5-5` reached pass@3 9/9 vs 0/9 alone, escaped defects 218 -> 0. Merge after #36.
-- v1.3 batches are archived locally under `benchmarks/llm-air-lift/archive/v1.3.0/`.
+- v0.14.0 is released (npmjs, GitHub Packages, GitHub release, Homebrew `air-ir`).
+- Roadmap track "Any service, any change" is in `docs/roadmap.md` section 12a. Milestone 1 (`baseline --at`, `check record`, `check approve`, `check diff-baseline`) is in review on `feat/m1-any-change`. Next: milestone 2 (topology changes: `internal-boundary` and `rename` normalizations, multi-process candidates, extract/merge examples). No benchmark runs until after milestone 2.

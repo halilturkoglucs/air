@@ -81,7 +81,10 @@ export interface CheckBaseline {
   readonly hashes: { readonly repository: string; readonly discovery?: string; readonly check: string; readonly policy: string; readonly normalization: string; readonly target: string };
   readonly target: { readonly name: string; readonly type: "http" | "command" };
   readonly scenarios: readonly { readonly id: string; readonly observation: DigestNode }[];
+  readonly approvals?: readonly BaselineApproval[];
 }
+
+export interface BaselineApproval { readonly scenario: string; readonly reason: string; readonly approvedAt: string; readonly previousBaselineId: string; readonly target: string }
 
 export interface CheckMismatch {
   readonly classification: FailureClassification;
@@ -539,4 +542,37 @@ export async function loadCheckPolicy(path?: string): Promise<CheckPolicy> { ret
 export async function loadCheckBaseline(directory: string): Promise<CheckBaseline> { return parseCheckBaseline(await readFile(resolve(directory, "baseline.json"), "utf8")); }
 export async function writeCheckBaseline(directory: string, baseline: CheckBaseline): Promise<string> { await mkdir(dirname(directory), { recursive: true }); await mkdir(directory, { recursive: false }); const output = resolve(directory, "baseline.json"); await writeFile(output, `${JSON.stringify(baseline, null, 2)}\n`, { encoding: "utf8", flag: "wx" }); return output; }
 export async function writeCheckResult(directory: string, result: CheckResult): Promise<string> { await mkdir(dirname(directory), { recursive: true }); await mkdir(directory, { recursive: false }); const output = resolve(directory, "result.json"); await writeFile(output, `${JSON.stringify(result, null, 2)}\n`, { encoding: "utf8", flag: "wx" }); return output; }
+
+// Accepts the candidate's current behavior for chosen scenarios as intended, keeping every other scenario's
+// approved digest. The reason and previous baseline are recorded so intentional changes stay reviewable.
+export async function approveBaselineScenarios(input: { readonly check: CheckDocument; readonly baseline: CheckBaseline; readonly target: CheckTarget; readonly repositoryRoot: string; readonly clean: boolean; readonly scenarioIds: readonly string[]; readonly reason: string }): Promise<CheckBaseline> {
+  const known = new Set(input.baseline.scenarios.map((scenario) => scenario.id));
+  const unknown = input.scenarioIds.filter((id) => !known.has(id));
+  if (unknown.length > 0) throw new CheckInputError(`Unknown baseline scenario(s): ${unknown.join(", ")}.`);
+  if (!input.reason.trim()) throw new CheckInputError("An approval needs a non-empty --reason.");
+  const wanted = new Set(input.scenarioIds);
+  const check = { ...input.check, spec: { ...input.check.spec, scenarios: input.check.spec.scenarios.filter((scenario) => wanted.has(scenario.id)) } };
+  const execution = await executeScenarios(check, input.target, input.repositoryRoot);
+  if (execution.issues.length > 0) throw new CheckInputError(execution.issues.map((issue) => `${issue.scenario}${issue.selector}: ${issue.message}`).join(" "));
+  const observed = new Map(execution.scenarios.map((scenario) => [scenario.id, scenario.observation]));
+  const approvedAt = new Date().toISOString();
+  const material = {
+    ...withoutBaselineIdentity(input.baseline) as Omit<CheckBaseline, "baselineId">,
+    createdAt: approvedAt, releasable: input.baseline.releasable && input.clean,
+    scenarios: input.baseline.scenarios.map((scenario) => ({ id: scenario.id, observation: observed.get(scenario.id) ?? scenario.observation })),
+    approvals: [...(input.baseline.approvals ?? []), ...input.scenarioIds.map((scenario) => ({ scenario, reason: input.reason.trim(), approvedAt, previousBaselineId: input.baseline.baselineId, target: input.target.metadata.name }))],
+  };
+  const baseline: CheckBaseline = { ...material, baselineId: checkContentHash(material) };
+  if (!validateBaseline(baseline)) throw validationError("Approved check baseline", validateBaseline);
+  return baseline;
+}
+
+// Structural differences between two baselines of the same check, e.g. before and after an approval.
+export function diffBaselines(before: CheckBaseline, after: CheckBaseline): readonly CheckMismatch[] {
+  const mismatches: CheckMismatch[] = [];
+  const afterById = new Map(after.scenarios.map((scenario) => [scenario.id, scenario.observation]));
+  for (const scenario of before.scenarios) compareNodes(scenario.observation, afterById.get(scenario.id), "", scenario.id, mismatches);
+  for (const scenario of after.scenarios) if (!before.scenarios.some((item) => item.id === scenario.id)) mismatches.push({ classification: "candidate-difference", scenario: scenario.id, category: "scenario", selector: "/", provenance: `baseline:${after.baselineId}`, repair: "harness" });
+  return mismatches;
+}
 

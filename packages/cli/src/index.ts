@@ -1,7 +1,8 @@
 import { basename, dirname, relative, resolve } from "node:path";
 import { createHash } from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
-import { copyFile, mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import {
   AirMigrationError,
   AirParseError,
@@ -22,7 +23,7 @@ import { importPostgres } from "@air/import-postgres";
 import { importOpenApiSource } from "@air/import-openapi";
 import { importNextjs } from "@air/import-nextjs";
 import { importSpring } from "@air/import-spring";
-import { CheckInfrastructureError, CheckInputError, adoptExtractedCapability, createCheckBaseline, discoverSpring, discoveryFromAirCandidate, extractCapability, ingestEvidence, initializeMigrationCheck, loadCheckBaseline, loadCheckPolicy, loadCheckTarget, loadMigrationCheck, mergeDiscoveryBundles, parseCheckResult, readDiscoveryBundle, runMigrationCheckDetailed, observeCheckTarget, sameDigest, buildAgentReport, formatAgentReport, differenceKey, AGENT_PROTOCOL, startWorkbench, validateMigrationCheck, verifyImportedCapability, writeCheckBaseline, writeCheckResult, writeDiscoveryBundle, writeDiscoveryReport, type CheckMismatch, type DiscoveryBundle } from "@air/discovery";
+import { CheckInfrastructureError, CheckInputError, adoptExtractedCapability, createCheckBaseline, discoverSpring, discoveryFromAirCandidate, extractCapability, ingestEvidence, initializeMigrationCheck, loadCheckBaseline, loadCheckPolicy, loadCheckTarget, loadMigrationCheck, mergeDiscoveryBundles, parseCheckResult, readDiscoveryBundle, runMigrationCheckDetailed, observeCheckTarget, approveBaselineScenarios, diffBaselines, checkFromExchanges, exchangesFromHar, recordHttpTraffic, writeRecordedCheck, type CheckBaseline, sameDigest, buildAgentReport, formatAgentReport, differenceKey, AGENT_PROTOCOL, startWorkbench, validateMigrationCheck, verifyImportedCapability, writeCheckBaseline, writeCheckResult, writeDiscoveryBundle, writeDiscoveryReport, type CheckMismatch, type DiscoveryBundle } from "@air/discovery";
 import { startLanguageServer } from "@air/language-server";
 import { NextjsTargetAdapter, type NextjsTargetOptions } from "@air/target-nextjs";
 import { RustTargetAdapter, type RustTargetOptions } from "@air/target-rust";
@@ -67,6 +68,9 @@ Usage:
   air check run [<check.yaml>] [--baseline <dir>] [--target <file>] [--output <dir>] [--policy <file>] [--agent] [--reveal] [--max-lines <n>] [--json]
   air check explain <result.json> [--agent] [--json]
   air check status [--json]                   Check profile and last-run summary (runs nothing)
+  air check record --to <url> --output <dir> [--from-har <file>]  Record HTTP traffic (proxy or HAR) into a check
+  air check approve <scenario>... --reason <text>  Accept the candidate's behavior for chosen scenarios
+  air check diff-baseline <before> <after>    Show behavioral differences between two baselines
   air agent instructions                      Print the agent repair loop for AGENTS.md / CLAUDE.md
   air mcp                                     Serve air_check_* tools over MCP stdio
   air validate <file>                         Parse and validate AIR YAML
@@ -1145,7 +1149,7 @@ function explainMismatch(mismatch: CheckMismatch): string {
   return `${mismatch.classification} ${mismatch.scenario} ${mismatch.selector}: ${action}; provenance ${mismatch.provenance}`;
 }
 
-interface CheckProfile { readonly check: string; readonly policy?: string; readonly baseline: string; readonly legacy: string; readonly candidate: string; readonly output: string }
+interface CheckProfile { readonly check: string; readonly policy?: string; readonly baseline: string; readonly legacy: string; readonly candidate: string; readonly output: string; readonly at?: string; readonly atSetup?: string }
 interface LastRun { readonly v: string; readonly baselineId: string; readonly at: string; readonly passed: number; readonly total: number; readonly differences: number; readonly keys: readonly string[] }
 
 function projectRoot(): string {
@@ -1165,13 +1169,16 @@ async function readLastRun(root: string): Promise<LastRun | undefined> {
 
 async function checkCommand(args: readonly string[], io: CliIo): Promise<number> {
   const [action, ...rest] = args;
+  if (action === "record") return checkRecordCommand(rest, io);
+  if (action === "approve") return checkApproveCommand(rest, io);
+  if (action === "diff-baseline") return checkDiffBaselineCommand(rest, io);
   const usages = {
     init: "Usage: air check init <discovery> --capability <id> --output <directory>\n",
-    profile: "Usage: air check profile --check <check.yaml> --baseline <directory> --legacy <target> --candidate <target> --output <directory> [--policy <file>]\n",
+    profile: "Usage: air check profile --check <check.yaml> --baseline <directory> --legacy <target> --candidate <target> --output <directory> [--policy <file>] [--at <git-ref>] [--at-setup <command>]\n",
     status: "Usage: air check status [--json]\n",
     validate: "Usage: air check validate [<check.yaml>] [--policy <file>] [--json]\n",
-    baseline: "Usage: air check baseline [<check.yaml>] [--target <file>] [--output <directory>] [--policy <file>] [--allow-dirty] [--json]\n",
-    run: "Usage: air check run [<check.yaml>] [--baseline <directory>] [--target <file>] [--output <directory>] [--policy <file>] [--agent] [--reveal] [--legacy <file>] [--max-lines <n>] [--json]\n",
+    baseline: "Usage: air check baseline [<check.yaml>] [--target <file>] [--output <directory>] [--policy <file>] [--at <git-ref>] [--at-setup <command>] [--allow-dirty] [--json]\n",
+    run: "Usage: air check run [<check.yaml>] [--baseline <directory>] [--target <file>] [--output <directory>] [--policy <file>] [--agent] [--reveal] [--legacy <file>] [--at <git-ref>] [--at-setup <command>] [--max-lines <n>] [--json]\n",
     explain: "Usage: air check explain <result.json> [--agent] [--max-lines <n>] [--json]\n",
   } as const;
   const input = rest[0] && !rest[0].startsWith("--") ? rest[0] : undefined;
@@ -1182,10 +1189,10 @@ async function checkCommand(args: readonly string[], io: CliIo): Promise<number>
   const usage = usages[action as keyof typeof usages];
   let json = false; let allowDirty = false; let agent = false; let reveal = false; const values = new Map<string, string>();
   const allowed = action === "init" ? new Set(["--capability", "--output"])
-    : action === "profile" ? new Set(["--check", "--policy", "--baseline", "--legacy", "--candidate", "--output"])
+    : action === "profile" ? new Set(["--check", "--policy", "--baseline", "--legacy", "--candidate", "--output", "--at", "--at-setup"])
       : action === "validate" ? new Set(["--policy"])
-        : action === "baseline" ? new Set(["--target", "--output", "--policy"])
-          : action === "run" ? new Set(["--baseline", "--target", "--output", "--policy", "--legacy", "--max-lines"])
+        : action === "baseline" ? new Set(["--target", "--output", "--policy", "--at", "--at-setup"])
+          : action === "run" ? new Set(["--baseline", "--target", "--output", "--policy", "--legacy", "--max-lines", "--at", "--at-setup"])
             : action === "explain" ? new Set(["--max-lines"])
               : new Set<string>();
   for (let index = 0; index < options.length; index += 1) {
@@ -1206,7 +1213,7 @@ async function checkCommand(args: readonly string[], io: CliIo): Promise<number>
       const required = ["--check", "--baseline", "--legacy", "--candidate", "--output"] as const;
       if (required.some((option) => !values.has(option))) { io.stderr(usage); return 2; }
       const relativePath = (option: string): string => relative(root, resolve(values.get(option)!));
-      const profile: CheckProfile = { check: relativePath("--check"), ...(values.has("--policy") ? { policy: relativePath("--policy") } : {}), baseline: relativePath("--baseline"), legacy: relativePath("--legacy"), candidate: relativePath("--candidate"), output: relativePath("--output") };
+      const profile: CheckProfile = { check: relativePath("--check"), ...(values.has("--policy") ? { policy: relativePath("--policy") } : {}), baseline: relativePath("--baseline"), legacy: relativePath("--legacy"), candidate: relativePath("--candidate"), output: relativePath("--output"), ...(values.has("--at") ? { at: values.get("--at")! } : {}), ...(values.has("--at-setup") ? { atSetup: values.get("--at-setup")! } : {}) };
       await mkdir(resolve(root, ".air"), { recursive: true });
       await writeFile(resolve(root, ".air/check.json"), `${JSON.stringify(profile, null, 2)}\n`, "utf8");
       io.stdout(json ? `${JSON.stringify({ ok: true, profile: resolve(root, ".air/check.json") })}\n` : `Check profile: ${resolve(root, ".air/check.json")}\n`);
@@ -1257,9 +1264,12 @@ async function checkCommand(args: readonly string[], io: CliIo): Promise<number>
       const targetPath = option("--target", "legacy"); const output = option("--output", "baseline");
       if (!targetPath || !output) { io.stderr(usage); return 2; }
       const repository = gitRepositoryState();
-      if (!repository.clean && !allowDirty) throw new CheckInputError("Tracked working tree is dirty; commit/stash changes or pass --allow-dirty for a non-releasable baseline.");
       const [check, target, policy] = await Promise.all([loadMigrationCheck(checkPath), loadCheckTarget(targetPath), loadCheckPolicy(policyPath)]);
-      const baseline = await createCheckBaseline({ check, target, policy, repositoryRoot: repository.root, repositoryHash: repository.hash, clean: repository.clean, allowDirty });
+      const at = values.get("--at") ?? profile?.at;
+      if (!at && !repository.clean && !allowDirty) throw new CheckInputError("Tracked working tree is dirty; commit/stash changes or pass --allow-dirty for a non-releasable baseline.");
+      const baseline = at
+        ? await withWorktreeAt({ ref: at, setup: values.get("--at-setup") ?? profile?.atSetup, root: repository.root, create: (worktree, hash) => createCheckBaseline({ check, target, policy, repositoryRoot: worktree, repositoryHash: hash, clean: true }) })
+        : await createCheckBaseline({ check, target, policy, repositoryRoot: repository.root, repositoryHash: repository.hash, clean: repository.clean, allowDirty });
       const path = await writeCheckBaseline(output, baseline);
       const response = { ok: true, baselineId: baseline.baselineId, releasable: baseline.releasable, path };
       if (json) io.stdout(`${JSON.stringify(response)}\n`); else io.stdout(`Baseline ${baseline.baselineId}: ${path}\n${baseline.releasable ? "Releasable clean-tree baseline." : "NON-RELEASABLE dirty-tree baseline."}\n`);
@@ -1284,7 +1294,9 @@ async function checkCommand(args: readonly string[], io: CliIo): Promise<number>
       const revealed = new Map<string, { expected: unknown; actual: unknown }>(); const notes: string[] = [];
       if (legacyTarget && !result.passed) {
         const failing = result.scenarios.filter((scenario) => !scenario.passed).map((scenario) => scenario.id);
-        const legacy = await observeCheckTarget({ check, target: legacyTarget, repositoryRoot: repository.root, scenarioIds: failing });
+        const at = values.get("--at") ?? profile?.at; const target = legacyTarget;
+        const observe = (repositoryRoot: string) => observeCheckTarget({ check, target, repositoryRoot, scenarioIds: failing });
+        const legacy = at ? await withWorktreeAt({ ref: at, setup: values.get("--at-setup") ?? profile?.atSetup, root: repository.root, create: (worktree) => observe(worktree) }) : await observe(repository.root);
         for (const id of failing) {
           const approved = baseline.scenarios.find((scenario) => scenario.id === id)?.observation; const observed = legacy.get(id);
           if (observed && sameDigest(observed.digest, approved)) revealed.set(id, { expected: observed.raw, actual: observations.get(id) });
@@ -1313,6 +1325,122 @@ async function checkCommand(args: readonly string[], io: CliIo): Promise<number>
     if (json) io.stderr(`${JSON.stringify({ ok: false, category: code === 2 ? "invalid-input" : "infrastructure-error", message: shown })}\n`);
     else io.stderr(agent ? `${code === 2 ? "INPUT" : "INFRA"} ${shown}\nNEXT fix the target or environment, not the candidate's behavior; exit ${code}.\n` : `${message}\n`);
     return code;
+  }
+}
+
+// Runs work (legacy baseline or reveal) from a clean Git worktree at `ref`, so refactors in place need no second running copy.
+async function withWorktreeAt<T>(input: { readonly ref: string; readonly setup: string | undefined; readonly root: string; readonly create: (worktree: string, repositoryHash: string) => Promise<T> }): Promise<T> {
+  const resolved = spawnSync("git", ["rev-parse", "--verify", `${input.ref}^{commit}`], { cwd: input.root, encoding: "utf8", shell: false });
+  if (resolved.status !== 0) throw new CheckInputError(`Git ref ${input.ref} does not name a commit.`);
+  const commit = resolved.stdout.trim();
+  const worktree = await mkdtemp(resolve(tmpdir(), "air-baseline-"));
+  const added = spawnSync("git", ["worktree", "add", "--detach", "--force", worktree, commit], { cwd: input.root, encoding: "utf8", shell: false });
+  if (added.status !== 0) throw new CheckInfrastructureError(`Could not create a worktree at ${input.ref}: ${added.stderr.trim()}`);
+  try {
+    if (input.setup) {
+      const [program, ...args] = input.setup.split(/\s+/u).filter(Boolean);
+      if (!program) throw new CheckInputError("--at-setup must name a command.");
+      const setup = spawnSync(program, args, { cwd: worktree, encoding: "utf8", shell: false });
+      if (setup.status !== 0) throw new CheckInfrastructureError(`--at-setup failed in the ${input.ref} worktree with exit ${setup.status}: ${setup.stderr.trim().split("\n").slice(-3).join(" ")}`);
+    }
+    return await input.create(worktree, createHash("sha256").update(commit).digest("hex"));
+  } finally {
+    spawnSync("git", ["worktree", "remove", "--force", worktree], { cwd: input.root, shell: false });
+  }
+}
+
+async function checkRecordCommand(args: readonly string[], io: CliIo): Promise<number> {
+  const usage = "Usage: air check record --to <url> --output <directory> [--from-har <file>] [--listen <port>] [--max <n>] [--name <name>] [--keep-header <name>]... [--include-static]\n";
+  const values = new Map<string, string>(); const keepHeaders: string[] = []; let includeStatic = false;
+  const allowed = new Set(["--to", "--output", "--from-har", "--listen", "--max", "--name", "--keep-header"]);
+  for (let index = 0; index < args.length; index += 1) {
+    const option = args[index]!;
+    if (option === "--include-static") { includeStatic = true; continue; }
+    const value = args[index + 1];
+    if (!allowed.has(option) || !value || value.startsWith("--") || (option !== "--keep-header" && values.has(option))) { io.stderr(usage); return 2; }
+    if (option === "--keep-header") keepHeaders.push(value); else values.set(option, value);
+    index += 1;
+  }
+  const to = values.get("--to"); const output = values.get("--output");
+  const numberOption = (name: string): number | undefined => values.has(name) ? Number(values.get(name)) : undefined;
+  const port = numberOption("--listen"); const max = numberOption("--max");
+  if (!to || !output || (port !== undefined && !Number.isInteger(port)) || (max !== undefined && (!Number.isInteger(max) || max < 1))) { io.stderr(usage); return 2; }
+  try {
+    const upstream = new URL(to).toString();
+    let exchanges;
+    if (values.has("--from-har")) exchanges = exchangesFromHar(JSON.parse(await readFile(resolve(values.get("--from-har")!), "utf8")), upstream);
+    else {
+      const controller = new AbortController(); const stop = (): void => controller.abort();
+      process.once("SIGINT", stop);
+      try {
+        exchanges = await recordHttpTraffic({ upstream, signal: controller.signal, ...(port === undefined ? {} : { port }), ...(max === undefined ? {} : { maxRequests: max }),
+          onListening: (url) => io.stderr(`Recording: send traffic to ${url} (forwarded to ${upstream}). Press Ctrl-C to stop.\n`),
+          onExchange: (exchange) => io.stderr(`  ${exchange.method} ${exchange.path} -> ${exchange.status}\n`) });
+      } finally { process.off("SIGINT", stop); }
+    }
+    const name = values.get("--name") ?? `${new URL(upstream).hostname.replace(/[^a-z0-9]+/giu, "-")}-recorded`;
+    const { check, skipped } = checkFromExchanges(exchanges, { name, keepHeaders, includeStatic });
+    const paths = await writeRecordedCheck(resolve(output), check, upstream);
+    io.stdout(`Recorded ${check.spec.scenarios.length} scenario(s)${skipped > 0 ? `; skipped ${skipped} non-JSON or static exchange(s)` : ""}.\nCheck: ${paths.check}\nLegacy target: ${paths.target}\nNext: review the scenarios (stateful services need a lifecycle.reset), then run \`air check baseline\` against the legacy service.\n`);
+    return 0;
+  } catch (error) {
+    io.stderr(`${error instanceof Error && "code" in error && error.code === "EEXIST" ? "Output already contains a recorded check; AIR will not overwrite it." : error instanceof Error ? error.message : String(error)}\n`);
+    return 2;
+  }
+}
+
+async function checkApproveCommand(args: readonly string[], io: CliIo): Promise<number> {
+  const usage = "Usage: air check approve <scenario>... --reason <text> [--output <directory>] [--allow-dirty] [--json]\n";
+  const scenarioIds: string[] = []; const values = new Map<string, string>(); let json = false; let allowDirty = false;
+  for (let index = 0; index < args.length; index += 1) {
+    const option = args[index]!;
+    if (!option.startsWith("--")) { scenarioIds.push(option); continue; }
+    if (option === "--json") { json = true; continue; }
+    if (option === "--allow-dirty") { allowDirty = true; continue; }
+    const value = args[index + 1];
+    if (!["--reason", "--output"].includes(option) || !value || value.startsWith("--") || values.has(option)) { io.stderr(usage); return 2; }
+    values.set(option, value); index += 1;
+  }
+  if (scenarioIds.length === 0 || !values.get("--reason")) { io.stderr(usage); return 2; }
+  try {
+    const root = projectRoot(); const profile = await readCheckProfile(root);
+    if (!profile) throw new CheckInputError("air check approve uses the check profile; create one with `air check profile`.");
+    const repository = gitRepositoryState();
+    if (!repository.clean && !allowDirty) throw new CheckInputError("Commit the intended change before approving it, or pass --allow-dirty for a non-releasable baseline.");
+    const [check, baseline, target] = await Promise.all([loadMigrationCheck(resolve(root, profile.check)), loadCheckBaseline(resolve(root, profile.baseline)), loadCheckTarget(resolve(root, profile.candidate))]);
+    const approved = await approveBaselineScenarios({ check, baseline, target, repositoryRoot: repository.root, clean: repository.clean, scenarioIds, reason: values.get("--reason")! });
+    const output = values.has("--output") ? resolve(values.get("--output")!) : resolve(root, `${profile.baseline}-approved-${new Date().toISOString().replace(/[:.]/gu, "-")}`);
+    const path = await writeCheckBaseline(output, approved);
+    await writeFile(resolve(root, ".air/check.json"), `${JSON.stringify({ ...profile, baseline: relative(root, output) }, null, 2)}\n`, "utf8");
+    const changed = diffBaselines(baseline, approved).length;
+    if (json) io.stdout(`${JSON.stringify({ ok: true, baselineId: approved.baselineId, previousBaselineId: baseline.baselineId, approved: scenarioIds, changedSelectors: changed, path })}\n`);
+    else io.stdout(`Approved ${scenarioIds.join(", ")} (${changed} changed selector(s)). New baseline ${approved.baselineId}: ${path}\nThe check profile now points to it; the previous baseline is kept for review.\n`);
+    return 0;
+  } catch (error) {
+    const code = checkFailureCode(error);
+    io.stderr(`${error instanceof Error && "code" in error && error.code === "EEXIST" ? "Output already exists; AIR will not overwrite an approved baseline." : error instanceof Error ? error.message : String(error)}\n`);
+    return code;
+  }
+}
+
+async function checkDiffBaselineCommand(args: readonly string[], io: CliIo): Promise<number> {
+  const usage = "Usage: air check diff-baseline <before> <after> [--json]\n";
+  const json = args.includes("--json"); const paths = args.filter((arg) => arg !== "--json");
+  if (paths.length !== 2 || paths.some((path) => path.startsWith("--"))) { io.stderr(usage); return 2; }
+  try {
+    const [before, after] = await Promise.all(paths.map((path) => loadCheckBaseline(resolve(path))));
+    const differences = diffBaselines(before!, after!);
+    const approvals = (after!.approvals ?? []).filter((approval) => !(before!.approvals ?? []).some((item) => item.approvedAt === approval.approvedAt && item.scenario === approval.scenario));
+    if (json) io.stdout(`${JSON.stringify({ changed: differences.map(({ scenario, selector }) => ({ scenario, selector })), approvals })}\n`);
+    else {
+      for (const item of differences) io.stdout(`CHANGED ${item.scenario} ${item.selector}\n`);
+      for (const approval of approvals) io.stdout(`APPROVED ${approval.scenario} by target ${approval.target}: ${approval.reason}\n`);
+      if (differences.length === 0) io.stdout("No behavioral differences between the baselines.\n");
+    }
+    return differences.length === 0 ? 0 : 1;
+  } catch (error) {
+    io.stderr(`${error instanceof Error ? error.message : String(error)}\n`);
+    return checkFailureCode(error);
   }
 }
 

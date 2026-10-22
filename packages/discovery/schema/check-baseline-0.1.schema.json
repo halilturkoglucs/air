@@ -9,7 +9,8 @@
     "baselineId": { "$ref": "#/$defs/hash" }, "createdAt": { "type": "string", "format": "date-time" }, "releasable": { "type": "boolean" },
     "hashes": { "type": "object", "additionalProperties": false, "required": ["repository", "check", "policy", "normalization", "target"], "properties": { "repository": { "$ref": "#/$defs/hash" }, "discovery": { "$ref": "#/$defs/hash" }, "check": { "$ref": "#/$defs/hash" }, "policy": { "$ref": "#/$defs/hash" }, "normalization": { "$ref": "#/$defs/hash" }, "target": { "$ref": "#/$defs/hash" } } },
     "target": { "type": "object", "additionalProperties": false, "required": ["name", "type"], "properties": { "name": { "type": "string" }, "type": { "enum": ["http", "command"] } } },
-    "scenarios": { "type": "array", "minItems": 1, "items": { "type": "object", "additionalProperties": false, "required": ["id", "observation"], "properties": { "id": { "type": "string" }, "observation": { "$ref": "#/$defs/node" } } } }
+    "scenarios": { "type": "array", "minItems": 1, "items": { "type": "object", "additionalProperties": false, "required": ["id", "observation"], "properties": { "id": { "type": "string" }, "observation": { "$ref": "#/$defs/node" } } } },
+    "approvals": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["scenario", "reason", "approvedAt", "previousBaselineId", "target"], "properties": { "scenario": { "type": "string", "minLength": 1 }, "reason": { "type": "string", "minLength": 1 }, "approvedAt": { "type": "string", "format": "date-time" }, "previousBaselineId": { "$ref": "#/$defs/hash" }, "target": { "type": "string", "minLength": 1 } } } }
   },
   "$defs": {
     "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
