@@ -4,6 +4,14 @@ All notable changes are recorded here. AIR follows the pre-1.0 policy in `docs/v
 
 ## Unreleased
 
+## 0.13.0 - 2026-10-22
+
+- Added the framework-neutral UI v0.1 schema and MongoDB target generation.
+- Added a reproducible, resumable LLM verification-lift benchmark. On suite v1.3, `claude-sonnet-5-5` reached behavioral pass@3 9/9 with AIR feedback versus 0/9 on ordinary tests alone, with zero escaped defects; the scorecard is published in the README.
+- The benchmark harness supports Codex CLI and Claude Code agents, keeps checkpoints and agent workspaces outside the repository, pauses on usage limits, and verifies committed evidence deterministically from a clean clone.
+- Releases now also publish both packages to GitHub Packages.
+- Updated tsup to 9, vitest to 5.0.5, and `actions/setup-java` to v6, and pinned vite to 7.3.7 or later to resolve Dependabot advisories.
+
 ## 0.12.0 - 2026-10-20
 
 - Repositioned AIR around the model-neutral promise “AI writes the migration. AIR proves what changed,” while preserving every existing discovery, IR, compiler, provider, and import interface.

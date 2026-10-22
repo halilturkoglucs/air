@@ -1,6 +1,6 @@
 {
   "name": "air",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "private": true,
   "description": "A model-neutral verification layer for proving what changed in agent-written migrations.",
   "license": "Apache-2.0",
@@ -46,7 +46,7 @@
     "tsup": "^9.0.0",
     "typescript": "^5.9.3",
     "postgres": "^3.4.7",
-    "vitest": "^5.0.3"
+    "vitest": "^5.0.5"
   },
   "engines": {
     "node": ">=22"

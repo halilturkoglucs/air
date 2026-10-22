@@ -7,7 +7,7 @@
 
 AIR is an open, model-neutral verification layer for capability replacement. Freeze reviewed legacy behavior, let any coding agent write an ordinary replacement in any language, then compare HTTP results, database effects, messages, outbound calls, ordering, and failures independently. AIR proves equivalence only inside the observation boundary you declare—not general correctness.
 
-AIR v0.12 makes agent verification the primary product journey. AIR’s existing Application IR, compiler, providers, discovery, and import commands remain compatible, but coding agents no longer need AIR-generated code or an Application AIR document to verify a replacement.
+Since v0.12, agent verification is AIR's primary product journey. AIR’s existing Application IR, compiler, providers, discovery, and import commands remain compatible, but coding agents no longer need AIR-generated code or an Application AIR document to verify a replacement.
 
 <!-- AIR_LLM_BENCHMARK:START -->
 ## Does AIR improve an LLM migration?
@@ -59,7 +59,7 @@ This result applies only to the named model and suite. Runtime throughput is mea
 
 For existing enterprise systems, AIR does **not** promise one-click repository-to-YAML conversion. It builds an evidence-backed architecture map, then helps teams review, verify, and replace one business capability at a time. Architecture inventory is the entry point; verified modernization is the outcome.
 
-AIR CLI v0.12 accepts application documents from v0.1 through v0.10, System documents through v0.2, Deployment v0.1, and framework-neutral UI v0.1 documents. Discovery and agent verification are supported product boundaries; extraction, differential import verification, and adoption remain experimental:
+AIR CLI v0.13 accepts application documents from v0.1 through v0.10, System documents through v0.2, Deployment v0.1, and framework-neutral UI v0.1 documents. Discovery and agent verification are supported product boundaries; extraction, differential import verification, and adoption remain experimental:
 
 - entities, relationships, CRUD HTTP operations, contracts, principals, and declared errors
 - transactional create/update/delete commands, guards, preconditions, ownership, role/scope policies, and invariant expressions
@@ -84,10 +84,10 @@ AIR CLI v0.12 accepts application documents from v0.1 through v0.10, System docu
 
 ## Start here
 
-Install AIR v0.12 with Node.js 22 or newer, then clone the repository for the included example files:
+Install AIR v0.13 with Node.js 22 or newer, then clone the repository for the included example files:
 
 ```bash
-npm install --global @halilturkoglucs/air@0.12.0
+npm install --global @halilturkoglucs/air@0.13.0
 git clone https://github.com/halilturkoglucs/air.git
 cd air
 air --version
@@ -146,10 +146,10 @@ AIR is not a general correctness oracle, fuzzy similarity scorer, load tester, o
 
 ## CLI, discovery, and generation
 
-The v0.12 package also preserves the discovery, AIR IR, compiler, and conformance workflows:
+The v0.13 package also preserves the discovery, AIR IR, compiler, and conformance workflows:
 
 ```bash
-npm install --global @halilturkoglucs/air@0.12.0
+npm install --global @halilturkoglucs/air@0.13.0
 # or: brew install halilturkoglucs/tap/air-ir
 
 # Create an evidence-backed map of a Spring service (Java 17+).
@@ -183,7 +183,7 @@ External discovery calibration reports are available for the large archived [Net
 Provider and deployment integrations use the public, versioned SDK:
 
 ```bash
-npm install @halilturkoglucs/air-plugin-sdk@0.12.0
+npm install @halilturkoglucs/air-plugin-sdk@0.13.0
 ```
 
 Implement `AirProviderPlugin` for brokers, caches, or databases, or `AirDeployerPlugin` for deployment profiles. Export the implementation through an `AirPluginModule`, set `apiVersion` to `AIR_PLUGIN_API_VERSION`, and declare an immutable plugin `id` and `version`. Deployment documents must name the plugin explicitly and lock that version; AIR does not discover or execute arbitrary installed packages.

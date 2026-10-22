@@ -13,3 +13,5 @@ packages/cli/NOTICE
 experiments/
 graphify-out/
 .graphify/
+benchmarks/llm-air-lift/results-batches/
+benchmarks/llm-air-lift/archive/
