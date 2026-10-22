@@ -1,0 +1,17 @@
+{
+  "ecosystem": "mybatis",
+  "extensions": [
+    ".xml"
+  ],
+  "lineComment": "<!--",
+  "seams": [],
+  "effects": [
+    {
+      "kind": "database",
+      "pattern": "\\b(?:FROM|INTO|UPDATE|JOIN)\\s+([A-Za-z_]\\w*)",
+      "name": 1,
+      "flags": "i",
+      "fileFilter": "[Mm]apper"
+    }
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "ecosystem": "csharp",
+  "extensions": [
+    ".cs"
+  ],
+  "lineComment": "//",
+  "prefixes": [
+    {
+      "pattern": "\\[Route\\(\\s*\"([^\"]*)\"\\s*\\)\\]\\s*(?:\\[[^\\]]*\\]\\s*)*(?:public\\s+|internal\\s+|sealed\\s+|partial\\s+|abstract\\s+)*class\\s+(\\w+)",
+      "prefix": 1,
+      "className": 2
+    }
+  ],
+  "seams": [
+    {
+      "kind": "http",
+      "framework": "aspnet",
+      "pattern": "\\[Http(Get|Post|Put|Patch|Delete)(?:\\(\\s*\"([^\"]*)\"[^)]*\\))?\\]",
+      "method": 1,
+      "route": 2
+    },
+    {
+      "kind": "http",
+      "framework": "aspnet-minimal",
+      "pattern": "\\.Map(Get|Post|Put|Patch|Delete)\\(\\s*\"([^\"]*)\"",
+      "method": 1,
+      "route": 2
+    }
+  ],
+  "effects": [
+    {
+      "kind": "database",
+      "pattern": "[\"'`]\\s*(?:SELECT\\b[^\"'`;]{0,200}?\\bFROM|INSERT\\s+INTO|DELETE\\s+FROM)\\s+[`\"\\[]?([A-Za-z_][\\w.]*)",
+      "name": 1,
+      "flags": "i"
+    },
+    {
+      "kind": "database",
+      "pattern": "[\"'`]\\s*UPDATE\\s+[`\"\\[]?([A-Za-z_][\\w.]*)[`\"\\]]?\\s+SET\\b",
+      "name": 1,
+      "flags": "i"
+    },
+    {
+      "kind": "database",
+      "pattern": "\\bDbSet<\\s*(\\w+)\\s*>",
+      "name": 1
+    }
+  ]
+}

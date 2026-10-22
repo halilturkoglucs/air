@@ -29,7 +29,7 @@ describe("air discover code route prefixes and data effects", () => {
       "GET /articles", "POST /articles/:slug/favorite",
       "GET /api/articles", "GET /api/articles/:slug",
       "GET /user",
-      "POST /users", "POST /users/login",
+      "POST /api/users", "POST /api/users/login",
       "ANY /api/profiles/:username/follow/",
       "GET /api/articles", "POST /api/articles", "GET /api/articles/:id", "DELETE /api/articles/:id",
     ]));
