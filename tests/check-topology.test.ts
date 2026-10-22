@@ -6,6 +6,9 @@ import { runCli } from "../packages/cli/src/index.js";
 
 const example = resolve("examples/extract-service");
 
+// Agent-mode runs write last-run state; keep it out of the repository during tests.
+process.env.AIR_STATE_DIR = resolve(tmpdir(), `air-state-${process.pid}`);
+
 function capture() {
   let stdout = ""; let stderr = "";
   return { io: { stdout: (message: string) => { stdout += message; }, stderr: (message: string) => { stderr += message; } }, stdout: () => stdout, stderr: () => stderr };

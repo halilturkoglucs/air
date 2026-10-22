@@ -4,6 +4,12 @@ All notable changes are recorded here. AIR follows the pre-1.0 policy in `docs/v
 
 ## Unreleased
 
+## 0.16.0 - 2026-10-22
+
+- Added `air discover traces`: OpenTelemetry (OTLP JSON) traces from any language become a deterministic map of endpoints and their database, outbound, and messaging effects.
+- Added `air check init --from-openapi`: reviewable HTTP scenario skeletons for every OpenAPI operation, with example path, query, and body values.
+- Added `air check coverage`: operations from OpenAPI or traces that no scenario exercises, with `--fail-under` for CI.
+- `AIR_STATE_DIR` relocates agent-mode last-run state; `.air/last-run.json` is per-developer and should not be committed.
 - Added `rename` and `internal-boundary` normalizations for topology changes: map data that moved to another service's database, and drop calls or steps that became internal when a service was extracted or merged. Both require a written reason and are policy-controlled.
 - Added `lifecycle.services` to check targets, so a candidate made of several processes is started (with optional readiness URLs) and stopped together.
 - Added `examples/extract-service`, a monolith-to-service split verified by AIR.

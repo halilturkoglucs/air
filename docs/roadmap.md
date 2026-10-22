@@ -193,7 +193,7 @@ The root workspace, CLI, and plugin SDK are versioned together and distributed i
 
 Public-corpus work is product evidence, not a customer ROI claim. AIR never claims that matching legacy behavior proves that behavior correct or that uncaptured behavior is equivalent.
 
-## 12a. Any service, any change — milestones 1–2 delivered
+## 12a. Any service, any change — milestones 1–3 delivered
 
 AIR's check engine is already language- and framework-neutral (argv or HTTP targets); only check authoring depended on Spring discovery. This track widens what developers can verify without adding code generators or per-framework analyzers.
 
@@ -202,7 +202,7 @@ AIR's check engine is already language- and framework-neutral (argv or HTTP targ
    - `air check record` turns live traffic (built-in recording proxy) or a HAR file into reviewable HTTP check scenarios for any language. Credentials are dropped unless a header is explicitly kept.
    - `air check approve <scenario> --reason` accepts intentional changes per scenario with an auditable record; `air check diff-baseline` reviews them.
 2. Topology changes (monolith to services and back) — delivered: `rename` and `internal-boundary` normalizations, `lifecycle.services` for multi-process candidates, and `examples/extract-service` (merging is the same check in reverse).
-3. Framework-neutral discovery from existing artifacts: OpenTelemetry trace import, `air check init --from-openapi`, and `air check coverage`.
+3. Framework-neutral discovery from existing artifacts — delivered: `air discover traces` maps OpenTelemetry (OTLP JSON) endpoints to their database, outbound, and messaging effects for any language; `air check init --from-openapi` creates reviewable scenario skeletons; `air check coverage` reports operations from OpenAPI or traces that no scenario exercises (`--fail-under` for CI).
 4. UI refactors: a `ui` observation category (accessibility tree, page network calls, console errors, visible text) produced by a user-owned script; no browser dependency in AIR.
 
 Continuous developer-experience items: `air check watch`, `--failed-only`, `--repeat N`, `--format github`, and a dependency-free GitHub Action. Benchmarks resume after milestone 2.

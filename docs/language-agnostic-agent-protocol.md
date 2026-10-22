@@ -97,6 +97,16 @@ air check diff-baseline <before> <after>          # review what an approval chan
 
 `--at-setup "<command>"` prepares the worktree (for example `npm ci`) without a shell. Recording keeps only replayable JSON/HTTP exchanges for the chosen origin, never stores `Authorization` or cookies unless `--keep-header` names them, and writes requests only: the baseline is created by replaying them against legacy. Approvals require a clean tree (or `--allow-dirty` for a non-releasable baseline) and keep the previous baseline for review.
 
+### Starting from what a team already has
+
+```text
+air discover traces traces.json                          # OpenTelemetry OTLP JSON, any language
+air check init --from-openapi openapi.yaml --output checks/api
+air check coverage --openapi openapi.yaml --traces traces.json --fail-under 80
+```
+
+`discover traces` groups client, database, and messaging spans under the server span that caused them and prints a deterministic map (`--json` or `--output` for the `air.dev/trace-map/v0.1` document). `--from-openapi` fills path, query, and body values from examples, enums, and required schema fields and marks each scenario `TODO review`; replace them with realistic inputs before baselining. `coverage` matches scenario requests against OpenAPI path templates and traced routes.
+
 ### MCP without extra dependencies
 
 `air mcp` serves four tools over MCP stdio from the same binary: `air_check_status`, `air_check_run` (`reveal`, `maxLines`), `air_check_explain`, and `air_check_baseline`. They wrap the compact mode above.
