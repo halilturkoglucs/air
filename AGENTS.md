@@ -79,5 +79,5 @@ Any agent can stop at any time. State lives in Git, in `pnpm benchmark:status`, 
 
 ### Current work
 
-- v0.16.0 (milestones 2 and 3 of `docs/roadmap.md` §12a) is tagged and released through `release.yml`; the npm CLI tarball for 0.15.0 never appeared on the registry even though publish succeeded, so 0.16.0 supersedes it.
-- Weak-point plan in progress: languages (#51), coverage and trust (`feat/protect-coverage`: `--add --tests`, COVERAGE line, reset suggestions, stricter harness gate), then a narrower CLI/README surface, then a Docker-sandboxed end-to-end trial on a public RealWorld service, then release v0.18.0.
+- v0.17.0 is released. Merged since: #51 (Java, C#, PHP, Rust, Ruby discovery), #52 (coverage, sign-in replay, stability pass), #53 (narrower CLI/README surface). #54 adds events, caches and gRPC discovery, `shape` normalization, and `harness verify --teardown`, from a Docker trial on the OpenTelemetry demo.
+- Next: release v0.18.0 after #54. Open items: UI observations (roadmap Milestone 5), `watch`, `--failed-only`, `--repeat`, `--format github`, and a trial with a real user's service.
