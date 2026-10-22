@@ -1,0 +1,76 @@
+{
+  "ecosystem": "java",
+  "extensions": [
+    ".java",
+    ".kt"
+  ],
+  "lineComment": "//",
+  "prefixes": [
+    {
+      "pattern": "@RequestMapping\\(\\s*(?:(?:path|value)\\s*=\\s*)?\"([^\"]*)\"\\s*\\)\\s*(?:@\\w+(?:\\([^)]*\\))?\\s*)*(?:public\\s+|internal\\s+|open\\s+|abstract\\s+|final\\s+)*class\\b",
+      "prefix": 1
+    },
+    {
+      "pattern": "@Path\\(\\s*\"([^\"]*)\"\\s*\\)\\s*(?:@\\w+(?:\\([^)]*\\))?\\s*)*(?:public\\s+)?(?:abstract\\s+)?class\\b",
+      "prefix": 1
+    }
+  ],
+  "seams": [
+    {
+      "kind": "http",
+      "framework": "spring",
+      "pattern": "@(Get|Post|Put|Patch|Delete)Mapping\\b(?:\\(\\s*(?:(?:path|value)\\s*=\\s*)?(?:\\{\\s*)?(?:\"([^\"]*)\")?)?",
+      "method": 1,
+      "route": 2
+    },
+    {
+      "kind": "http",
+      "framework": "spring",
+      "pattern": "@RequestMapping\\(\\s*(?:(?:path|value)\\s*=\\s*)?\"([^\"]*)\"\\s*,\\s*method\\s*=\\s*(?:RequestMethod\\.)?(GET|POST|PUT|PATCH|DELETE)",
+      "route": 1,
+      "method": 2
+    },
+    {
+      "kind": "http",
+      "framework": "jax-rs",
+      "pattern": "@(GET|POST|PUT|PATCH|DELETE)\\b(?:\\s*@(?:Path\\(\\s*\"([^\"]*)\"\\s*\\)|\\w+(?:\\([^)]*\\))?))*",
+      "method": 1,
+      "route": 2
+    },
+    {
+      "kind": "cli",
+      "framework": "java",
+      "pattern": "\\bpublic\\s+static\\s+void\\s+main\\s*\\(",
+      "name": 0
+    }
+  ],
+  "effects": [
+    {
+      "kind": "database",
+      "pattern": "[\"'`]\\s*(?:SELECT\\b[^\"'`;]{0,200}?\\bFROM|INSERT\\s+INTO|DELETE\\s+FROM)\\s+[`\"\\[]?([A-Za-z_][\\w.]*)",
+      "name": 1,
+      "flags": "i"
+    },
+    {
+      "kind": "database",
+      "pattern": "[\"'`]\\s*UPDATE\\s+[`\"\\[]?([A-Za-z_][\\w.]*)[`\"\\]]?\\s+SET\\b",
+      "name": 1,
+      "flags": "i"
+    },
+    {
+      "kind": "database",
+      "pattern": "@Table\\(\\s*name\\s*=\\s*\"(\\w+)\"",
+      "name": 1
+    },
+    {
+      "kind": "database",
+      "pattern": "extends\\s+(?:Jpa|Crud|PagingAndSorting|Mongo|Reactive\\w*)Repository<\\s*(\\w+)",
+      "name": 1
+    },
+    {
+      "kind": "message",
+      "pattern": "\\b(?:kafkaTemplate|rabbitTemplate)\\.(?:send|convertAndSend)\\(\\s*\"([^\"]+)\"",
+      "name": 1
+    }
+  ]
+}

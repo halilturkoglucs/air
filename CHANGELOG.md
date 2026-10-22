@@ -4,6 +4,7 @@ All notable changes are recorded here. AIR follows the pre-1.0 policy in `docs/v
 
 ## Unreleased
 
+- `air discover code` now covers Java (Spring, JAX-RS, JPA, MyBatis), C# (ASP.NET controllers and minimal APIs, Entity Framework), PHP (Laravel routes and resources, Eloquent), Rust (axum, actix, rocket, SQL in raw strings), and Ruby (a Rails routes DSL interpreter, ActiveRecord). Measured on RealWorld implementations, route recall is 19/19 in all ten supported stacks.
 Measured on public RealWorld implementations (the same 19-endpoint API in five stacks), route recall of `air discover code` went from Express 19, NestJS 16, FastAPI 11, Go/gin 13, Django REST 0 to 19/19 in all five:
 
 - Route prefixes declared away from the route are resolved: Nest `@Controller`, FastAPI `APIRouter(prefix=)`, Flask `Blueprint(url_prefix=)` in the same file, and cross-file mounts (FastAPI `include_router(module.router, prefix=)`, Django `url(..., include("dotted.module"))`, Go `Register(group.Group("/p"))` functions, Express `app.use("/p", importedRouter)`).
