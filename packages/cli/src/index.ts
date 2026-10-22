@@ -24,7 +24,7 @@ import { importPostgres } from "@air/import-postgres";
 import { importOpenApiSource } from "@air/import-openapi";
 import { importNextjs } from "@air/import-nextjs";
 import { importSpring } from "@air/import-spring";
-import { CheckInfrastructureError, CheckInputError, adoptExtractedCapability, createCheckBaseline, discoverSpring, discoveryFromAirCandidate, extractCapability, ingestEvidence, initializeMigrationCheck, loadCheckBaseline, loadCheckPolicy, loadCheckTarget, loadMigrationCheck, mergeDiscoveryBundles, parseCheckResult, readDiscoveryBundle, runMigrationCheckDetailed, observeCheckTarget, approveBaselineScenarios, diffBaselines, checkFromExchanges, exchangesFromHar, recordHttpTraffic, writeRecordedCheck, traceMapFromOtlp, formatTraceMap, checkFromOpenApi, checkCoverage, formatCoverage, type CheckBaseline, sameDigest, buildAgentReport, formatAgentReport, differenceKey, AGENT_PROTOCOL, startWorkbench, validateMigrationCheck, verifyImportedCapability, writeCheckBaseline, writeCheckResult, writeDiscoveryBundle, writeDiscoveryReport, type CheckMismatch, type DiscoveryBundle } from "@air/discovery";
+import { CheckInfrastructureError, CheckInputError, adoptExtractedCapability, createCheckBaseline, discoverSpring, discoveryFromAirCandidate, extractCapability, ingestEvidence, initializeMigrationCheck, loadCheckBaseline, loadCheckPolicy, loadCheckTarget, loadMigrationCheck, mergeDiscoveryBundles, parseCheckResult, readDiscoveryBundle, runMigrationCheckDetailed, observeCheckTarget, approveBaselineScenarios, diffBaselines, checkFromExchanges, exchangesFromHar, recordHttpTraffic, writeRecordedCheck, traceMapFromOtlp, formatTraceMap, scanCodeSeams, formatCodeSeams, checkFromOpenApi, checkCoverage, formatCoverage, type CheckBaseline, sameDigest, buildAgentReport, formatAgentReport, differenceKey, AGENT_PROTOCOL, startWorkbench, validateMigrationCheck, verifyImportedCapability, writeCheckBaseline, writeCheckResult, writeDiscoveryBundle, writeDiscoveryReport, type CheckMismatch, type DiscoveryBundle } from "@air/discovery";
 import { startLanguageServer } from "@air/language-server";
 import { NextjsTargetAdapter, type NextjsTargetOptions } from "@air/target-nextjs";
 import { RustTargetAdapter, type RustTargetOptions } from "@air/target-rust";
@@ -86,6 +86,7 @@ Usage:
   air import-nextjs [options]                 Import Next.js App Router + Drizzle into AIR
   air discover spring <repository> [options] Build an evidence-backed discovery bundle
   air discover traces <otlp.json> [options]  Map endpoints to DB, outbound, and messaging from OpenTelemetry
+  air discover code [<path>] [--symbol <name>] [--since <ref>]  Propose behavioral seams in any JS/TS, Python, or Go code
   air discovery report <bundle> [options] Export a deterministic discovery report
   air evidence ingest <trace> [options]      Ingest redacted runtime/test evidence
   air evidence capture <profile> [options]   Run a command with self-hosted evidence adapters
@@ -998,8 +999,22 @@ async function discoverTracesCommand(args: readonly string[], io: CliIo): Promis
   } catch (error) { io.stderr(`${error instanceof Error ? error.message : String(error)}\n`); return 2; }
 }
 
+async function discoverCodeCommand(args: readonly string[], io: CliIo): Promise<number> {
+  const usage = "Usage: air discover code [<path>] [--symbol <name>] [--since <git-ref>] [--output <file>] [--json]\n";
+  const parsed = parseFlags(args, ["--symbol", "--since", "--output"], ["--json"]);
+  if (!parsed || parsed.positional.length > 1) { io.stderr(usage); return 2; }
+  try {
+    const root = projectRoot();
+    const report = await scanCodeSeams({ root, path: parsed.positional[0] ? relative(root, resolve(parsed.positional[0])) || "." : relative(root, process.cwd()) || ".", ...(parsed.values.has("--symbol") ? { symbol: parsed.values.get("--symbol")! } : {}), ...(parsed.values.has("--since") ? { since: parsed.values.get("--since")! } : {}) });
+    if (parsed.values.has("--output")) await writeFile(resolve(parsed.values.get("--output")!), `${JSON.stringify(report, null, 2)}\n`, "utf8");
+    io.stdout(parsed.flags.has("--json") ? `${JSON.stringify(report)}\n` : formatCodeSeams(report));
+    return 0;
+  } catch (error) { io.stderr(`${error instanceof Error ? error.message.split("\n")[0] : String(error)}\n`); return 2; }
+}
+
 async function discoverCommand(args: readonly string[], io: CliIo): Promise<number> {
   if (args[0] === "traces") return discoverTracesCommand(args.slice(1), io);
+  if (args[0] === "code") return discoverCodeCommand(args.slice(1), io);
   const [framework, repository, ...options] = args;
   const usage = "Usage: air discover spring <repository> --output <directory> [--name <name>] [--analyzer auto|source|openrewrite]\n";
   if (framework !== "spring" || !repository || repository.startsWith("--")) { io.stderr(usage); return 2; }

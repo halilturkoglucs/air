@@ -1,0 +1,74 @@
+{
+  "ecosystem": "python",
+  "extensions": [
+    ".py"
+  ],
+  "lineComment": "#",
+  "seams": [
+    {
+      "kind": "http",
+      "framework": "flask-fastapi",
+      "pattern": "@\\w+\\.(get|post|put|patch|delete|head)\\(\\s*['\"](/[^'\"]*)",
+      "method": 1,
+      "route": 2
+    },
+    {
+      "kind": "http",
+      "framework": "flask",
+      "pattern": "@\\w+\\.route\\(\\s*['\"](/[^'\"]*)['\"](?:[^)]*methods\\s*=\\s*\\[\\s*['\"](\\w+))?",
+      "route": 1,
+      "method": 2,
+      "defaultMethod": "GET"
+    },
+    {
+      "kind": "http",
+      "framework": "django",
+      "pattern": "\\b(?:re_)?path\\(\\s*r?['\"]\\^?([^'\"]*)['\"]\\s*,",
+      "route": 1,
+      "routePrefix": "/",
+      "defaultMethod": "ANY",
+      "fileFilter": "urls\\.py$"
+    },
+    {
+      "kind": "job",
+      "framework": "celery-apscheduler",
+      "pattern": "@(?:\\w+\\.)?(?:shared_task|task|scheduled_job)\\b",
+      "name": 0
+    },
+    {
+      "kind": "consumer",
+      "framework": "kafka-python",
+      "pattern": "\\bKafkaConsumer\\(\\s*['\"]([^'\"]+)",
+      "name": 1
+    },
+    {
+      "kind": "cli",
+      "framework": "python",
+      "pattern": "^if\\s+__name__\\s*==\\s*['\"]__main__['\"]",
+      "name": 0
+    }
+  ],
+  "effects": [
+    {
+      "kind": "database",
+      "pattern": "\\b(?:select\\b[\\s\\S]{0,80}?\\bfrom|insert\\s+into|update|delete\\s+from)\\s+[\"`]?([A-Za-z_][\\w.]*)",
+      "name": 1,
+      "flags": "i"
+    },
+    {
+      "kind": "database",
+      "pattern": "\\b([A-Z]\\w*)\\.objects\\.(?:create|filter|get|update|delete|all)",
+      "name": 1
+    },
+    {
+      "kind": "outbound",
+      "pattern": "\\b(?:requests|httpx|session)\\.(?:get|post|put|patch|delete)\\(\\s*f?['\"](https?://[^'\"\\s]+)",
+      "name": 1
+    },
+    {
+      "kind": "message",
+      "pattern": "\\.(?:send|produce)\\(\\s*['\"]([^'\"]+)",
+      "name": 1
+    }
+  ]
+}

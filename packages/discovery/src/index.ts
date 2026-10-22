@@ -13,3 +13,4 @@ export * from "./check.js";
 export * from "./agent-format.js";
 export * from "./record.js";
 export * from "./sources.js";
+export * from "./code-seams.js";
