@@ -1,0 +1,6 @@
+{
+  "name": "air-benchmark-library-access",
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "node --test ordinary.test.mjs" }
+}

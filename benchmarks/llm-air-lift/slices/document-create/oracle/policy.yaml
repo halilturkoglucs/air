@@ -1,0 +1,7 @@
+apiVersion: air.dev/check-policy/v0.1
+kind: CheckPolicy
+metadata: { name: document-create-benchmark }
+spec:
+  requiredObservations: [http, database, messages, outbound, ordering, failures, retryability]
+  requireCleanBaseline: true
+  unmatchedEvidence: fail

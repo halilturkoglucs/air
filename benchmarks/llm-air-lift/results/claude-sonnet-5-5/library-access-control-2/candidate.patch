@@ -1,0 +1,65 @@
+diff --git a/candidate.mjs b/candidate.mjs
+index c62384c..a2d586c 100644
+--- a/candidate.mjs
++++ b/candidate.mjs
+@@ -1,18 +1,51 @@
+ let source = "";
+ for await (const chunk of process.stdin) source += chunk;
+ const input = JSON.parse(source || "{}");
+-const books = input.books ?? [];
++const books = Array.isArray(input.books) ? input.books : [];
++const principal = input.principal ?? null;
++const query = input.query ?? input.filters ?? {};
+ 
+-if (input.operation === "delete") {
++const json = { "content-type": "application/json" };
++const isLibrarian = principal?.role === "librarian";
++
++function out(status, body, list = books, deleted = []) {
++  const headers = body === null ? {} : json;
+   console.log(JSON.stringify({
+-    http: { status: 204, headers: {}, body: null },
+-    database: { books: books.filter((book) => book.id !== input.bookId), deleted: [input.bookId] },
++    http: { status, headers, body },
++    database: { books: list, deleted },
+     failures: []
+   }));
++}
++
++const project = (b) => ({ id: b.id, ownerId: b.ownerId, title: b.title, genre: b.genre });
++const cmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
++
++if (!principal || principal.id == null) {
++  out(401, { error: "unauthorized" });
++} else if (input.operation === "delete") {
++  const book = books.find((b) => b.id === input.bookId);
++  if (!book) out(404, { error: "not found" });
++  else if (!isLibrarian && book.ownerId !== principal.id) out(403, { error: "forbidden" });
++  else out(204, null, books.filter((b) => b.id !== input.bookId), [input.bookId]);
+ } else {
+-  console.log(JSON.stringify({
+-    http: { status: 200, headers: { "content-type": "application/json" }, body: { items: books, total: books.length } },
+-    database: { books, deleted: [] },
+-    failures: []
+-  }));
++  const get = (k) => query[k] ?? input[k];
++  let items = books.filter((b) => isLibrarian || b.ownerId === principal.id);
++  const genre = get("genre");
++  if (genre != null && genre !== "") items = items.filter((b) => b.genre === genre);
++  const ownerId = get("ownerId");
++  if (ownerId != null && ownerId !== "") items = items.filter((b) => b.ownerId === ownerId);
++  const q = get("q") ?? get("title");
++  if (q != null && q !== "") {
++    const needle = String(q).toLowerCase();
++    items = items.filter((b) => String(b.title ?? "").toLowerCase().includes(needle));
++  }
++  items = [...items].sort((a, b) =>
++    cmp(String(a.title ?? "").toLowerCase(), String(b.title ?? "").toLowerCase()) ||
++    cmp(String(a.id), String(b.id)));
++  const total = items.length;
++  const offset = Math.max(0, Number.parseInt(get("offset"), 10) || 0);
++  const limitRaw = Number.parseInt(get("limit"), 10);
++  const limit = Number.isFinite(limitRaw) && limitRaw >= 0 ? limitRaw : undefined;
++  items = items.slice(offset, limit === undefined ? undefined : offset + limit);
++  out(200, { items: items.map(project), total });
+ }

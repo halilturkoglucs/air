@@ -1,0 +1,50 @@
+{
+  "apiVersion": "air.dev/check-result/v0.1",
+  "kind": "CheckResult",
+  "generatedAt": "2026-10-22T08:42:23.050Z",
+  "baselineId": "2194b2ab208ccc166fc7d7f14a6362bdb3b070ed0f73eee9940cd70eb59f9c62",
+  "candidate": {
+    "name": "candidate",
+    "targetHash": "665b2ecdd0ef2157bebeda0f24ae2012786e516d13d79b610d22592207a78d58"
+  },
+  "passed": true,
+  "policy": {
+    "passed": true,
+    "violations": []
+  },
+  "scenarios": [
+    {
+      "id": "lists-owned-books",
+      "passed": true
+    },
+    {
+      "id": "forbids-foreign-delete",
+      "passed": true
+    },
+    {
+      "id": "returns-ordered-page",
+      "passed": true
+    },
+    {
+      "id": "allows-owner-delete",
+      "passed": true
+    },
+    {
+      "id": "lists-owned-books-holdout",
+      "passed": true
+    },
+    {
+      "id": "forbids-foreign-delete-holdout",
+      "passed": true
+    },
+    {
+      "id": "returns-ordered-page-holdout",
+      "passed": true
+    },
+    {
+      "id": "allows-owner-delete-holdout",
+      "passed": true
+    }
+  ],
+  "mismatches": []
+}

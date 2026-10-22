@@ -1,0 +1,50 @@
+{
+  "apiVersion": "air.dev/check-result/v0.1",
+  "kind": "CheckResult",
+  "generatedAt": "2026-10-22T08:43:21.047Z",
+  "baselineId": "57aa8a89c1ee4fb1227daacb87c4adcc703008b992b6a1beb30af81e1bb87f57",
+  "candidate": {
+    "name": "candidate",
+    "targetHash": "665b2ecdd0ef2157bebeda0f24ae2012786e516d13d79b610d22592207a78d58"
+  },
+  "passed": true,
+  "policy": {
+    "passed": true,
+    "violations": []
+  },
+  "scenarios": [
+    {
+      "id": "moves-funds-atomically",
+      "passed": true
+    },
+    {
+      "id": "rolls-back-insufficient-funds",
+      "passed": true
+    },
+    {
+      "id": "replays-transfer",
+      "passed": true
+    },
+    {
+      "id": "rejects-version-conflict",
+      "passed": true
+    },
+    {
+      "id": "moves-funds-atomically-holdout",
+      "passed": true
+    },
+    {
+      "id": "rolls-back-insufficient-funds-holdout",
+      "passed": true
+    },
+    {
+      "id": "replays-transfer-holdout",
+      "passed": true
+    },
+    {
+      "id": "rejects-version-conflict-holdout",
+      "passed": true
+    }
+  ],
+  "mismatches": []
+}

@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://air.dev/schema/llm-benchmark-evidence-0.1.json",
+  "title": "AIR LLM benchmark evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format", "suiteVersion", "generatedAt", "source", "model", "budget", "runs"],
+  "properties": {
+    "format": { "const": "air.dev/llm-benchmark/v0.1" },
+    "suiteVersion": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commit", "suiteSha256"],
+      "properties": {
+        "commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "suiteSha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "reasoning", "agent", "agentVersion"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "reasoning": { "enum": ["low", "medium", "high", "xhigh", "max", "ultra"] },
+        "agent": { "type": "string", "minLength": 1 },
+        "agentVersion": { "type": "string", "minLength": 1 }
+      }
+    },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repairRounds"],
+      "properties": { "repairRounds": { "type": "integer", "minimum": 1, "maximum": 10 } }
+    },
+    "runs": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/run" }
+    }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "arm", "slice", "trial", "inputs", "measurements", "artifacts"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+        "arm": { "enum": ["control", "air"] },
+        "slice": { "type": "string", "minLength": 1 },
+        "trial": { "type": "integer", "minimum": 1 },
+        "inputs": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["taskSha256", "promptSha256", "starterSha256"],
+          "properties": {
+            "taskSha256": { "$ref": "#/$defs/sha256" },
+            "promptSha256": { "$ref": "#/$defs/sha256" },
+            "starterSha256": { "$ref": "#/$defs/sha256" }
+          }
+        },
+        "measurements": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["passAt1", "passAt3", "ordinaryTestsPassed", "roundsUsed", "passedScenarios", "totalScenarios", "escapedDefects", "buildFailures", "infrastructureRetries", "mismatchesByCategory", "durationMs"],
+          "properties": {
+            "passAt1": { "type": "boolean" },
+            "passAt3": { "type": "boolean" },
+            "ordinaryTestsPassed": { "type": "boolean" },
+            "roundsUsed": { "type": "integer", "minimum": 1 },
+            "passedScenarios": { "type": "integer", "minimum": 0 },
+            "totalScenarios": { "type": "integer", "minimum": 1 },
+            "escapedDefects": { "type": "integer", "minimum": 0 },
+            "buildFailures": { "type": "integer", "minimum": 0 },
+            "infrastructureRetries": { "type": "integer", "minimum": 0 },
+            "mismatchesByCategory": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 0 } },
+            "durationMs": { "type": "integer", "minimum": 0 },
+            "inputTokens": { "type": "integer", "minimum": 0 },
+            "outputTokens": { "type": "integer", "minimum": 0 },
+            "estimatedCostUsd": { "type": "number", "minimum": 0 }
+          }
+        },
+        "artifacts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["patch", "transcript", "result"],
+          "properties": {
+            "patch": { "$ref": "#/$defs/artifact" },
+            "transcript": { "$ref": "#/$defs/artifact" },
+            "result": { "$ref": "#/$defs/artifact" }
+          }
+        }
+      }
+    }
+  }
+}
