@@ -21,6 +21,9 @@ AIR locks what a service observably does, so changes do not alter behavior by ac
 - Never edit the check, policy, baseline, or anything under .air/ to make a run pass.
 - NOTE lines and a NEXT line about a stale baseline or policy are setup problems: report them instead of
   changing the code.
+- Behavior HTTP cannot see (events, caches, data, jobs, files, emails): when \`air protect\` prints a TASK, run
+  \`air harness task\` and follow it. You write a small harness; AIR only trusts it after
+  \`air harness verify <name> --mutation <patch>\` proves it is stable, input-sensitive, and catches a planted break.
 - \`air check status\` shows the last result without running anything.
 `;
 

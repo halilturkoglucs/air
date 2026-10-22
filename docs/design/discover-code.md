@@ -61,6 +61,10 @@ Developers should not have to learn or type this pipeline. A coding agent runs i
 
 At the owner's request, the agent-first entry point shipped before steps 4b–4d, built on sources that already work for any HTTP service: an OpenAPI file, routes found by `air discover code` (read-only, parameter-free GET routes only), or an optional recorded command. As 4b–4d land, `air protect` gains richer scenarios and non-HTTP seams without changing how people use it.
 
+### Behavior beyond HTTP: agent-written, AIR-verified harnesses
+
+Parsing every technology (brokers, caches, schedulers, file and mail systems) does not scale. Instead, the coding agent that already works in the repository writes a small harness in the existing command-target contract, and AIR decides whether to trust it with deterministic checks only: identical results across runs (generated UUIDs and timestamps become proposed `typed-token` rules), different observations for different inputs, and a detected difference when the same harness runs against a throwaway copy of the code with an agent-supplied breaking patch applied. Observation categories are open, so a harness reports whatever matters (`events`, `cache`, `files`, ...). This replaces most of the planned per-language work in steps 4b–4d: the code scanner now points the agent at what to cover instead of trying to model it.
+
 ## Everyday flow
 
 What the developer does: run `air agent install` once, then ask their agent for a change as usual.

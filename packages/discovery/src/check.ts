@@ -11,7 +11,9 @@ import baselineSchema from "../schema/check-baseline-0.1.schema.json" with { typ
 import resultSchema from "../schema/check-result-0.1.schema.json" with { type: "json" };
 import { readDiscoveryBundle } from "./store.js";
 
-export type ObservationCategory = "http" | "database" | "messages" | "outbound" | "ordering" | "failures" | "retryability";
+// Built-in categories have adapters; any other lowercase name (cache, events, files, emails, ...) is reported by a harness.
+export type KnownObservationCategory = "http" | "database" | "messages" | "outbound" | "ordering" | "failures" | "retryability";
+export type ObservationCategory = KnownObservationCategory | (string & {});
 export type FailureClassification = "candidate-difference" | "baseline-stale" | "missing-observation" | "policy-violation" | "infrastructure-error";
 type EnvironmentReferences = Readonly<Record<string, { readonly fromEnv: string }>>;
 type CommandDefinition = { readonly argv: readonly string[]; readonly workingDirectory?: string; readonly environment?: EnvironmentReferences };
@@ -567,6 +569,12 @@ export async function observeCheckTarget(input: { readonly check: CheckDocument;
   if (check.spec.scenarios.length === 0) return new Map();
   const execution = await executeScenarios(check, input.target, input.repositoryRoot, true);
   return new Map(execution.scenarios.map((scenario) => [scenario.id, { raw: scenario.raw, digest: scenario.observation }]));
+}
+
+// Runs every scenario once on a target and returns normalized values, digests, and observation issues (no baseline needed).
+export async function observeAllScenarios(input: { readonly check: CheckDocument; readonly target: CheckTarget; readonly repositoryRoot: string }): Promise<{ readonly scenarios: readonly { readonly id: string; readonly raw: unknown; readonly digest: DigestNode }[]; readonly issues: readonly { readonly scenario: string; readonly selector: string; readonly message: string }[] }> {
+  const execution = await executeScenarios(input.check, input.target, input.repositoryRoot, true);
+  return { scenarios: execution.scenarios.map((scenario) => ({ id: scenario.id, raw: scenario.raw, digest: scenario.observation })), issues: execution.issues.map(({ scenario, selector, message }) => ({ scenario, selector, message })) };
 }
 
 export function sameDigest(left: DigestNode | undefined, right: DigestNode | undefined): boolean {

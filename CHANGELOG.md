@@ -7,6 +7,9 @@ All notable changes are recorded here. AIR follows the pre-1.0 policy in `docs/v
 - Added `air protect`, one command for people and agents: the first run (`--url`) builds read-only scenarios from an OpenAPI file or the routes in the code, or records a command through `$AIR_PROXY_URL`, and creates a baseline; later runs check the current code and show expected and actual values from a local, gitignored cache. No proxy or framework plugin is required.
 - Added `air agent install`, which writes a managed AIR block to `AGENTS.md` and `CLAUDE.md` and can register the MCP server (`--mcp`), and the `air_protect` MCP tool.
 - `air check run --reveal` now uses locally cached expected values when the legacy service is no longer running.
+- Added agent-written harnesses for behavior HTTP cannot see (events, caches, data, jobs, files, emails): `air harness task` lists what to cover, `air harness new` scaffolds a harness in the command-target contract, and `air harness verify --mutation <patch>` accepts it only if it is stable across runs, input-sensitive, and detects a planted break in a throwaway copy of the code. `air protect` baselines verified harnesses and checks them on every run, and asks for re-verification when a harness changes.
+- Observation categories are open: besides the built-in seven, any lowercase name (`cache`, `events`, `files`, ...) can be declared and compared.
+- `air discover code` reports every database and messaging effect, including those outside detected entry points; agent-mode run state is kept per check.
 - Added `air discover code` (step 4a of source discovery): proposes behavioral seams (HTTP routes, CLI entry points, jobs, consumers) and the database, outbound, and messaging effects behind them in JavaScript/TypeScript, Python, and Go code, scoped by path, symbol, or `--since <git-ref>`. Detection rules are data files; every seam stays `inferred` until AIR executes it.
 
 ## 0.16.0 - 2026-10-22
