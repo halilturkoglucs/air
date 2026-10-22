@@ -24,13 +24,15 @@ export interface CodeSeam {
 }
 export interface CodeSeamReport { readonly apiVersion: "air.dev/code-seams/v0.1"; readonly scope: { readonly path: string; readonly symbol?: string; readonly since?: string }; readonly files: number; readonly seams: readonly CodeSeam[]; readonly effects: readonly (SeamEffect & { readonly file: string })[] }
 
-interface SeamRule { readonly kind: SeamKind; readonly framework: string; readonly pattern: string; readonly method?: number; readonly route?: number; readonly name?: number; readonly defaultMethod?: string; readonly routeFromPath?: string; readonly routePrefix?: string; readonly fileFilter?: string; readonly expand?: readonly string[]; readonly regexRoute?: boolean; readonly methodList?: number }
+interface SeamRule { readonly kind: SeamKind; readonly framework: string; readonly pattern: string; readonly method?: number; readonly route?: number; readonly name?: number; readonly defaultMethod?: string; readonly routeFromPath?: string; readonly routePrefix?: string; readonly fileFilter?: string; readonly expand?: readonly string[]; readonly regexRoute?: boolean; readonly methodList?: number; readonly receiver?: number }
 interface EffectRule { readonly kind: SeamEffect["kind"]; readonly pattern: string; readonly name: number; readonly flags?: string; readonly fileFilter?: string }
 // Prefixes apply to routes declared later in the same file (a controller or router prefix).
 interface PrefixRule { readonly pattern: string; readonly prefix: number; readonly className?: number }
 // Mounts attach a prefix to routes in another file: a module, a dotted module path, a function, or an imported file.
-interface MountRule { readonly pattern: string; readonly target: number; readonly prefix: number; readonly targetKind: "module" | "dotted" | "function" | "import" }
-interface Ecosystem { readonly ecosystem: string; readonly extensions: readonly string[]; readonly lineComment: string; readonly seams: readonly SeamRule[]; readonly effects: readonly EffectRule[]; readonly prefixes?: readonly PrefixRule[]; readonly mounts?: readonly MountRule[]; readonly pathPrefixes?: readonly { readonly file: string; readonly prefix: string }[]; readonly railsRoutes?: boolean }
+interface MountRule { readonly pattern: string; readonly target: number; readonly prefix: number; readonly targetKind: "module" | "dotted" | "function" | "import"; readonly base?: number }
+// Group variables chain prefixes inside a file: v1 := r.Group("/api"); users := v1.Group("/users").
+interface GroupVarRule { readonly pattern: string; readonly variable: number; readonly base: number; readonly path: number }
+interface Ecosystem { readonly ecosystem: string; readonly extensions: readonly string[]; readonly lineComment: string; readonly seams: readonly SeamRule[]; readonly effects: readonly EffectRule[]; readonly prefixes?: readonly PrefixRule[]; readonly mounts?: readonly MountRule[]; readonly pathPrefixes?: readonly { readonly file: string; readonly prefix: string }[]; readonly railsRoutes?: boolean; readonly groupVars?: readonly GroupVarRule[] }
 
 const ECOSYSTEMS = [javascriptRules, pythonRules, goRules, sqlRules, javaRules, mybatisRules, csharpRules, phpRules, rustRules, rubyRules] as unknown as readonly Ecosystem[];
 const SKIP = new Set(["node_modules", ".git", "dist", "build", "out", "vendor", "venv", ".venv", "target", "__pycache__", "coverage", ".next", "graphify-out", ".air"]);
@@ -151,7 +153,10 @@ export async function scanCodeSeams(options: { readonly root: string; readonly p
     const relativeFile = relative(options.root, file).split(sep).join("/");
     const source = stripComments(await readFile(file, "utf8"), ecosystem.lineComment);
     sources.set(relativeFile, source);
-    for (const rule of ecosystem.mounts ?? []) for (const match of source.matchAll(new RegExp(rule.pattern, "gmu"))) mounts.push({ rule, target: match[rule.target]!, prefix: match[rule.prefix] ?? "", file: relativeFile });
+    const groups = new Map<string, { base: string; path: string }>();
+    for (const rule of ecosystem.groupVars ?? []) for (const match of source.matchAll(new RegExp(rule.pattern, "gmu"))) groups.set(match[rule.variable]!, { base: match[rule.base]!, path: match[rule.path] ?? "" });
+    const groupPrefix = (variable: string | undefined, depth = 0): string => { const group = variable ? groups.get(variable) : undefined; return group && depth < 16 ? joinRoute(groupPrefix(group.base, depth + 1), group.path) : ""; };
+    for (const rule of ecosystem.mounts ?? []) for (const match of source.matchAll(new RegExp(rule.pattern, "gmu"))) mounts.push({ rule, target: match[rule.target]!, prefix: joinRoute(rule.base !== undefined ? groupPrefix(match[rule.base]) : "", match[rule.prefix] ?? ""), file: relativeFile });
     // "[controller]" in a class route (ASP.NET) stands for the class name without its Controller suffix.
     const prefixes = (ecosystem.prefixes ?? []).flatMap((rule) => [...source.matchAll(new RegExp(rule.pattern, "gmu"))].map((match) => ({ line: lineOf(source, match.index), prefix: (match[rule.prefix] ?? "").replace("[controller]", rule.className !== undefined ? (match[rule.className] ?? "").replace(/Controller$/u, "") : "[controller]") }))).sort((left, right) => left.line - right.line);
     const filePrefix = (ecosystem.pathPrefixes ?? []).find((item) => new RegExp(item.file, "u").test(relativeFile))?.prefix ?? "";
@@ -170,7 +175,7 @@ export async function scanCodeSeams(options: { readonly root: string; readonly p
         // A method list (axum's get(..).put(..), Laravel's Route::match([...])) yields one seam per method.
         const methods = rule.methodList !== undefined ? [...new Set([...(match[rule.methodList] ?? "").matchAll(/\b(get|post|put|patch|delete|head)\b/giu)].map((item) => item[1]!.toUpperCase()))] : [];
         const method = (rule.method !== undefined ? match[rule.method] : undefined)?.toUpperCase() ?? rule.defaultMethod;
-        const route = routeFromPath ? routeFromPath[1]!.replace(/\[([^[\]/]+)\]/gu, ":$1") || "/" : rule.route !== undefined ? joinRoute(prefixAt(line), `${rule.routePrefix ?? ""}${rule.regexRoute ? fromRegexRoute(match[rule.route] ?? "") : match[rule.route] ?? ""}`) : undefined;
+        const route = routeFromPath ? routeFromPath[1]!.replace(/\[([^[\]/]+)\]/gu, ":$1") || "/" : rule.route !== undefined ? joinRoute(prefixAt(line), rule.receiver !== undefined ? groupPrefix(match[rule.receiver]) : "", `${rule.routePrefix ?? ""}${rule.regexRoute ? fromRegexRoute(match[rule.route] ?? "") : match[rule.route] ?? ""}`) : undefined;
         const name = rule.name !== undefined ? (rule.name === 0 ? relativeFile : match[rule.name]) : undefined;
         // A route that registers a named handler (", pay)") owns that function's effects; an unresolved name owns none.
         const lineText = source.split("\n")[line - 1] ?? "";

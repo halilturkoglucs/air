@@ -16,16 +16,18 @@
     {
       "kind": "http",
       "framework": "gin-echo",
-      "pattern": "\\b\\w+\\.(GET|POST|PUT|PATCH|DELETE|HEAD)\\(\\s*\"(/[^\"]*)\"",
-      "method": 1,
-      "route": 2
+      "pattern": "\\b(\\w+)\\.(GET|POST|PUT|PATCH|DELETE|HEAD)\\(\\s*\"(/[^\"]*)\"",
+      "method": 2,
+      "route": 3,
+      "receiver": 1
     },
     {
       "kind": "http",
       "framework": "chi",
-      "pattern": "\\b\\w+\\.(Get|Post|Put|Patch|Delete|Head)\\(\\s*\"(/[^\"]*)\"",
-      "method": 1,
-      "route": 2
+      "pattern": "\\b(\\w+)\\.(Get|Post|Put|Patch|Delete|Head)\\(\\s*\"(/[^\"]*)\"",
+      "method": 2,
+      "route": 3,
+      "receiver": 1
     },
     {
       "kind": "cli",
@@ -75,10 +77,19 @@
   ],
   "mounts": [
     {
-      "pattern": "\\b(?:\\w+\\.)?(\\w+)\\(\\s*\\w+\\.Group\\(\\s*\"([^\"]*)\"\\s*\\)\\s*\\)",
+      "pattern": "\\b(?:\\w+\\.)?(\\w+)\\(\\s*(\\w+)\\.Group\\(\\s*\"([^\"]*)\"\\s*\\)\\s*\\)",
       "target": 1,
-      "prefix": 2,
+      "base": 2,
+      "prefix": 3,
       "targetKind": "function"
+    }
+  ],
+  "groupVars": [
+    {
+      "pattern": "\\b(\\w+)\\s*:?=\\s*(\\w+)\\.Group\\(\\s*\"([^\"]*)\"\\s*\\)",
+      "variable": 1,
+      "base": 2,
+      "path": 3
     }
   ]
 }
