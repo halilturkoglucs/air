@@ -4,6 +4,7 @@ All notable changes are recorded here. AIR follows the pre-1.0 policy in `docs/v
 
 ## Unreleased
 
+- Narrower product surface: `air --help` leads with the everyday commands (`protect`, `agent install`, `check approve/status/run`, `harness`, `mcp`), then discovery, then `air check` in detail, with the Application IR, compiler, generators, providers, and importers grouped as the legacy toolchain. The README keeps the behavior-check story; the IR reference moved unchanged to `docs/legacy-toolchain.md` and the manual check steps to `docs/manual-check-workflow.md`. No command was removed.
 Measured on public RealWorld implementations (the same 19-endpoint API in five stacks), route recall of `air discover code` went from Express 19, NestJS 16, FastAPI 11, Go/gin 13, Django REST 0 to 19/19 in all five:
 
 - Route prefixes declared away from the route are resolved: Nest `@Controller`, FastAPI `APIRouter(prefix=)`, Flask `Blueprint(url_prefix=)` in the same file, and cross-file mounts (FastAPI `include_router(module.router, prefix=)`, Django `url(..., include("dotted.module"))`, Go `Register(group.Group("/p"))` functions, Express `app.use("/p", importedRouter)`).
