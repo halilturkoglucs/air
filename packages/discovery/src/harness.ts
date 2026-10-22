@@ -50,6 +50,12 @@ export async function verifyHarness(input: { readonly check: CheckDocument; read
   if (digests.length > 1 && digests.every((digest) => sameDigest(digest, digests[0]))) problems.push("every scenario produced the same observation; the harness does not react to its input");
   if (observations[0]!.scenarios.every((scenario) => !scenario.raw || (typeof scenario.raw === "object" && Object.keys(scenario.raw as object).length === 0))) problems.push("the harness reported no observations");
 
+  // Every declared category must carry data somewhere; a category that is always empty is a promise the harness does not keep.
+  for (const category of input.check.spec.observations) {
+    const empty = (value: unknown): boolean => value === undefined || value === null || value === "" || (Array.isArray(value) && value.length === 0) || (typeof value === "object" && value !== null && !Array.isArray(value) && Object.keys(value).length === 0);
+    if (observations[0]!.scenarios.every((scenario) => empty((scenario.raw as Record<string, unknown> | undefined)?.[category]))) problems.push(`category ${category} was never observed (empty in every scenario); observe it or remove it from check.yaml`);
+  }
+
   // Planted change: the same harness run against a deliberately broken copy must see a difference.
   let mutationDetected: boolean | undefined;
   if (input.mutatedRoot) {

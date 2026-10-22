@@ -644,6 +644,27 @@ export async function approveBaselineScenarios(input: { readonly check: CheckDoc
   return baseline;
 }
 
+// Extends a baseline with scenarios newly added to its check (coverage grown with `air protect --add`). Existing
+// digests are kept; only the new scenarios are observed. The check hash is updated so later runs are not stale.
+export async function addBaselineScenarios(input: { readonly check: CheckDocument; readonly policy?: CheckPolicy; readonly baseline: CheckBaseline; readonly target: CheckTarget; readonly repositoryRoot: string; readonly scenarioIds: readonly string[]; readonly reason: string }): Promise<{ readonly baseline: CheckBaseline; readonly observations: ReadonlyMap<string, unknown> }> {
+  const known = new Set(input.baseline.scenarios.map((scenario) => scenario.id));
+  const fresh = input.scenarioIds.filter((id) => !known.has(id));
+  const check = { ...input.check, spec: { ...input.check.spec, scenarios: input.check.spec.scenarios.filter((scenario) => fresh.includes(scenario.id)) } };
+  const execution = fresh.length > 0 ? await executeScenarios(check, input.target, input.repositoryRoot, true) : { scenarios: [], issues: [] };
+  if (execution.issues.length > 0) throw new CheckInputError(execution.issues.map((issue) => `${issue.scenario}${issue.selector}: ${issue.message}`).join(" "));
+  const addedAt = new Date().toISOString();
+  const material = {
+    ...withoutBaselineIdentity(input.baseline) as Omit<CheckBaseline, "baselineId">,
+    createdAt: addedAt,
+    hashes: { ...input.baseline.hashes, check: checkContentHash(input.check), policy: checkContentHash(input.policy ?? DEFAULT_POLICY), normalization: checkContentHash(input.check.spec.normalization ?? []) },
+    scenarios: [...input.baseline.scenarios, ...execution.scenarios.map(({ id, observation }) => ({ id, observation }))],
+    approvals: [...(input.baseline.approvals ?? []), ...fresh.map((scenario) => ({ scenario, reason: input.reason, approvedAt: addedAt, previousBaselineId: input.baseline.baselineId, target: input.target.metadata.name }))],
+  };
+  const baseline: CheckBaseline = { ...material, baselineId: checkContentHash(material) };
+  if (!validateBaseline(baseline)) throw validationError("Extended check baseline", validateBaseline);
+  return { baseline, observations: new Map(execution.scenarios.map((scenario) => [scenario.id, scenario.raw])) };
+}
+
 // Structural differences between two baselines of the same check, e.g. before and after an approval.
 export function diffBaselines(before: CheckBaseline, after: CheckBaseline): readonly CheckMismatch[] {
   const mismatches: CheckMismatch[] = [];

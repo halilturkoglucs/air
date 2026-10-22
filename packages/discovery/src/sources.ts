@@ -171,7 +171,7 @@ export function checkFromOpenApi(spec: unknown, options: { readonly name: string
 
 export interface CoverageReport { readonly total: number; readonly covered: number; readonly operations: readonly { readonly method: string; readonly path: string; readonly sources: readonly string[]; readonly scenarios: readonly string[] }[] }
 
-const templatePattern = (template: string): RegExp => new RegExp(`^${template.split(/(\{[^}]+\}|:[A-Za-z_]\w*)/u).map((part) => (/^(\{[^}]+\}|:[A-Za-z_]\w*)$/u.test(part) ? "[^/]+" : part.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"))).join("")}/?$`, "u");
+export const templatePattern = (template: string): RegExp => new RegExp(`^${template.split(/(\{[^}]+\}|:[A-Za-z_]\w*)/u).map((part) => (/^(\{[^}]+\}|:[A-Za-z_]\w*)$/u.test(part) ? "[^/]+" : part.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"))).join("")}/?$`, "u");
 
 export function checkCoverage(check: CheckDocument, sources: { readonly openapi?: unknown; readonly traces?: TraceMap }): CoverageReport {
   const wanted = new Map<string, { method: string; path: string; sources: Set<string> }>();

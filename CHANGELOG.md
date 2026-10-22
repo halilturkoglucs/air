@@ -4,6 +4,9 @@ All notable changes are recorded here. AIR follows the pre-1.0 policy in `docs/v
 
 ## Unreleased
 
+- `air protect --add --tests` grows coverage from the project's own API tests: AIR finds the test command (npm scripts, pytest, go test, rspec, phpunit, Maven, Gradle, cargo), points base-URL environment variables the tests read at its recording proxy, and appends and baselines only the new requests. `--add -- <command>` and `--add --from-har` work the same way; the previous baseline is kept.
+- `air protect` prints a COVERAGE line (HTTP routes found in the code versus routes exercised) and, when the code stores data, suggests the project's own reset command (npm scripts, Prisma, Rails, Laravel, Django).
+- `air harness verify` rejects harnesses with a declared category that is never observed and accepts repeated `--mutation` patches, each of which must be detected.
 Measured on public RealWorld implementations (the same 19-endpoint API in five stacks), route recall of `air discover code` went from Express 19, NestJS 16, FastAPI 11, Go/gin 13, Django REST 0 to 19/19 in all five:
 
 - Route prefixes declared away from the route are resolved: Nest `@Controller`, FastAPI `APIRouter(prefix=)`, Flask `Blueprint(url_prefix=)` in the same file, and cross-file mounts (FastAPI `include_router(module.router, prefix=)`, Django `url(..., include("dotted.module"))`, Go `Register(group.Group("/p"))` functions, Express `app.use("/p", importedRouter)`).

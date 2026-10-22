@@ -10,8 +10,9 @@ AIR locks what a service observably does, so changes do not alter behavior by ac
 - Before changing a service: if .air/check.json does not exist, make sure the service is running and run
   \`air protect --url http://localhost:<port>\`. AIR builds safe read-only scenarios from an OpenAPI file or
   from the routes in the code and records a baseline. If AIR asks a QUESTION, ask the developer.
-  For richer coverage, add a command that sends realistic requests:
-  \`air protect --url http://localhost:<port> -- sh -c 'BASE_URL=$AIR_PROXY_URL npm test'\`.
+  Then grow coverage until the COVERAGE line is high: \`air protect --add --tests\` runs the project's own
+  API tests through AIR's proxy (base-URL variables such as API_URL point at it), or
+  \`air protect --add -- <command that calls $AIR_PROXY_URL>\` for a request script you write.
 - Read every NOTE after the first run. If most scenarios hit a login wall, ask the developer how to sign in,
   put the session cookie or token in an environment variable, and run
   \`air protect --header Cookie=<ENV_VAR> --rebaseline\` (only the variable name is stored). If the code stores
