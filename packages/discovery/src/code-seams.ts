@@ -89,7 +89,7 @@ export async function scanCodeSeams(options: { readonly root: string; readonly p
         const line = lineOf(source, match.index);
         if (range && (line < range.start || line > range.end)) continue;
         const method = (rule.method !== undefined ? match[rule.method] : undefined)?.toUpperCase() ?? rule.defaultMethod;
-        const route = routeFromPath ? routeFromPath[1]!.replace(/\[([^\]]+)\]/gu, ":$1") || "/" : rule.route !== undefined ? `${rule.routePrefix ?? ""}${match[rule.route] ?? ""}` || "/" : undefined;
+        const route = routeFromPath ? routeFromPath[1]!.replace(/\[([^[\]/]+)\]/gu, ":$1") || "/" : rule.route !== undefined ? `${rule.routePrefix ?? ""}${match[rule.route] ?? ""}` || "/" : undefined;
         const name = rule.name !== undefined ? (rule.name === 0 ? relativeFile : match[rule.name]) : undefined;
         // A route that registers a named handler (", pay)") owns that function's effects; an unresolved name owns none.
         const lineText = source.split("\n")[line - 1] ?? "";
