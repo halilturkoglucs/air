@@ -39,7 +39,7 @@ describe("AIR agent protocol", () => {
       "- creates-book",
       "  /database/rows/0 (3): expected {\"title\":\"Dune\",\"state\":\"created\",\"version\":1,\"owner\":\"alice\"}, got {\"title\":\"Dune\",\"state\":\"draft\",\"version\":2,\"owner\":\"bob\"}",
       "  /http/status: expected 201, got 200",
-      "NEXT edit candidate code only, then rerun `air check run --agent`.",
+      "NEXT fix the code (never the checks) unless the change is intended, then rerun the same AIR command.",
       "",
     ].join("\n"));
     expect(air("check", "run", "--agent", "--reveal").out.split("\n")[0]).toBe("FAIL 0/1 scenarios · 4 differences · fixed 0, new 0 since last run");

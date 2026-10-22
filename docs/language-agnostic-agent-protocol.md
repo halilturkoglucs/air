@@ -74,7 +74,7 @@ FAIL 0/1 scenarios · 4 differences · fixed 2, new 0 since last run
 - creates-book
   /database/rows/0 (3): expected {"state":"created","version":1,...}, got {"state":"draft","version":2,...}
   /http/status: expected 201, got 200
-NEXT edit candidate code only, then rerun `air check run --agent`.
+NEXT fix the code (never the checks) unless the change is intended, then rerun the same AIR command.
 ```
 
 - Output is deterministic: scenarios follow the check order and selectors are sorted. Three or more differences under one parent collapse into that parent with a count.

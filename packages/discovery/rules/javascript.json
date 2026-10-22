@@ -61,9 +61,25 @@
   "effects": [
     {
       "kind": "database",
-      "pattern": "\\b(?:select\\b[\\s\\S]{0,80}?\\bfrom|insert\\s+into|update|delete\\s+from)\\s+[\"`]?([A-Za-z_][\\w.]*)",
+      "pattern": "[\"'`]\\s*(?:SELECT\\b[^\"'`;]{0,200}?\\bFROM|INSERT\\s+INTO|DELETE\\s+FROM)\\s+[`\"\\[]?([A-Za-z_][\\w.]*)",
       "name": 1,
       "flags": "i"
+    },
+    {
+      "kind": "database",
+      "pattern": "[\"'`]\\s*UPDATE\\s+[`\"\\[]?([A-Za-z_][\\w.]*)[`\"\\]]?\\s+SET\\b",
+      "name": 1,
+      "flags": "i"
+    },
+    {
+      "kind": "database",
+      "pattern": "\\.collection\\(\\s*[\"'`]([\\w.-]+)[\"'`]",
+      "name": 1
+    },
+    {
+      "kind": "database",
+      "pattern": "\\bmodel\\(\\s*[\"'`](\\w+)[\"'`]",
+      "name": 1
     },
     {
       "kind": "database",

@@ -133,6 +133,24 @@
         },
         "evidenceCaptureProfile": {
           "$ref": "#/$defs/relativePath"
+        },
+        "headers": {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^[A-Za-z0-9-]{1,64}$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "fromEnv"
+            ],
+            "properties": {
+              "fromEnv": {
+                "$ref": "#/$defs/envName"
+              }
+            }
+          }
         }
       },
       "allOf": [

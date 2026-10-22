@@ -4,6 +4,12 @@ All notable changes are recorded here. AIR follows the pre-1.0 policy in `docs/v
 
 ## Unreleased
 
+From a field trial of `air protect` on a production Next.js and MongoDB service:
+
+- `air protect --reset "<command>"` restores a clean state before each scenario, and `--header <Name>=<ENV_VAR>` signs requests in with a value read from an environment variable (only the name is stored, in the target's new `headers` field). `--rebaseline` re-captures behavior with the new setup and keeps the previous baseline.
+- After its first baseline, `air protect` explains what limits the check: scenarios that only reached a login wall, 5xx responses from missing configuration, and stored data that can make earlier requests change later answers.
+- `air discover code` recognizes MongoDB (driver collections, Mongoose models, pymongo, Go driver) and only treats SQL as SQL when a string literal starts with a statement, which removes false positives from messages such as "Failed to update ...".
+- Clearer agent output: proxy-free scenarios are reported as built from OpenAPI or code, and `NEXT` lines tell agents to rerun the same AIR command.
 ## 0.17.0 - 2026-10-22
 
 - Added `air protect`, one command for people and agents: the first run (`--url`) builds read-only scenarios from an OpenAPI file or the routes in the code, or records a command through `$AIR_PROXY_URL`, and creates a baseline; later runs check the current code and show expected and actual values from a local, gitignored cache. No proxy or framework plugin is required.
