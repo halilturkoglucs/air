@@ -142,7 +142,7 @@ Scenarios can come from wherever a team already is. None of them needs AIR-gener
 - **Spring source code:** `air discover spring ./service` builds an evidence-backed map, then `air check init` turns a reviewed capability into a check.
 - **By hand, for any language:** a target is just a command that reads JSON and prints an observation, or an HTTP base URL. Writing one is usually a short script.
 
-Discovering other codebases directly from source (any language, the whole repository or one part of it) is the next roadmap milestone; see [`docs/roadmap.md`](docs/roadmap.md) §12a.
+Discovering other codebases directly from source (any language, the whole repository or one part of it) is the next roadmap milestone. It ends in a runnable, verified baseline for the code you are about to change, not a code map; see [`docs/roadmap.md`](docs/roadmap.md) §12a.
 
 ### The everyday loop
 
