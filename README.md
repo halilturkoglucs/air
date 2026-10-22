@@ -132,6 +132,18 @@ Continue with the [from-scratch agent verification tutorial](docs/getting-starte
 | Gate AI-written changes in CI | Approved baseline versus the pull request | `air check run --json` exit codes, `air check coverage --fail-under` |
 | Understand an unfamiliar service before changing it | Endpoints and their data, outbound, and messaging effects | `air discover spring`, `air discover traces`, recorded traffic |
 
+### Quick start
+
+```bash
+npm install --global @halilturkoglucs/air
+air agent install                              # once: tells Claude Code, Codex, and other agents how to use AIR
+air protect --url http://localhost:3000        # once, with your service running: builds safe scenarios and a baseline
+# change the code (or ask your agent to), restart the service
+air protect                                    # after every change: PASS, or exactly what changed
+```
+
+No proxy or framework plugin is needed: the first `air protect` builds read-only scenarios from an OpenAPI file in the repository or from the routes it finds in the code, then calls the service directly. For richer coverage, let it record a command that exercises the service, for example your API tests: `air protect --url http://localhost:3000 -- sh -c 'BASE_URL=$AIR_PROXY_URL npm test'`. Differences show expected and actual values; values stay on your machine (`.air/expected.json`, gitignored). Accept an intended change with `air check approve <scenario> --reason "..."`.
+
 ### Ways to start
 
 Scenarios can come from wherever a team already is. None of them needs AIR-generated code or a framework plugin in your service:

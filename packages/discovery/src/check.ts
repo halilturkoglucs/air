@@ -494,7 +494,17 @@ function hashesFor(check: CheckDocument, policy: CheckPolicy, target: CheckTarge
   return { repository: repositoryHash, ...(check.spec.capability.discoveryHash ? { discovery: check.spec.capability.discoveryHash } : {}), check: checkContentHash(check), policy: checkContentHash(policy), normalization: checkContentHash(check.spec.normalization ?? []), target: checkContentHash(target) };
 }
 
-export async function createCheckBaseline(input: { readonly check: CheckDocument; readonly policy?: CheckPolicy; readonly target: CheckTarget; readonly repositoryRoot: string; readonly repositoryHash: string; readonly clean: boolean; readonly allowDirty?: boolean }): Promise<CheckBaseline> {
+type BaselineInput = { readonly check: CheckDocument; readonly policy?: CheckPolicy; readonly target: CheckTarget; readonly repositoryRoot: string; readonly repositoryHash: string; readonly clean: boolean; readonly allowDirty?: boolean };
+
+export async function createCheckBaseline(input: BaselineInput): Promise<CheckBaseline> {
+  return (await createCheckBaselineDetailed(input)).baseline;
+}
+
+// Digest of a normalized observation, comparable with baseline digests (used to validate locally cached values).
+export function observationDigest(normalized: unknown): DigestNode { return summarize(normalized); }
+
+// Same as createCheckBaseline, plus the normalized observations in memory so callers can keep a local, uncommitted value cache.
+export async function createCheckBaselineDetailed(input: BaselineInput & { readonly keepObservations?: boolean }): Promise<{ readonly baseline: CheckBaseline; readonly observations: ReadonlyMap<string, unknown> }> {
   const policy = input.policy ?? DEFAULT_POLICY; const cleanForPolicy = input.clean || input.allowDirty === true;
   const violations = policyViolations(input.check, policy, cleanForPolicy);
   if (violations.length > 0) throw new CheckInputError(violations.join(" "));
@@ -505,13 +515,13 @@ export async function createCheckBaseline(input: { readonly check: CheckDocument
     target: { name: input.target.metadata.name, type: input.target.spec.type },
     scenarios: [] as readonly { readonly id: string; readonly observation: DigestNode }[],
   };
-  const execution = await executeScenarios(input.check, input.target, input.repositoryRoot);
+  const execution = await executeScenarios(input.check, input.target, input.repositoryRoot, input.keepObservations === true);
   const blockingIssues = execution.issues.filter((issue) => issue.kind !== "unmatched" || policy.spec.unmatchedEvidence !== "report");
   if (blockingIssues.length > 0) throw new CheckInputError(blockingIssues.map((issue) => `${issue.scenario}${issue.selector}: ${issue.message}`).join(" "));
-  const completedMaterial = { ...material, scenarios: execution.scenarios };
+  const completedMaterial = { ...material, scenarios: execution.scenarios.map(({ id, observation }) => ({ id, observation })) };
   const baseline: CheckBaseline = { ...completedMaterial, baselineId: checkContentHash(withoutBaselineIdentity(completedMaterial)) };
   if (!validateBaseline(baseline)) throw validationError("Generated check baseline", validateBaseline);
-  return baseline;
+  return { baseline, observations: new Map(execution.scenarios.filter((scenario) => scenario.raw !== undefined).map((scenario) => [scenario.id, scenario.raw])) };
 }
 
 type RunCheckInput = { readonly check: CheckDocument; readonly policy?: CheckPolicy; readonly target: CheckTarget; readonly baseline: CheckBaseline; readonly repositoryRoot: string; readonly repositoryHash: string };

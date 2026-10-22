@@ -3,25 +3,29 @@ import { createInterface } from "node:readline";
 interface CliIo { readonly stdout: (message: string) => void; readonly stderr: (message: string) => void }
 type RunCli = (args: readonly string[], io: CliIo) => Promise<number>;
 
-export const AGENT_INSTRUCTIONS = `AIR agent loop (protocol air.dev/agent/v1)
+export const AGENT_INSTRUCTIONS = `## Behavior checks with AIR (protocol air.dev/agent/v1)
 
-Goal: make the candidate behave exactly like the approved legacy baseline.
+AIR locks what a service observably does, so changes do not alter behavior by accident.
 
-1. Run: air check run --agent --reveal
-   Exit 0 = done. Exit 1 = behavioral differences. Exit 2 = invalid input. Exit 3 = infrastructure failure.
-2. On exit 1, read each "- scenario" block. Every line is a JSON pointer with the
-   expected (legacy) and actual (candidate) value. "(n)" means n differences under that pointer.
-3. Edit candidate code only. Never edit the check, policy, baseline, or legacy target to make a run pass.
-4. Rerun step 1. The header reports how many differences were fixed or are new since the last run.
-5. Lines starting with NOTE or a NEXT line about a stale baseline or policy are harness problems:
-   stop and report them instead of changing the candidate.
-6. Stop on exit 0, or after the repair budget you were given, and report the last header line.
-
-Status without running anything: air check status
-Full machine output: add --json to any command.
+- Before changing a service: if .air/check.json does not exist, make sure the service is running and run
+  \`air protect --url http://localhost:<port>\`. AIR builds safe read-only scenarios from an OpenAPI file or
+  from the routes in the code and records a baseline. If AIR asks a QUESTION, ask the developer.
+  For richer coverage, add a command that sends realistic requests:
+  \`air protect --url http://localhost:<port> -- sh -c 'BASE_URL=$AIR_PROXY_URL npm test'\`.
+- After each change: restart the service and run \`air protect\`.
+  Exit 0 = behavior unchanged. Exit 1 = each "- scenario" block lists pointers with expected and actual
+  values; "(n)" means n differences under that pointer. Exit 2 = setup question. Exit 3 = the service or
+  environment failed, not the behavior.
+- Fix the code unless the difference is intended. If it might be intended, ask the developer, then run
+  \`air check approve <scenario> --reason "<their reason>"\`.
+- Never edit the check, policy, baseline, or anything under .air/ to make a run pass.
+- NOTE lines and a NEXT line about a stale baseline or policy are setup problems: report them instead of
+  changing the code.
+- \`air check status\` shows the last result without running anything.
 `;
 
 const tools = [
+  { name: "air_protect", description: "Protect a running service: the first call (with url) records and baselines it, later calls check the current code against that baseline and return compact differences.", inputSchema: { type: "object", properties: { url: { type: "string", description: "Base URL of the running service, e.g. http://localhost:3000; needed only the first time." }, command: { type: "array", items: { type: "string" }, description: "Optional argv that sends requests to $AIR_PROXY_URL, for richer first-time recording." } }, additionalProperties: false } },
   { name: "air_check_status", description: "Show the check profile and the last run summary. Runs nothing.", inputSchema: { type: "object", properties: {}, additionalProperties: false } },
   { name: "air_check_run", description: "Run the candidate against the approved baseline and return compact differences. Exit 0 means the candidate matches.", inputSchema: { type: "object", properties: { reveal: { type: "boolean", description: "Show expected and actual values for failing scenarios (local only)." }, maxLines: { type: "integer", minimum: 4 } }, additionalProperties: false } },
   { name: "air_check_explain", description: "Explain a saved result.json compactly.", inputSchema: { type: "object", properties: { result: { type: "string" } }, required: ["result"], additionalProperties: false } },
@@ -29,6 +33,7 @@ const tools = [
 ] as const;
 
 function toolArgs(name: string, args: Record<string, unknown>): readonly string[] | undefined {
+  if (name === "air_protect") return ["protect", ...(typeof args.url === "string" ? ["--url", args.url] : []), ...(Array.isArray(args.command) && args.command.every((item) => typeof item === "string") && args.command.length > 0 ? ["--", ...(args.command as string[])] : [])];
   if (name === "air_check_status") return ["check", "status"];
   if (name === "air_check_run") return ["check", "run", "--agent", ...(args.reveal === true ? ["--reveal"] : []), ...(Number.isInteger(args.maxLines) ? ["--max-lines", String(args.maxLines)] : [])];
   if (name === "air_check_explain" && typeof args.result === "string") return ["check", "explain", args.result, "--agent"];

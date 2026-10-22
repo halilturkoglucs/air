@@ -71,7 +71,7 @@ describe("AIR agent protocol", () => {
     const responses = run.stdout.trim().split("\n").map((line) => JSON.parse(line) as { id: number; result?: Record<string, unknown>; error?: { code: number } });
     expect(responses.map((response) => response.id)).toEqual([1, 2, 3, 4]);
     expect(responses[0]!.result).toMatchObject({ serverInfo: { name: "air" }, capabilities: { tools: {} } });
-    expect((responses[1]!.result!.tools as { name: string }[]).map((tool) => tool.name)).toEqual(["air_check_status", "air_check_run", "air_check_explain", "air_check_baseline"]);
+    expect((responses[1]!.result!.tools as { name: string }[]).map((tool) => tool.name)).toEqual(["air_protect", "air_check_status", "air_check_run", "air_check_explain", "air_check_baseline"]);
     expect(responses[2]!.result).toMatchObject({ isError: false, content: [{ type: "text", text: expect.stringContaining("/http/status: expected 201, got 200") }] });
     expect(responses[3]!.error!.code).toBe(-32601);
   }, 30_000);

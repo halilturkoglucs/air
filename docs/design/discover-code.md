@@ -57,6 +57,10 @@ Developers should not have to learn or type this pipeline. A coding agent runs i
 - **Human decisions are phrased as questions.** When AIR needs a human (a `TODO review` scenario input, an unstable field that would need `ignore`, an intended behavior change), the report states the exact question and the command the agent runs once the developer answers, for example `QUESTION orders.total changes on every run; is it derived from time? If yes: air protect --ignore /http/body/total --reason "<answer>"`.
 - **Safe defaults for unattended runs.** `air protect` never baselines unreviewed scenarios, never approves changes, and never adds an `ignore` on its own. Everything it writes is ordinary, reviewable files under `.air/` plus the check files the developer commits.
 
+### Delivered first: `air protect` on existing sources
+
+At the owner's request, the agent-first entry point shipped before steps 4b–4d, built on sources that already work for any HTTP service: an OpenAPI file, routes found by `air discover code` (read-only, parameter-free GET routes only), or an optional recorded command. As 4b–4d land, `air protect` gains richer scenarios and non-HTTP seams without changing how people use it.
+
 ## Everyday flow
 
 What the developer does: run `air agent install` once, then ask their agent for a change as usual.

@@ -24,7 +24,7 @@ import { importPostgres } from "@air/import-postgres";
 import { importOpenApiSource } from "@air/import-openapi";
 import { importNextjs } from "@air/import-nextjs";
 import { importSpring } from "@air/import-spring";
-import { CheckInfrastructureError, CheckInputError, adoptExtractedCapability, createCheckBaseline, discoverSpring, discoveryFromAirCandidate, extractCapability, ingestEvidence, initializeMigrationCheck, loadCheckBaseline, loadCheckPolicy, loadCheckTarget, loadMigrationCheck, mergeDiscoveryBundles, parseCheckResult, readDiscoveryBundle, runMigrationCheckDetailed, observeCheckTarget, approveBaselineScenarios, diffBaselines, checkFromExchanges, exchangesFromHar, recordHttpTraffic, writeRecordedCheck, traceMapFromOtlp, formatTraceMap, scanCodeSeams, formatCodeSeams, checkFromOpenApi, checkCoverage, formatCoverage, type CheckBaseline, sameDigest, buildAgentReport, formatAgentReport, differenceKey, AGENT_PROTOCOL, startWorkbench, validateMigrationCheck, verifyImportedCapability, writeCheckBaseline, writeCheckResult, writeDiscoveryBundle, writeDiscoveryReport, type CheckMismatch, type DiscoveryBundle } from "@air/discovery";
+import { CheckInfrastructureError, CheckInputError, adoptExtractedCapability, createCheckBaseline, discoverSpring, discoveryFromAirCandidate, extractCapability, ingestEvidence, initializeMigrationCheck, loadCheckBaseline, loadCheckPolicy, loadCheckTarget, loadMigrationCheck, mergeDiscoveryBundles, parseCheckResult, readDiscoveryBundle, runMigrationCheckDetailed, observeCheckTarget, approveBaselineScenarios, diffBaselines, checkFromExchanges, exchangesFromHar, recordHttpTraffic, writeRecordedCheck, traceMapFromOtlp, formatTraceMap, createCheckBaselineDetailed, observationDigest, checkFromOpenApi, checkCoverage, formatCoverage, type CheckBaseline, sameDigest, buildAgentReport, formatAgentReport, differenceKey, AGENT_PROTOCOL, startWorkbench, validateMigrationCheck, verifyImportedCapability, writeCheckBaseline, writeCheckResult, writeDiscoveryBundle, writeDiscoveryReport, type CheckMismatch, type CheckDocument, type DiscoveryBundle, scanCodeSeams, formatCodeSeams } from "@air/discovery";
 import { startLanguageServer } from "@air/language-server";
 import { NextjsTargetAdapter, type NextjsTargetOptions } from "@air/target-nextjs";
 import { RustTargetAdapter, type RustTargetOptions } from "@air/target-rust";
@@ -74,6 +74,8 @@ Usage:
   air check diff-baseline <before> <after>    Show behavioral differences between two baselines
   air check init --from-openapi <spec> --output <dir>  Scenario skeletons for every OpenAPI operation
   air check coverage [<check.yaml>] --openapi <spec> | --traces <otlp.json> [--fail-under <percent>]
+  air protect [--url <url> -- <command>]      Record and baseline a running service once; afterwards check every change
+  air agent install [--mcp]                   Add AIR's loop to AGENTS.md / CLAUDE.md (and register MCP)
   air agent instructions                      Print the agent repair loop for AGENTS.md / CLAUDE.md
   air mcp                                     Serve air_check_* tools over MCP stdio
   air validate <file>                         Parse and validate AIR YAML
@@ -1205,6 +1207,17 @@ async function readCheckProfile(root: string): Promise<CheckProfile | undefined>
 // Per-developer run state; AIR_STATE_DIR relocates it (tests, CI) so it never lands in the repository.
 const lastRunPath = (root: string): string => resolve(process.env.AIR_STATE_DIR ?? resolve(root, ".air"), "last-run.json");
 
+// Raw expected values recorded at baseline time, for local --reveal only. Never committed (gitignored by `air protect`).
+const expectedCachePath = (root: string): string => resolve(process.env.AIR_STATE_DIR ?? resolve(root, ".air"), "expected.json");
+async function readExpectedCache(root: string): Promise<Record<string, unknown>> {
+  try { return (JSON.parse(await readFile(expectedCachePath(root), "utf8")) as { scenarios?: Record<string, unknown> }).scenarios ?? {}; } catch { return {}; }
+}
+async function writeExpectedCache(root: string, observations: ReadonlyMap<string, unknown>): Promise<void> {
+  const scenarios = { ...await readExpectedCache(root), ...Object.fromEntries(observations) };
+  await mkdir(dirname(expectedCachePath(root)), { recursive: true });
+  await writeFile(expectedCachePath(root), `${JSON.stringify({ v: 1, scenarios })}\n`, "utf8");
+}
+
 async function readLastRun(root: string): Promise<LastRun | undefined> {
   try { return JSON.parse(await readFile(lastRunPath(root), "utf8")) as LastRun; } catch { return undefined; }
 }
@@ -1328,16 +1341,29 @@ async function checkCommand(args: readonly string[], io: CliIo): Promise<number>
     if (reveal) {
       if (policy.spec.reveal === "deny") throw new CheckInputError("The check policy denies --reveal (reveal: deny).");
       const legacyPath = option("--legacy", "legacy");
-      if (!legacyPath) throw new CheckInputError("--reveal needs the legacy target: pass --legacy or set it in the check profile.");
-      legacyTarget = await loadCheckTarget(legacyPath);
-      if (legacyTarget.spec.evidenceCaptureProfile && policy.spec.reveal !== "allow") throw new CheckInputError("The legacy target uses evidence capture; set `reveal: allow` in the check policy to show its values locally.");
+      // Without --at, a legacy target that is the same file as the candidate is the running service itself: it now
+      // runs the changed code, so values can only come from the local expected-value cache written at baseline time.
+      if (legacyPath && (legacyPath !== targetPath || values.has("--at") || profile?.at)) {
+        legacyTarget = await loadCheckTarget(legacyPath);
+        if (legacyTarget.spec.evidenceCaptureProfile && policy.spec.reveal !== "allow") throw new CheckInputError("The legacy target uses evidence capture; set `reveal: allow` in the check policy to show its values locally.");
+      }
     }
     const { result, observations } = await runMigrationCheckDetailed({ check, baseline, target, policy, repositoryRoot: repository.root, repositoryHash: repository.hash, keepObservations: reveal });
     const path = await writeCheckResult(output, result);
     if (agent) {
       const revealed = new Map<string, { expected: unknown; actual: unknown }>(); const notes: string[] = [];
-      if (legacyTarget && !result.passed) {
-        const failing = result.scenarios.filter((scenario) => !scenario.passed).map((scenario) => scenario.id);
+      if (reveal && !result.passed) {
+        const cache = await readExpectedCache(root);
+        const pending: string[] = [];
+        for (const id of result.scenarios.filter((scenario) => !scenario.passed).map((scenario) => scenario.id)) {
+          const approved = baseline.scenarios.find((scenario) => scenario.id === id)?.observation;
+          if (Object.hasOwn(cache, id) && sameDigest(observationDigest(cache[id]), approved)) revealed.set(id, { expected: cache[id], actual: observations.get(id) });
+          else pending.push(id);
+        }
+        if (pending.length > 0 && !legacyTarget) notes.push(`expected values for ${pending.join(", ")} are unavailable: no matching local cache and no separate legacy target. Differences are still exact; only the values are hidden.`);
+      }
+      if (legacyTarget && !result.passed && reveal) {
+        const failing = result.scenarios.filter((scenario) => !scenario.passed && !revealed.has(scenario.id)).map((scenario) => scenario.id);
         const at = values.get("--at") ?? profile?.at; const target = legacyTarget;
         const observe = (repositoryRoot: string) => observeCheckTarget({ check, target, repositoryRoot, scenarioIds: failing });
         const legacy = at ? await withWorktreeAt({ ref: at, setup: values.get("--at-setup") ?? profile?.atSetup, root: repository.root, create: (worktree) => observe(worktree) }) : await observe(repository.root);
@@ -1538,6 +1564,150 @@ async function checkCoverageCommand(args: readonly string[], io: CliIo): Promise
     const percent = report.total === 0 ? 100 : (report.covered / report.total) * 100;
     return failUnder !== undefined && percent < failUnder ? 1 : 0;
   } catch (error) { io.stderr(`${error instanceof Error ? error.message : String(error)}\n`); return checkFailureCode(error); }
+}
+
+const AIR_GITIGNORE = [".air/runs/", ".air/last-run.json", ".air/expected.json"];
+const OPENAPI_CANDIDATES = ["openapi.yaml", "openapi.yml", "openapi.json", "swagger.yaml", "swagger.yml", "swagger.json", "docs/openapi.yaml", "docs/openapi.json", "api/openapi.yaml"];
+const SAFE_METHODS = new Set(["GET", "HEAD"]);
+
+// Proxy-free scenario source: read-only operations from an OpenAPI file, else parameter-free GET routes from the code.
+async function scenariosWithoutProxy(root: string, name: string): Promise<{ readonly check?: CheckDocument; readonly skipped: number }> {
+  for (const candidate of OPENAPI_CANDIDATES) {
+    let spec: unknown;
+    try { spec = await readSpec(resolve(root, candidate)); } catch { continue; }
+    const { check } = checkFromOpenApi(spec, { name });
+    const safe = check.spec.scenarios.filter((scenario) => scenario.request.kind === "http" && SAFE_METHODS.has(scenario.request.method));
+    const skipped = check.spec.scenarios.length - safe.length;
+    return safe.length > 0 ? { check: { ...check, spec: { ...check.spec, scenarios: safe.map((scenario) => ({ ...scenario, description: scenario.description?.replace("TODO review: ", "From OpenAPI: ") ?? "From OpenAPI" })) } }, skipped } : { skipped };
+  }
+  const seams = (await scanCodeSeams({ root })).seams.filter((seam) => seam.kind === "http" && seam.route);
+  const safe = seams.filter((seam) => (seam.method === "GET" || seam.method === "ANY") && !/[:{<[*]/u.test(seam.route!));
+  const routes = [...new Set(safe.map((seam) => seam.route!))].sort();
+  if (routes.length === 0) return { skipped: seams.length };
+  const ids = new Map<string, number>();
+  const scenarios = routes.map((route) => {
+    const base = `get-${route.toLowerCase().replace(/[^a-z0-9]+/gu, "-").replace(/^-|-$/gu, "") || "root"}`; const count = (ids.get(base) ?? 0) + 1; ids.set(base, count);
+    return { id: count === 1 ? base : `${base}-${count}`, description: `From code: GET ${route}`, request: { kind: "http" as const, method: "GET", path: route } };
+  });
+  return { check: { apiVersion: "air.dev/check/v0.1", kind: "Check", metadata: { name }, spec: { capability: { id: name }, observations: ["http"], scenarios } }, skipped: seams.length - safe.length };
+}
+
+async function ensureGitignore(root: string): Promise<boolean> {
+  const path = resolve(root, ".gitignore"); let current = "";
+  try { current = await readFile(path, "utf8"); } catch { /* created below */ }
+  const missing = AIR_GITIGNORE.filter((line) => !current.split("\n").includes(line));
+  if (missing.length === 0) return false;
+  await writeFile(path, `${current}${current && !current.endsWith("\n") ? "\n" : ""}# AIR local state (values stay on this machine)\n${missing.join("\n")}\n`, "utf8");
+  return true;
+}
+
+// One entry point for people and agents: first run records and baselines a running service, later runs check it.
+async function protectCommand(args: readonly string[], io: CliIo): Promise<number> {
+  const usage = "Usage: air protect [--url <base-url> [--from-har <file> | -- <command that sends requests to $AIR_PROXY_URL>] [--output <dir>]] [--max-lines <n>] [--json]\n";
+  const separator = args.indexOf("--"); const command = separator >= 0 ? args.slice(separator + 1) : [];
+  const parsed = parseFlags(separator >= 0 ? args.slice(0, separator) : args, ["--url", "--from-har", "--output", "--max-lines"], ["--json"]);
+  if (!parsed || parsed.positional.length > 0) { io.stderr(usage); return 2; }
+  const passThrough = [...(parsed.values.has("--max-lines") ? ["--max-lines", parsed.values.get("--max-lines")!] : []), ...(parsed.flags.has("--json") ? ["--json"] : [])];
+  try {
+    const root = projectRoot(); let profile = await readCheckProfile(root);
+    if (!profile) {
+      const url = parsed.values.get("--url");
+      if (!url) {
+        io.stdout("QUESTION AIR is not set up here yet. Which running service should it protect?\nNEXT start the service, then run: air protect --url http://localhost:<port>\n");
+        return 2;
+      }
+      const upstream = new URL(url).toString();
+      const name = `${new URL(upstream).hostname.replace(/[^a-z0-9]+/giu, "-")}-${new URL(upstream).port || "80"}`;
+      let check: CheckDocument | undefined; let note = "";
+      if (command.length === 0 && !parsed.values.has("--from-har")) {
+        // No proxy needed: build read-only scenarios from an OpenAPI file or from routes found in the code.
+        const built = await scenariosWithoutProxy(root, name);
+        if (!built.check) {
+          io.stdout(`QUESTION AIR found no OpenAPI file and no parameter-free GET routes to call safely${built.skipped > 0 ? ` (${built.skipped} route(s) need inputs or change data)` : ""}. What sends this service realistic requests?\nNEXT run: air protect --url ${url} -- <command that calls $AIR_PROXY_URL> (for example: sh -c 'BASE_URL=$AIR_PROXY_URL npm test'), or air protect --url ${url} --from-har <file>.\n`);
+          return 2;
+        }
+        check = built.check;
+        if (built.skipped > 0) note = `NOTE ${built.skipped} route(s) that need inputs or change data were not called. Add them later with a recorded run (air protect --url ${url} -- <command>) or by editing the check file.\n`;
+      }
+      let exchanges: Parameters<typeof checkFromExchanges>[0] = [];
+      if (check) { /* built above */ }
+      else if (parsed.values.has("--from-har")) exchanges = exchangesFromHar(JSON.parse(await readFile(resolve(parsed.values.get("--from-har")!), "utf8")), upstream);
+      else {
+        const controller = new AbortController(); let commandExit = 0; let commandTail = "";
+        const recording = recordHttpTraffic({ upstream, signal: controller.signal, onListening: (proxy) => {
+          const [program, ...programArgs] = command;
+          const child = spawn(program!, programArgs, { cwd: process.cwd(), env: { ...process.env, AIR_PROXY_URL: proxy }, shell: false, stdio: ["ignore", "pipe", "pipe"] });
+          const keep = (chunk: Buffer): void => { commandTail = `${commandTail}${chunk.toString()}`.slice(-2000); };
+          child.stdout.on("data", keep); child.stderr.on("data", keep);
+          child.once("error", (error) => { commandExit = 127; commandTail = error.message; controller.abort(); });
+          child.once("close", (code) => { commandExit = code ?? 1; controller.abort(); });
+        } });
+        exchanges = await recording;
+        if (commandExit !== 0) io.stderr(`NOTE the traffic command exited ${commandExit}; recorded what it sent. Last output: ${commandTail.trim().split("\n").slice(-2).join(" | ")}\n`);
+        if (exchanges.length === 0) throw new CheckInputError("The command sent no requests through $AIR_PROXY_URL. Point its base URL at AIR_PROXY_URL, e.g. sh -c 'BASE_URL=$AIR_PROXY_URL npm test'.");
+      }
+      const output = resolve(parsed.values.get("--output") ?? "air-checks");
+      let skipped = 0;
+      if (!check) ({ check, skipped } = checkFromExchanges(exchanges, { name }));
+      const paths = await writeRecordedCheck(output, check, upstream);
+      if (note) io.stderr(note);
+      const policyPath = resolve(output, "policy.yaml");
+      await writeFile(policyPath, "apiVersion: air.dev/check-policy/v0.1\nkind: CheckPolicy\nmetadata: { name: air-protect }\nspec:\n  allowedNormalizations: [ignore, typed-token, unordered-array, rename, internal-boundary]\n  # The baseline comes from the running service, not from a committed tree.\n  requireCleanBaseline: false\n", { encoding: "utf8", flag: "wx" });
+      profile = { check: relative(root, paths.check), policy: relative(root, policyPath), baseline: relative(root, resolve(output, "baseline")), legacy: relative(root, paths.target), candidate: relative(root, paths.target), output: ".air/runs" };
+      await mkdir(resolve(root, ".air"), { recursive: true });
+      await writeFile(resolve(root, ".air/check.json"), `${JSON.stringify(profile, null, 2)}\n`, "utf8");
+      if (await ensureGitignore(root)) io.stderr("NOTE added AIR's local state (.air/runs, last-run, expected values) to .gitignore.\n");
+      io.stderr(`Recorded ${check.spec.scenarios.length} scenario(s)${skipped > 0 ? ` (skipped ${skipped} non-JSON or static)` : ""}.\n`);
+    }
+    let baselineExists = true;
+    try { await stat(resolve(root, profile.baseline, "baseline.json")); } catch { baselineExists = false; }
+    if (!baselineExists) {
+      const repository = gitRepositoryState();
+      const [check, target, policy] = await Promise.all([loadMigrationCheck(resolve(root, profile.check)), loadCheckTarget(resolve(root, profile.legacy)), loadCheckPolicy(profile.policy ? resolve(root, profile.policy) : undefined)]);
+      const { baseline, observations } = await createCheckBaselineDetailed({ check, target, policy, repositoryRoot: repository.root, repositoryHash: repository.hash, clean: repository.clean, allowDirty: true, keepObservations: true });
+      await writeCheckBaseline(resolve(root, profile.baseline), baseline);
+      await writeExpectedCache(root, observations);
+      io.stdout(`PROTECTED ${baseline.scenarios.length} scenario(s) (baseline ${baseline.baselineId.slice(0, 12)}). Commit ${dirname(profile.check)}/ and .air/check.json.\nNEXT change the code, restart the service, then run \`air protect\`.\n`);
+      return 0;
+    }
+    return checkCommand(["run", "--agent", "--reveal", ...passThrough], io);
+  } catch (error) {
+    io.stderr(`${error instanceof Error && "code" in error && error.code === "EEXIST" ? "AIR files already exist in the output directory; remove them or pass --output." : error instanceof Error ? error.message.split("\n")[0] : String(error)}\n`);
+    return checkFailureCode(error);
+  }
+}
+
+const AGENT_BLOCK_START = "<!-- AIR:START (managed by `air agent install`; edits inside are replaced) -->";
+const AGENT_BLOCK_END = "<!-- AIR:END -->";
+
+async function agentInstallCommand(args: readonly string[], io: CliIo): Promise<number> {
+  const parsed = parseFlags(args, [], ["--mcp"]);
+  if (!parsed || parsed.positional.length > 0) { io.stderr("Usage: air agent install [--mcp]\n"); return 2; }
+  const root = projectRoot();
+  const block = `${AGENT_BLOCK_START}\n${AGENT_INSTRUCTIONS.trimEnd()}\n${AGENT_BLOCK_END}\n`;
+  const write = async (name: string): Promise<string> => {
+    const path = resolve(root, name); let current = "";
+    try { current = await readFile(path, "utf8"); } catch { /* new file */ }
+    const pattern = /<!-- AIR:START[^\n]*-->[\s\S]*?<!-- AIR:END -->\n?/u;
+    const next = pattern.test(current) ? current.replace(pattern, block) : `${current}${current && !current.endsWith("\n") ? "\n" : ""}${current ? "\n" : ""}${block}`;
+    if (next === current) return `${name}: already up to date`;
+    await writeFile(path, next, "utf8"); return `${name}: ${current ? "updated" : "created"}`;
+  };
+  const results = [await write("AGENTS.md")];
+  let claude = ""; try { claude = await readFile(resolve(root, "CLAUDE.md"), "utf8"); } catch { /* none */ }
+  // A CLAUDE.md that already imports AGENTS.md gets the block through the import.
+  results.push(claude.includes("@AGENTS.md") ? "CLAUDE.md: imports AGENTS.md" : await write("CLAUDE.md"));
+  const registrations: string[] = [];
+  for (const [cli, argv] of [["claude", ["mcp", "add", "air", "--", "air", "mcp"]], ["codex", ["mcp", "add", "air", "--", "air", "mcp"]]] as const) {
+    const available = spawnSync(cli, ["--version"], { encoding: "utf8", shell: false }).status === 0;
+    if (!available) continue;
+    if (parsed.flags.has("--mcp")) {
+      const run = spawnSync(cli, argv, { cwd: root, encoding: "utf8", shell: false });
+      registrations.push(`${cli}: ${run.status === 0 ? "MCP server registered" : `registration failed (${(run.stderr || run.stdout).trim().split("\n")[0]})`}`);
+    } else registrations.push(`${cli}: run \`${cli} ${argv.join(" ")}\` or rerun with --mcp`);
+  }
+  io.stdout(`${[...results, ...registrations].join("\n")}\nNEXT ask your coding agent for a change; it will run \`air protect\` before and after.\n`);
+  return 0;
 }
 
 async function verify(args: readonly string[], io: CliIo): Promise<number> {
@@ -2301,6 +2471,8 @@ export async function runCli(args: readonly string[], io: CliIo = defaultIo): Pr
   if (command === "check") return checkCommand(args.slice(1), io);
   if (command === "mcp" && args.length === 1) return serveMcp(runCli, VERSION);
   if (command === "agent" && args[1] === "instructions" && args.length === 2) { io.stdout(AGENT_INSTRUCTIONS); return 0; }
+  if (command === "agent" && args[1] === "install") return agentInstallCommand(args.slice(2), io);
+  if (command === "protect") return protectCommand(args.slice(1), io);
   if (command === "compile") return compile(args.slice(1), io);
   if (command === "compose") return composeSystem(args.slice(1), io);
   if (command === "dev") return devSystem(args.slice(1), io);
