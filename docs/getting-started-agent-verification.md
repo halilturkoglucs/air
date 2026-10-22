@@ -25,7 +25,7 @@ You need:
 Install AIR, then clone the repository for the tutorial fixtures:
 
 ```bash
-npm install --global @halilturkoglucs/air@0.16.0
+npm install --global @halilturkoglucs/air@0.17.0
 git clone https://github.com/halilturkoglucs/air.git
 cd air
 air --version

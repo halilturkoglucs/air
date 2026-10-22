@@ -87,7 +87,7 @@ AIR CLI v0.13 accepts application documents from v0.1 through v0.10, System docu
 Install AIR v0.13 with Node.js 22 or newer, then clone the repository for the included example files:
 
 ```bash
-npm install --global @halilturkoglucs/air@0.16.0
+npm install --global @halilturkoglucs/air@0.17.0
 git clone https://github.com/halilturkoglucs/air.git
 cd air
 air --version
@@ -190,7 +190,7 @@ AIR is not a general correctness oracle, fuzzy similarity scorer, load tester, o
 The v0.13 package also preserves the discovery, AIR IR, compiler, and conformance workflows:
 
 ```bash
-npm install --global @halilturkoglucs/air@0.16.0
+npm install --global @halilturkoglucs/air@0.17.0
 # or: brew install halilturkoglucs/tap/air-ir
 
 # Create an evidence-backed map of a Spring service (Java 17+).
@@ -224,7 +224,7 @@ External discovery calibration reports are available for the large archived [Net
 Provider and deployment integrations use the public, versioned SDK:
 
 ```bash
-npm install @halilturkoglucs/air-plugin-sdk@0.16.0
+npm install @halilturkoglucs/air-plugin-sdk@0.17.0
 ```
 
 Implement `AirProviderPlugin` for brokers, caches, or databases, or `AirDeployerPlugin` for deployment profiles. Export the implementation through an `AirPluginModule`, set `apiVersion` to `AIR_PLUGIN_API_VERSION`, and declare an immutable plugin `id` and `version`. Deployment documents must name the plugin explicitly and lock that version; AIR does not discover or execute arbitrary installed packages.

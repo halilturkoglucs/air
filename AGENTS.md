@@ -76,4 +76,4 @@ Any agent can stop at any time. State lives in Git, in `pnpm benchmark:status`, 
 ### Current work
 
 - v0.16.0 (milestones 2 and 3 of `docs/roadmap.md` §12a) is tagged and released through `release.yml`; the npm CLI tarball for 0.15.0 never appeared on the registry even though publish succeeded, so 0.16.0 supersedes it.
-- Milestone 4 (`docs/design/discover-code.md`): 4a is merged. PR #47 (`feat/protect`) adds `air protect`, `air agent install`, open observation categories, and agent-written harnesses verified by AIR (`air harness task|new|verify --mutation`), replacing most of the planned per-language parsers. Next after it merges: release v0.17.0.
+- v0.17.0 ships `air protect`, `air agent install`, `air discover code`, open observation categories, and AIR-verified harnesses (release PR `chore/release-0.17.0`; tag `v0.17.0` on its merge commit). Next: real-world trials of `air protect` on existing services, then milestone 5 (`ui` observations) and the developer-experience items in `docs/roadmap.md` §12a.

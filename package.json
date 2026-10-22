@@ -1,6 +1,6 @@
 {
   "name": "air",
-  "version": "0.16.0",
+  "version": "0.17.0",
   "private": true,
   "description": "A model-neutral verification layer for proving what changed in agent-written migrations.",
   "license": "Apache-2.0",

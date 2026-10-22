@@ -56,8 +56,8 @@ air --version
 air --help
 ```
 
-The current public release is `0.16.0`. For a reproducible installation, use
-`npm install --global @halilturkoglucs/air@0.16.0`.
+The current public release is `0.17.0`. For a reproducible installation, use
+`npm install --global @halilturkoglucs/air@0.17.0`.
 
 ## What can I use it for?
 
