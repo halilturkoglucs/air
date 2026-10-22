@@ -2,20 +2,21 @@
 
 This paired benchmark asks the same pinned coding model to replace three capabilities. The control arm receives ordinary tests. The AIR arm receives the same inputs plus `air check` differences after each repair round. A hidden AIR suite scores both arms.
 
-Suite v1.2 pins two model profiles, each run through its own coding agent: GPT-6 Astra via Codex CLI and Claude Sonnet 5.5 via Claude Code, both at medium reasoning. Each profile runs three slices, three trials per arm, and three repair rounds: 18 isolated runs per model. Results apply only to the named model, suite, commit, and environment. They are not a universal claim about every LLM or migration. A model's scorecard is published only when its AIR arm beats its control arm on pass@3, or ties on pass@3 with fewer escaped defects.
+Suite v1.3 pins Claude Sonnet 5.5 via Claude Code at medium reasoning. The runner is agent-neutral (a Codex CLI adapter is included), and each pinned profile runs three slices, three trials per arm, and three repair rounds: 18 isolated runs per model. Results apply only to the named model, suite, commit, and environment. They are not a universal claim about every LLM or migration. A model's scorecard is published only when its AIR arm beats its control arm on pass@3, or ties on pass@3 with fewer escaped defects.
 
 ## Feedback boundary
 
-AIR check results store digests, not payloads. For the AIR arm, the harness re-runs the legacy oracle and the candidate on the **feedback** scenarios only. Each mismatch is shown with the reviewed expected value and the actual value, as a developer with local legacy access would see them. Evaluation adds held-out scenarios, such as idempotent replay, that neither arm ever sees.
+AIR check results store digests, not payloads. For the AIR arm, the harness re-runs the legacy oracle and the candidate on the **feedback** scenarios only. Each difference is shown with the reviewed expected value and the actual value, as a developer with local legacy access would see them. Sibling differences collapse into their parent and each scenario is capped at eight lines to keep tokens down.
 
-Suite v1.0 sent digests only. The task text does not name contract strings such as outbound operation names, so neither arm could recover them: 0 of 12 completed runs passed. Those runs are archived locally under `archive/v1.0.0/` and are not published.
+Feedback covers every behavior once. Evaluation re-runs those scenarios plus one **held-out variant** per behavior with new identifiers, amounts, principals, and data. Neither arm ever sees the variants, so they measure whether a fix generalizes rather than whether it memorized one example.
+
+Earlier suites are archived locally and not published. v1.0 sent digests only, so neither arm could recover unnamed contract strings (0 of 12 runs passed). v1.2 held out whole behaviors whose exact strings no input revealed, and its ledger ordinary test asserted status 200 while the legacy system returns 201; v1.3 fixes both.
 
 ## Reproduce
 
 ```bash
 pnpm build
 pnpm benchmark:status          # offline progress, tokens spent, resume commands
-pnpm benchmark:llm -- --model gpt-6-astra
 pnpm benchmark:llm -- --model claude-sonnet-5-5
 pnpm benchmark:merge
 pnpm benchmark:verify
@@ -34,7 +35,7 @@ For concurrent local execution, run one `--slice` per process with a distinct `-
 - tests green but behavior wrong: ordinary tests passed in the final round while the hidden suite failed
 - fully correct migrations and escaped defects
 - scenario results grouped by HTTP, database, messages, outbound calls, ordering, rollback, idempotency, authorization, filtering, and pagination
-- repair rounds, duration, build failures, and token counts when the agent exposes them
+- repair rounds, hidden scenarios passed after each round, duration, build failures, and token counts when the agent exposes them
 - bounded infrastructure retries, which do not consume repair rounds and restore the pre-attempt candidate before retrying
 
 Runtime throughput remains documented separately in [`docs/benchmarking.md`](../../docs/benchmarking.md). This benchmark measures verification lift, not generated-runtime speed.

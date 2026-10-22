@@ -8,48 +8,32 @@ spec:
     - id: lists-owned-books
       request:
         kind: command
-        input:
-          operation: list
-          principal: { id: user-1, role: student }
-          genre: science-fiction
-          offset: 0
-          limit: 2
-          books:
-            - { id: b1, ownerId: user-1, title: Dune, genre: science-fiction }
-            - { id: b2, ownerId: user-2, title: Foundation, genre: science-fiction }
-            - { id: b3, ownerId: user-1, title: Kindred, genre: science-fiction }
+        input: { operation: list, principal: { id: user-1, role: student }, genre: science-fiction, offset: 0, limit: 2, books: [{ id: b1, ownerId: user-1, title: Dune, genre: science-fiction }, { id: b2, ownerId: user-2, title: Foundation, genre: science-fiction }, { id: b3, ownerId: user-1, title: Kindred, genre: science-fiction }] }
     - id: forbids-foreign-delete
       request:
         kind: command
-        input:
-          operation: delete
-          principal: { id: user-1, role: student }
-          bookId: b2
-          books:
-            - { id: b1, ownerId: user-1, title: Dune, genre: science-fiction }
-            - { id: b2, ownerId: user-2, title: Foundation, genre: science-fiction }
+        input: { operation: delete, principal: { id: user-1, role: student }, bookId: b2, books: [{ id: b1, ownerId: user-1, title: Dune, genre: science-fiction }, { id: b2, ownerId: user-2, title: Foundation, genre: science-fiction }, { id: b3, ownerId: user-1, title: Kindred, genre: science-fiction }] }
     - id: returns-ordered-page
       request:
         kind: command
-        input:
-          operation: list
-          principal: { id: admin-1, role: librarian }
-          genre: science-fiction
-          offset: 1
-          limit: 2
-          books:
-            - { id: b3, ownerId: user-1, title: Kindred, genre: science-fiction }
-            - { id: b4, ownerId: user-3, title: Beloved, genre: literary }
-            - { id: b2, ownerId: user-2, title: Foundation, genre: science-fiction }
-            - { id: b1, ownerId: user-1, title: Dune, genre: science-fiction }
-            - { id: b5, ownerId: user-3, title: Ancillary Justice, genre: science-fiction }
+        input: { operation: list, principal: { id: admin-1, role: librarian }, genre: science-fiction, offset: 1, limit: 2, books: [{ id: b3, ownerId: user-1, title: Kindred, genre: science-fiction }, { id: b4, ownerId: user-3, title: Beloved, genre: literary }, { id: b2, ownerId: user-2, title: Foundation, genre: science-fiction }, { id: b1, ownerId: user-1, title: Dune, genre: science-fiction }, { id: b5, ownerId: user-3, title: Ancillary Justice, genre: science-fiction }] }
     - id: allows-owner-delete
       request:
         kind: command
-        input:
-          operation: delete
-          principal: { id: user-1, role: student }
-          bookId: b1
-          books:
-            - { id: b1, ownerId: user-1, title: Dune, genre: science-fiction }
-            - { id: b2, ownerId: user-2, title: Foundation, genre: science-fiction }
+        input: { operation: delete, principal: { id: user-1, role: student }, bookId: b1, books: [{ id: b1, ownerId: user-1, title: Dune, genre: science-fiction }, { id: b2, ownerId: user-2, title: Foundation, genre: science-fiction }, { id: b3, ownerId: user-1, title: Kindred, genre: science-fiction }] }
+    - id: lists-owned-books-holdout
+      request:
+        kind: command
+        input: { operation: list, principal: { id: user-7, role: student }, genre: fantasy, offset: 0, limit: 3, books: [{ id: c4, ownerId: user-7, title: Piranesi, genre: fantasy }, { id: c1, ownerId: user-8, title: Earthsea, genre: fantasy }, { id: c3, ownerId: user-7, title: Middlemarch, genre: literary }, { id: c2, ownerId: user-9, title: Gormenghast, genre: fantasy }, { id: c5, ownerId: user-8, title: Circe, genre: fantasy }] }
+    - id: forbids-foreign-delete-holdout
+      request:
+        kind: command
+        input: { operation: delete, principal: { id: user-7, role: student }, bookId: c1, books: [{ id: c4, ownerId: user-7, title: Piranesi, genre: fantasy }, { id: c1, ownerId: user-8, title: Earthsea, genre: fantasy }, { id: c3, ownerId: user-7, title: Middlemarch, genre: literary }, { id: c2, ownerId: user-9, title: Gormenghast, genre: fantasy }, { id: c5, ownerId: user-8, title: Circe, genre: fantasy }] }
+    - id: returns-ordered-page-holdout
+      request:
+        kind: command
+        input: { operation: list, principal: { id: admin-2, role: librarian }, genre: fantasy, offset: 0, limit: 3, books: [{ id: c4, ownerId: user-7, title: Piranesi, genre: fantasy }, { id: c1, ownerId: user-8, title: Earthsea, genre: fantasy }, { id: c3, ownerId: user-7, title: Middlemarch, genre: literary }, { id: c2, ownerId: user-9, title: Gormenghast, genre: fantasy }, { id: c5, ownerId: user-8, title: Circe, genre: fantasy }] }
+    - id: allows-owner-delete-holdout
+      request:
+        kind: command
+        input: { operation: delete, principal: { id: user-7, role: student }, bookId: c4, books: [{ id: c4, ownerId: user-7, title: Piranesi, genre: fantasy }, { id: c1, ownerId: user-8, title: Earthsea, genre: fantasy }, { id: c3, ownerId: user-7, title: Middlemarch, genre: literary }, { id: c2, ownerId: user-9, title: Gormenghast, genre: fantasy }, { id: c5, ownerId: user-8, title: Circe, genre: fantasy }] }

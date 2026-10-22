@@ -21,3 +21,19 @@ spec:
       request:
         kind: command
         input: { transferId: transfer-4, idempotencyKey: key-4, fromId: alice, toId: bob, fromBalance: 100, toBalance: 20, amount: 30, fromVersion: 4, toVersion: 2, conflict: true }
+    - id: moves-funds-atomically-holdout
+      request:
+        kind: command
+        input: { transferId: transfer-5, idempotencyKey: key-5, fromId: carol, toId: dave, fromBalance: 250, toBalance: 0, amount: 75, fromVersion: 9, toVersion: 1 }
+    - id: rolls-back-insufficient-funds-holdout
+      request:
+        kind: command
+        input: { transferId: transfer-6, idempotencyKey: key-6, fromId: carol, toId: dave, fromBalance: 74, toBalance: 0, amount: 75, fromVersion: 9, toVersion: 1 }
+    - id: replays-transfer-holdout
+      request:
+        kind: command
+        input: { transferId: transfer-7, idempotencyKey: key-7, fromId: carol, toId: dave, fromBalance: 250, toBalance: 0, amount: 75, fromVersion: 9, toVersion: 1, replay: true }
+    - id: rejects-version-conflict-holdout
+      request:
+        kind: command
+        input: { transferId: transfer-8, idempotencyKey: key-8, fromId: carol, toId: dave, fromBalance: 250, toBalance: 0, amount: 75, fromVersion: 9, toVersion: 1, conflict: true }

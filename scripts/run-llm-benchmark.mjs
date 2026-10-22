@@ -95,7 +95,9 @@ for (const target of targets) {
   const sliceRoot = resolve(benchmarkRoot, "slices", target.slice.id);
   const task = await readFile(resolve(sliceRoot, "task.md"), "utf8");
   const starterHash = await sha256File(resolve(sliceRoot, "workspace/candidate.mjs"));
-  const basePrompt = `${task}\n\nBenchmark rules:\n- Work only inside this directory.\n- Modify candidate.mjs.\n- Run npm test.\n- Do not inspect Git history, parent directories, environment variables, or network resources.\n- Finish with a concise change summary.\n`;
+  const ordinaryTest = await readFile(resolve(sliceRoot, "workspace/ordinary.test.mjs"), "utf8");
+  // Inlining the test saves the agent turns it would otherwise spend listing and reading files.
+  const basePrompt = `${task}\n\n\`ordinary.test.mjs\`:\n\`\`\`js\n${ordinaryTest}\`\`\`\n\nBenchmark rules:\n- Work only inside this directory. The files you need are shown in this prompt; do not list or re-read them.\n- Edit candidate.mjs with the Edit or Write tool. Use Bash only for \`npm test\` or \`node candidate.mjs\`.\n- Run npm test before finishing.\n- Do not inspect Git history, parent directories, environment variables, or network resources.\n- Finish with one sentence.\n`;
   let state;
   try {
     state = JSON.parse(await readFile(checkpointPath, "utf8"));
@@ -140,7 +142,8 @@ for (const target of targets) {
   }
 
   for (let round = state.nextRound; round <= suite.budget.repairRounds; round += 1) {
-    const prompt = round === 1 ? basePrompt : `${basePrompt}\nThis is repair round ${round} of ${suite.budget.repairRounds}. The current files contain your previous attempt.\n\nPrevious verification feedback:\n${state.previousFeedback}\n`;
+    const current = `\nCurrent \`candidate.mjs\`:\n\`\`\`js\n${await readFile(resolve(workspace, "candidate.mjs"), "utf8")}\`\`\`\n`;
+    const prompt = round === 1 ? `${basePrompt}${current}` : `${basePrompt}${current}\nThis is repair round ${round} of ${suite.budget.repairRounds}; the candidate above is your previous attempt.\n\nPrevious verification feedback:\n${state.previousFeedback}\n`;
 
     if (state.phase !== "verify") {
       await cp(resolve(workspace, "candidate.mjs"), beforeRoundPath);
@@ -192,12 +195,13 @@ for (const target of targets) {
     state.ordinaryTestsPassed = ordinary.code === 0;
     state.hiddenResult = await evaluateCandidate(target.slice, resolve(workspace, "candidate.mjs"), "evaluation");
     if (round === 1) state.passAt1 = state.hiddenResult.passed;
+    state.hiddenScenariosByRound = [...(state.hiddenScenariosByRound ?? []), state.hiddenResult.scenarios.filter((scenario) => scenario.passed).length];
     let airFeedback = "";
     if (target.arm === "air") {
       const feedbackResult = await evaluateCandidate(target.slice, resolve(workspace, "candidate.mjs"), "feedback");
       airFeedback = `\n\n${explainResult(feedbackResult, await feedbackValues(target.slice, resolve(workspace, "candidate.mjs")))}`;
     }
-    state.previousFeedback = `Ordinary test exit ${ordinary.code}.\n${ordinary.stdout}${ordinary.stderr}${airFeedback}`.trim();
+    state.previousFeedback = `${ordinary.code === 0 ? "npm test: pass." : `npm test: FAIL (exit ${ordinary.code}).\n${`${ordinary.stdout}${ordinary.stderr}`.slice(-3000)}`}${airFeedback}`.trim();
     state.transcriptParts.push(JSON.stringify({ kind: "ordinary-tests", round, exitCode: ordinary.code, stdout: ordinary.stdout, stderr: ordinary.stderr }));
     if (target.arm === "air") state.transcriptParts.push(JSON.stringify({ kind: "air-feedback", round, text: airFeedback.trim() }));
     state.durationMs += Date.now() - verifyStartedAt;
@@ -234,7 +238,7 @@ for (const target of targets) {
       promptSha256: sha256(basePrompt),
       starterSha256: starterHash,
     },
-    measurements: measurementFromResult(target.slice, state.hiddenResult, state.roundsUsed, state.passAt1, state.ordinaryTestsPassed, state.buildFailures, state.infrastructureRetries, state.durationMs, usage),
+    measurements: { ...measurementFromResult(target.slice, state.hiddenResult, state.roundsUsed, state.passAt1, state.ordinaryTestsPassed, state.buildFailures, state.infrastructureRetries, state.durationMs, usage), hiddenScenariosByRound: state.hiddenScenariosByRound ?? [] },
     artifacts: {
       patch: { path: relative(benchmarkRoot, patchPath), sha256: await sha256File(patchPath) },
       transcript: { path: relative(benchmarkRoot, transcriptPath), sha256: await sha256File(transcriptPath) },

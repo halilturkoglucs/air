@@ -13,3 +13,7 @@ spec:
       request:
         kind: command
         input: { operation: create, title: Rejected report, documentId: 22222222-2222-4222-8222-222222222222, timestamp: "2026-10-21T10:01:00.000Z", vendorStatus: 503, idempotencyKey: create-2 }
+    - id: replays-idempotently
+      request:
+        kind: command
+        input: { operation: create, title: Existing report, documentId: 33333333-3333-4333-8333-333333333333, timestamp: "2026-10-21T10:02:00.000Z", vendorStatus: 200, idempotencyKey: create-3, replay: true }

@@ -13,3 +13,11 @@ spec:
       request:
         kind: command
         input: { transferId: transfer-2, idempotencyKey: key-2, fromId: alice, toId: bob, fromBalance: 10, toBalance: 20, amount: 30, fromVersion: 4, toVersion: 2 }
+    - id: replays-transfer
+      request:
+        kind: command
+        input: { transferId: transfer-3, idempotencyKey: key-3, fromId: alice, toId: bob, fromBalance: 100, toBalance: 20, amount: 30, fromVersion: 4, toVersion: 2, replay: true }
+    - id: rejects-version-conflict
+      request:
+        kind: command
+        input: { transferId: transfer-4, idempotencyKey: key-4, fromId: alice, toId: bob, fromBalance: 100, toBalance: 20, amount: 30, fromVersion: 4, toVersion: 2, conflict: true }

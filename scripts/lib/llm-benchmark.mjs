@@ -230,7 +230,7 @@ function renderModelSection(evidence, labels, withHeading) {
   const categoryRows = categories.map((category) => `| ${category} | ${control.mismatchesByCategory[category] ?? 0} | ${air.mismatchesByCategory[category] ?? 0} |`).join("\n");
   return `${withHeading ? `### ${model}\n\n` : ""}${badge("control-pass-at-3", "LLM alone pass@3")} ${badge("air-pass-at-3", "LLM + AIR pass@3")} ${badge("escaped-defects", "Escaped defects")}
 
-> **Same model. Same task. Same 3-round repair budget.** With AIR feedback, ${model} shipped **${air.passAt3}/${air.total}** behaviorally correct migrations, compared with **${control.passAt3}/${control.total}** on ordinary tests alone. Escaped defects: **${control.escapedDefects} → ${air.escapedDefects}**.
+> **Same model. Same task. Same 3-round repair budget.** With AIR feedback, ${model} passed **${percent(air.scenarioPassRate)}** of hidden behavioral scenarios, compared with **${percent(control.scenarioPassRate)}** on ordinary tests alone. Escaped defects: **${control.escapedDefects} → ${air.escapedDefects}**. Fully correct migrations: **${air.passAt3}/${air.total}** vs ${control.passAt3}/${control.total}.
 
 | Metric | LLM alone | LLM + AIR | Lift |
 | --- | ---: | ---: | ---: |
@@ -352,13 +352,24 @@ const shown = (value) => {
   return text.length > 160 ? `${text.slice(0, 157)}...` : text;
 };
 
+const feedbackLinesPerScenario = 8;
+
+// Compact feedback keeps tokens down: sibling leaf mismatches collapse into their parent, and each scenario is capped.
 export function explainResult(result, values) {
   if (result.passed) return "AIR check: PASS. Candidate matches the reviewed feedback boundary.";
-  return `AIR check: FAIL. Repair candidate code only.\n${result.mismatches.map((item) => {
-    const observed = values?.[item.scenario];
-    const detail = observed ? ` expected ${shown(pointerValue(observed.expected, item.selector))}, got ${shown(pointerValue(observed.actual, item.selector))}.` : "";
-    return `- ${item.classification} in ${item.scenario} at ${item.selector}; category ${item.category}; ${item.classification === "missing-observation" ? "candidate must emit this observation" : "fix candidate code"}.${detail}`;
-  }).join("\n")}`;
+  const lines = [];
+  for (const scenario of [...new Set(result.mismatches.map((item) => item.scenario))]) {
+    const items = result.mismatches.filter((item) => item.scenario === scenario);
+    const parent = (selector) => selector.split("/").slice(0, -1).join("/") || "/";
+    const siblings = {};
+    for (const item of items) siblings[parent(item.selector)] = (siblings[parent(item.selector)] ?? 0) + 1;
+    const selectors = [...new Set(items.map((item) => (siblings[parent(item.selector)] > 1 && parent(item.selector) !== "/" ? parent(item.selector) : item.selector)))];
+    const observed = values?.[scenario];
+    const shownSelectors = selectors.slice(0, feedbackLinesPerScenario).map((selector) => `  ${selector}: ${observed ? `expected ${shown(pointerValue(observed.expected, selector))}, got ${shown(pointerValue(observed.actual, selector))}` : "differs"}`);
+    if (selectors.length > feedbackLinesPerScenario) shownSelectors.push(`  ...and ${selectors.length - feedbackLinesPerScenario} more differences`);
+    lines.push(`- ${scenario} (${items.length} differences):`, ...shownSelectors);
+  }
+  return `AIR check: FAIL. Fix candidate.mjs so its observation matches the expected values.\n${lines.join("\n")}`;
 }
 
 export function scrubTranscript(source) {
@@ -395,7 +406,7 @@ export function isUsageLimitFailure(output) {
 export function measurementFromResult(slice, result, rounds, passAt1, ordinaryTestsPassed, buildFailures, infrastructureRetries, durationMs, usage) {
   const failed = new Set(result.scenarios.filter((scenario) => !scenario.passed).map((scenario) => scenario.id));
   const mismatchesByCategory = {};
-  for (const scenario of failed) for (const category of slice.scenarioCategories[scenario] ?? ["unclassified"]) mismatchesByCategory[category] = (mismatchesByCategory[category] ?? 0) + 1;
+  for (const scenario of failed) for (const category of slice.scenarioCategories[scenario.replace(/-holdout$/u, "")] ?? ["unclassified"]) mismatchesByCategory[category] = (mismatchesByCategory[category] ?? 0) + 1;
   return {
     passAt1,
     passAt3: result.passed,

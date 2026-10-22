@@ -56,7 +56,6 @@ describe("LLM verification-lift benchmark", () => {
   it("loads the pinned three-slice, two-arm, 18-run design", async () => {
     const suite = await loadSuite();
     expect(suite.models).toEqual([
-      { id: "gpt-6-astra", reasoning: "medium", agent: "codex-cli" },
       { id: "claude-sonnet-5-5", reasoning: "medium", agent: "claude-code" },
     ]);
     expect(() => modelProfile(suite, "unknown-model")).toThrow("Unknown benchmark model");
@@ -137,16 +136,17 @@ describe("LLM verification-lift benchmark", () => {
     await expect(validateEvidence(valid)).rejects.toThrow("must contain all 18 runs");
   });
 
-  it("shows reviewed values only for feedback scenarios", async () => {
+  it("shows compact reviewed values only for feedback scenarios", async () => {
     const suite = await loadSuite();
     const slice = suite.slices.find((item: { id: string }) => item.id === "document-create");
     const starter = resolve(benchmarkRoot, "slices/document-create/workspace/candidate.mjs");
     const result = await evaluateCandidate(slice, starter, "feedback");
     const values = await feedbackValues(slice, starter);
-    expect(Object.keys(values).sort()).toEqual(["creates-document", "maps-vendor-failure"]);
+    expect(Object.keys(values).sort()).toEqual(["creates-document", "maps-vendor-failure", "replays-idempotently"]);
     const text = explainResult(result, values);
-    expect(text).toContain('at /outbound/0; category outbound; candidate must emit this observation. expected {"operation":"vendor.authorize"');
-    expect(text).not.toContain("replays-idempotently");
+    expect(text).toContain('/outbound: expected [{"operation":"vendor.authorize"');
+    expect(text).not.toContain("holdout");
+    for (const block of text.split("\n- ").slice(1)) expect(block.split("\n").length).toBeLessThanOrEqual(10);
   }, 30_000);
 
   it("passes known-good candidates and rejects starter mutants for every hidden evaluator", async () => {
