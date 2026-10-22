@@ -76,4 +76,4 @@ Any agent can stop at any time. State lives in Git, in `pnpm benchmark:status`, 
 ### Current work
 
 - v0.16.0 (milestones 2 and 3 of `docs/roadmap.md` §12a) is tagged and released through `release.yml`; the npm CLI tarball for 0.15.0 never appeared on the registry even though publish succeeded, so 0.16.0 supersedes it.
-- Next: milestone 4, source discovery for any codebase (`air discover code`, `air check init --from-code`; whole repo or one part, no telemetry needed; for everyday development as well as migration). Then milestone 5 (`ui` observations) and the developer-experience items in §12a. A benchmark rerun is allowed again if the owner asks.
+- Milestone 4 (`docs/design/discover-code.md`, design PR #45): step 4a, the static seam scanner `air discover code`, is in review on `feat/discover-code-scan`. Next: 4b (start-command detection and `check init --from-code` proposals), 4c (execution gate), 4d (function adapters), 4e (`air protect`, `air agent install`, MCP tools). Seams must stay `inferred` until executed; this is not a code map.

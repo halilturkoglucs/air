@@ -1,0 +1,89 @@
+{
+  "ecosystem": "javascript",
+  "extensions": [
+    ".js",
+    ".mjs",
+    ".cjs",
+    ".ts",
+    ".mts",
+    ".cts",
+    ".tsx",
+    ".jsx"
+  ],
+  "lineComment": "//",
+  "seams": [
+    {
+      "kind": "http",
+      "framework": "express-style",
+      "pattern": "\\b(?:app|router|server|api|fastify|routes?)\\.(get|post|put|patch|delete|head)\\(\\s*['\"`](/[^'\"`]*)",
+      "method": 1,
+      "route": 2
+    },
+    {
+      "kind": "http",
+      "framework": "nest",
+      "pattern": "@(Get|Post|Put|Patch|Delete|Head)\\(\\s*(?:['\"`]([^'\"`]*)['\"`])?\\s*\\)",
+      "method": 1,
+      "route": 2
+    },
+    {
+      "kind": "http",
+      "framework": "next-route",
+      "pattern": "export\\s+(?:async\\s+)?function\\s+(GET|POST|PUT|PATCH|DELETE|HEAD)\\s*\\(",
+      "method": 1,
+      "routeFromPath": "(?:^|/)app(/.*)/route\\.[cm]?[jt]sx?$"
+    },
+    {
+      "kind": "job",
+      "framework": "node-cron",
+      "pattern": "\\bcron\\.schedule\\(\\s*['\"`]([^'\"`]+)",
+      "name": 1
+    },
+    {
+      "kind": "consumer",
+      "framework": "kafkajs",
+      "pattern": "\\.subscribe\\(\\s*\\{[^}]*topics?:\\s*\\[?\\s*['\"`]([^'\"`]+)",
+      "name": 1
+    },
+    {
+      "kind": "consumer",
+      "framework": "amqp",
+      "pattern": "\\.consume\\(\\s*['\"`]([^'\"`]+)",
+      "name": 1
+    },
+    {
+      "kind": "cli",
+      "framework": "node",
+      "pattern": "^#!.*\\bnode\\b",
+      "name": 0
+    }
+  ],
+  "effects": [
+    {
+      "kind": "database",
+      "pattern": "\\b(?:select\\b[\\s\\S]{0,80}?\\bfrom|insert\\s+into|update|delete\\s+from)\\s+[\"`]?([A-Za-z_][\\w.]*)",
+      "name": 1,
+      "flags": "i"
+    },
+    {
+      "kind": "database",
+      "pattern": "\\bprisma\\.([A-Za-z_]\\w*)\\.(create|update|upsert|delete|findMany|findUnique|findFirst)",
+      "name": 1
+    },
+    {
+      "kind": "outbound",
+      "pattern": "\\b(?:fetch|axios(?:\\.(?:get|post|put|patch|delete))?|got|ky)\\(\\s*['\"`](https?://[^'\"`\\s]+)",
+      "name": 1
+    },
+    {
+      "kind": "message",
+      "pattern": "\\.send\\(\\s*\\{\\s*topic:\\s*['\"`]([^'\"`]+)",
+      "name": 1
+    },
+    {
+      "kind": "message",
+      "pattern": "\\.(?:sendToQueue|publish)\\(\\s*['\"`]([^'\"`]+)",
+      "name": 1
+    }
+  ]
+}

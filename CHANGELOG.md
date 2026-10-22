@@ -4,6 +4,8 @@ All notable changes are recorded here. AIR follows the pre-1.0 policy in `docs/v
 
 ## Unreleased
 
+- Added `air discover code` (step 4a of source discovery): proposes behavioral seams (HTTP routes, CLI entry points, jobs, consumers) and the database, outbound, and messaging effects behind them in JavaScript/TypeScript, Python, and Go code, scoped by path, symbol, or `--since <git-ref>`. Detection rules are data files; every seam stays `inferred` until AIR executes it.
+
 ## 0.16.0 - 2026-10-22
 
 - Added `air discover traces`: OpenTelemetry (OTLP JSON) traces from any language become a deterministic map of endpoints and their database, outbound, and messaging effects.

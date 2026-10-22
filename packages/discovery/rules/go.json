@@ -1,0 +1,55 @@
+{
+  "ecosystem": "go",
+  "extensions": [
+    ".go"
+  ],
+  "lineComment": "//",
+  "seams": [
+    {
+      "kind": "http",
+      "framework": "net/http",
+      "pattern": "\\.HandleFunc\\(\\s*\"(?:(GET|POST|PUT|PATCH|DELETE|HEAD)\\s+)?(/[^\"]*)\"",
+      "method": 1,
+      "route": 2,
+      "defaultMethod": "ANY"
+    },
+    {
+      "kind": "http",
+      "framework": "gin-echo",
+      "pattern": "\\b\\w+\\.(GET|POST|PUT|PATCH|DELETE|HEAD)\\(\\s*\"(/[^\"]*)\"",
+      "method": 1,
+      "route": 2
+    },
+    {
+      "kind": "http",
+      "framework": "chi",
+      "pattern": "\\b\\w+\\.(Get|Post|Put|Patch|Delete|Head)\\(\\s*\"(/[^\"]*)\"",
+      "method": 1,
+      "route": 2
+    },
+    {
+      "kind": "cli",
+      "framework": "go",
+      "pattern": "^func\\s+main\\(\\)",
+      "name": 0
+    }
+  ],
+  "effects": [
+    {
+      "kind": "database",
+      "pattern": "\\b(?:select\\b[\\s\\S]{0,80}?\\bfrom|insert\\s+into|update|delete\\s+from)\\s+[\"`]?([A-Za-z_][\\w.]*)",
+      "name": 1,
+      "flags": "i"
+    },
+    {
+      "kind": "outbound",
+      "pattern": "\\bhttp\\.(?:Get|Post|NewRequest(?:WithContext)?)\\([^\"]*\"(https?://[^\"\\s]+)",
+      "name": 1
+    },
+    {
+      "kind": "message",
+      "pattern": "\\bTopic:\\s*\"([^\"]+)\"",
+      "name": 1
+    }
+  ]
+}

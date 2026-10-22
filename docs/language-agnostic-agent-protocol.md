@@ -101,6 +101,7 @@ air check diff-baseline <before> <after>          # review what an approval chan
 
 ```text
 air discover traces traces.json                          # OpenTelemetry OTLP JSON, any language
+air discover code src/billing --since main               # seams in the code you are changing (JS/TS, Python, Go)
 air check init --from-openapi openapi.yaml --output checks/api
 air check coverage --openapi openapi.yaml --traces traces.json --fail-under 80
 ```
