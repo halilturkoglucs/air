@@ -56,8 +56,8 @@ air --version
 air --help
 ```
 
-The current public release is `0.14.0`. For a reproducible installation, use
-`npm install --global @halilturkoglucs/air@0.14.0`.
+The current public release is `0.15.0`. For a reproducible installation, use
+`npm install --global @halilturkoglucs/air@0.15.0`.
 
 The `air check` workflow uses stable JSON output and needs no hand-authored Application AIR YAML:
 
