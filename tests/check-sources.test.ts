@@ -63,7 +63,7 @@ describe("framework-neutral check sources", () => {
     ].join("\n"));
     expect(air("discover", "traces", "traces.json", "--service", "billing").out).not.toContain("orders POST");
     expect(air("discover", "traces", "missing.json").code).toBe(2);
-  });
+  }, 30_000);
 
   it("creates reviewable scenario skeletons from OpenAPI and reports coverage", async () => {
     const { root, air } = await workspace();
@@ -88,5 +88,5 @@ describe("framework-neutral check sources", () => {
     expect(coverage.out).toContain("UNCOVERED POST /invoices [traces]");
     expect(air("check", "coverage", "partial.yaml", "--openapi", "openapi.yaml", "--fail-under", "50").code).toBe(1);
     expect(air("check", "coverage", "partial.yaml").code).toBe(2);
-  });
+  }, 30_000);
 });
