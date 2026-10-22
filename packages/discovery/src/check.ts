@@ -23,6 +23,7 @@ type CheckRequest =
 // Any rule may be limited to some scenarios; generated values usually exist only in a few responses.
 export type NormalizationRule = (
   | { readonly kind: "ignore"; readonly pointer: string; readonly reason: string }
+  | { readonly kind: "shape"; readonly pointer: string; readonly reason: string }
   | { readonly kind: "typed-token"; readonly pointer: string; readonly format: "uuid" | "timestamp" | "jwt"; readonly binding?: string }
   | { readonly kind: "unordered-array"; readonly pointer: string; readonly key: string }
   | { readonly kind: "rename"; readonly pointer: string; readonly to: string; readonly reason: string }
@@ -132,7 +133,7 @@ const DEFAULT_POLICY: CheckPolicy = {
   apiVersion: "air.dev/check-policy/v0.1",
   kind: "CheckPolicy",
   metadata: { name: "air-default" },
-  spec: { allowedNormalizations: ["ignore", "typed-token", "unordered-array", "rename", "internal-boundary"], requireCleanBaseline: true, unmatchedEvidence: "fail" },
+  spec: { allowedNormalizations: ["ignore", "shape", "typed-token", "unordered-array", "rename", "internal-boundary"], requireCleanBaseline: true, unmatchedEvidence: "fail" },
 };
 
 function validationError(label: string, validate: ValidateFunction<unknown>): CheckInputError {
@@ -251,6 +252,14 @@ function applyTopologyRule(root: unknown, rule: Extract<NormalizationRule, { kin
   setAt(destination.parent, destination.key, value);
 }
 
+// Keeps keys and value types but not values, for content that is random by design (ads, recommendations).
+// Arrays become their distinct item shapes, so a random length or order does not matter.
+function shapeOf(value: unknown): unknown {
+  if (Array.isArray(value)) return [...new Map(value.map((item) => { const shape = shapeOf(item); return [canonical(shape), shape] as const; })).entries()].sort(([left], [right]) => left.localeCompare(right)).map(([, shape]) => shape);
+  if (value && typeof value === "object") return Object.fromEntries(Object.keys(value).sort().map((key) => [key, shapeOf((value as Record<string, unknown>)[key])]));
+  return { $airToken: value === null ? "null" : typeof value };
+}
+
 function applyNormalization(observation: unknown, rules: readonly NormalizationRule[]): unknown {
   const copy = JSON.parse(JSON.stringify(observation)) as unknown;
   const bindings = new Map<string, string>();
@@ -261,6 +270,7 @@ function applyNormalization(observation: unknown, rules: readonly NormalizationR
     const value = at(parent, key);
     if (value === undefined) throw new CheckInputError(`Normalization pointer ${rule.pointer} does not exist.`);
     if (rule.kind === "ignore") { deleteAt(parent, key); continue; }
+    if (rule.kind === "shape") { setAt(parent, key, shapeOf(value)); continue; }
     if (rule.kind === "unordered-array") {
       if (!Array.isArray(value) || value.some((item) => !item || typeof item !== "object" || Array.isArray(item) || (item as Record<string, unknown>)[rule.key] === undefined)) throw new CheckInputError(`Unordered array ${rule.pointer} must contain objects with key ${rule.key}.`);
       const keys = value.map((item) => canonical((item as Record<string, unknown>)[rule.key]));

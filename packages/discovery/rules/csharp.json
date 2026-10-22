@@ -25,6 +25,30 @@
       "pattern": "\\.Map(Get|Post|Put|Patch|Delete)\\(\\s*\"([^\"]*)\"",
       "method": 1,
       "route": 2
+    },
+    {
+      "kind": "consumer",
+      "framework": "confluent-kafka",
+      "pattern": "\\bnew\\s+ConsumerBuilder<",
+      "name": 0
+    },
+    {
+      "kind": "consumer",
+      "framework": "rabbitmq",
+      "pattern": "\\.BasicConsume(?:Async)?\\(",
+      "name": 0
+    },
+    {
+      "kind": "consumer",
+      "framework": "masstransit",
+      "pattern": "\\bIConsumer<\\s*(\\w+)\\s*>",
+      "name": 1
+    },
+    {
+      "kind": "consumer",
+      "framework": "servicebus",
+      "pattern": "\\bServiceBusProcessor\\b",
+      "name": 0
     }
   ],
   "effects": [
@@ -44,6 +68,36 @@
       "kind": "database",
       "pattern": "\\bDbSet<\\s*(\\w+)\\s*>",
       "name": 1
+    },
+    {
+      "kind": "message",
+      "pattern": "\\bnew\\s+ProducerBuilder<",
+      "name": "kafka"
+    },
+    {
+      "kind": "message",
+      "pattern": "\\.BasicPublish(?:Async)?\\(",
+      "name": "rabbitmq"
+    },
+    {
+      "kind": "message",
+      "pattern": "\\bI(?:Publish|Send)Endpoint\\b",
+      "name": "masstransit"
+    },
+    {
+      "kind": "message",
+      "pattern": "\\bServiceBusSender\\b",
+      "name": "servicebus"
+    },
+    {
+      "kind": "cache",
+      "pattern": "\\b(?:ConnectionMultiplexer|IConnectionMultiplexer)\\b",
+      "name": "redis"
+    },
+    {
+      "kind": "cache",
+      "pattern": "\\bI(?:Distributed|Memory)Cache\\b",
+      "name": "cache"
     }
   ]
 }

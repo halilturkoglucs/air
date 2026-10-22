@@ -60,7 +60,7 @@
     {
       "kind": "job",
       "framework": "celery-apscheduler",
-      "pattern": "@(?:\\w+\\.)?(?:shared_task|task|scheduled_job)\\b",
+      "pattern": "@(?:shared_task|\\w+\\.task|\\w+\\.scheduled_job)\\b",
       "name": 0
     },
     {
@@ -74,6 +74,18 @@
       "framework": "python",
       "pattern": "^if\\s+__name__\\s*==\\s*['\"]__main__['\"]",
       "name": 0
+    },
+    {
+      "kind": "consumer",
+      "framework": "confluent-kafka",
+      "pattern": "\\b(?:Consumer|AIOKafkaConsumer)\\(\\s*\\{",
+      "name": 0
+    },
+    {
+      "kind": "consumer",
+      "framework": "pika",
+      "pattern": "\\.basic_consume\\(\\s*(?:queue\\s*=\\s*)?['\"]([^'\"]+)",
+      "name": 1
     }
   ],
   "effects": [
@@ -128,6 +140,21 @@
       "kind": "database",
       "pattern": "__tablename__\\s*=\\s*[\"'](\\w+)[\"']",
       "name": 1
+    },
+    {
+      "kind": "message",
+      "pattern": "\\b(?:Producer|AIOKafkaProducer|KafkaProducer)\\(",
+      "name": "kafka"
+    },
+    {
+      "kind": "message",
+      "pattern": "\\.basic_publish\\(",
+      "name": "rabbitmq"
+    },
+    {
+      "kind": "cache",
+      "pattern": "^\\s*(?:import|from)\\s+(?:redis|aioredis)\\b",
+      "name": "redis"
     }
   ],
   "prefixes": [

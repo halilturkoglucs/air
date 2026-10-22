@@ -32,6 +32,10 @@ AIR locks what a service observably does, so changes do not alter behavior by ac
 - Behavior HTTP cannot see (events, caches, data, jobs, files, emails): when \`air protect\` prints a TASK, run
   \`air harness task\` and follow it. You write a small harness; AIR only trusts it after
   \`air harness verify <name> --mutation <patch>\` proves it is stable, input-sensitive, and catches a planted break.
+  For a service that runs in containers, add \`--setup "<build and deploy the copy>"\` and
+  \`--teardown "<redeploy the original>"\`; the normal runs happen first.
+- Values that are random by design (ads, recommendations) are named in a NOTE with a ready \`shape\` rule. Add it
+  only when the randomness is intended, with the real reason, then run \`air protect --rebaseline\`.
 - \`air check status\` shows the last result without running anything.
 `;
 

@@ -1,0 +1,22 @@
+{
+  "ecosystem": "protobuf",
+  "extensions": [
+    ".proto"
+  ],
+  "lineComment": "//",
+  "prefixes": [
+    {
+      "pattern": "^\\s*service\\s+(\\w+)",
+      "prefix": 1
+    }
+  ],
+  "seams": [
+    {
+      "kind": "rpc",
+      "framework": "grpc",
+      "pattern": "^\\s*rpc\\s+(\\w+)\\s*\\(",
+      "route": 1
+    }
+  ],
+  "effects": []
+}

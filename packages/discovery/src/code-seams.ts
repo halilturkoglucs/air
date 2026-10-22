@@ -11,13 +11,14 @@ import csharpRules from "../rules/csharp.json" with { type: "json" };
 import phpRules from "../rules/php.json" with { type: "json" };
 import rustRules from "../rules/rust.json" with { type: "json" };
 import rubyRules from "../rules/ruby.json" with { type: "json" };
+import protoRules from "../rules/proto.json" with { type: "json" };
 
 // Static seam scan for any codebase. It only proposes: a seam counts as discovered once AIR has executed it
 // (evidence moves inferred -> runnable -> observed -> baselined). No call graph, no symbol index.
 
-export type SeamKind = "http" | "cli" | "job" | "consumer" | "function";
+export type SeamKind = "http" | "rpc" | "cli" | "job" | "consumer" | "function";
 export type Evidence = "inferred" | "runnable" | "observed" | "baselined";
-export interface SeamEffect { readonly kind: "database" | "outbound" | "message"; readonly name: string; readonly line: number }
+export interface SeamEffect { readonly kind: "database" | "outbound" | "message" | "cache"; readonly name: string; readonly line: number }
 export interface CodeSeam {
   readonly id: string; readonly kind: SeamKind; readonly framework?: string; readonly method?: string; readonly route?: string; readonly name?: string;
   readonly file: string; readonly line: number; readonly evidence: Evidence; readonly effects: readonly SeamEffect[];
@@ -25,7 +26,8 @@ export interface CodeSeam {
 export interface CodeSeamReport { readonly apiVersion: "air.dev/code-seams/v0.1"; readonly scope: { readonly path: string; readonly symbol?: string; readonly since?: string }; readonly files: number; readonly seams: readonly CodeSeam[]; readonly effects: readonly (SeamEffect & { readonly file: string })[] }
 
 interface SeamRule { readonly kind: SeamKind; readonly framework: string; readonly pattern: string; readonly method?: number; readonly route?: number; readonly name?: number; readonly defaultMethod?: string; readonly routeFromPath?: string; readonly routePrefix?: string; readonly fileFilter?: string; readonly expand?: readonly string[]; readonly regexRoute?: boolean; readonly methodList?: number; readonly receiver?: number }
-interface EffectRule { readonly kind: SeamEffect["kind"]; readonly pattern: string; readonly name: number; readonly flags?: string; readonly fileFilter?: string }
+// A string name labels effects whose target is configured elsewhere (a Kafka client whose topic comes from the environment).
+interface EffectRule { readonly kind: SeamEffect["kind"]; readonly pattern: string; readonly name: number | string; readonly flags?: string; readonly fileFilter?: string }
 // Prefixes apply to routes declared later in the same file (a controller or router prefix).
 interface PrefixRule { readonly pattern: string; readonly prefix: number; readonly className?: number }
 // Mounts attach a prefix to routes in another file: a module, a dotted module path, a function, or an imported file.
@@ -34,7 +36,7 @@ interface MountRule { readonly pattern: string; readonly target: number; readonl
 interface GroupVarRule { readonly pattern: string; readonly variable: number; readonly base: number; readonly path: number }
 interface Ecosystem { readonly ecosystem: string; readonly extensions: readonly string[]; readonly lineComment: string; readonly seams: readonly SeamRule[]; readonly effects: readonly EffectRule[]; readonly prefixes?: readonly PrefixRule[]; readonly mounts?: readonly MountRule[]; readonly pathPrefixes?: readonly { readonly file: string; readonly prefix: string }[]; readonly railsRoutes?: boolean; readonly groupVars?: readonly GroupVarRule[] }
 
-const ECOSYSTEMS = [javascriptRules, pythonRules, goRules, sqlRules, javaRules, mybatisRules, csharpRules, phpRules, rustRules, rubyRules] as unknown as readonly Ecosystem[];
+const ECOSYSTEMS = [javascriptRules, pythonRules, goRules, sqlRules, javaRules, mybatisRules, csharpRules, phpRules, rustRules, rubyRules, protoRules] as unknown as readonly Ecosystem[];
 const SKIP = new Set(["node_modules", ".git", "dist", "build", "out", "vendor", "venv", ".venv", "target", "__pycache__", "coverage", ".next", "graphify-out", ".air"]);
 const MAX_FILE_BYTES = 1024 * 1024;
 // Words a loose SQL match can capture that are never table names (trigger rows, clauses, MyBatis attributes).
@@ -56,7 +58,9 @@ async function filesUnder(root: string, path: string): Promise<string[]> {
 // Blanks comment-only lines and block comments while keeping line numbers; strings such as "http://..." are untouched.
 function stripComments(source: string, lineComment: string): string {
   const withoutBlocks = lineComment === "//" ? source.replace(/\/\*[\s\S]*?\*\//gu, (block) => block.replace(/[^\n]/gu, " ")) : source;
-  return withoutBlocks.split("\n").map((line) => (line.trimStart().startsWith(lineComment) && !line.trimStart().startsWith("#!") ? "" : line)).join("\n");
+  const lines = withoutBlocks.split("\n").map((line) => (line.trimStart().startsWith(lineComment) && !line.trimStart().startsWith("#!") ? "" : line)).join("\n");
+  // In SQL files, string literals are data ('... from https://...'), never table names.
+  return lineComment === "--" ? lines.replace(/'(?:[^']|'')*'/gu, (literal) => literal.replace(/[^\n]/gu, " ")) : lines;
 }
 
 const lineOf = (source: string, index: number): number => source.slice(0, index).split("\n").length;
@@ -191,7 +195,8 @@ export async function scanCodeSeams(options: { readonly root: string; readonly p
     if (ecosystem.railsRoutes && /(?:^|\/)config\/routes\.rb$/u.test(relativeFile)) for (const route of railsRoutes(source)) found.push({ line: route.line, seam: { kind: "http", framework: "rails", method: route.method, route: route.route, file: relativeFile, line: route.line, evidence: "inferred" } });
     for (const rule of ecosystem.effects) for (const match of (rule.fileFilter && !new RegExp(rule.fileFilter, "u").test(relativeFile) ? [] : source.matchAll(new RegExp(rule.pattern, `g${rule.flags ?? ""}u`)))) {
       const line = lineOf(source, match.index);
-      if ((!range || (line >= range.start && line <= range.end)) && !(rule.kind === "database" && NOT_TABLES.has(match[rule.name]!.toLowerCase()))) effects.push({ kind: rule.kind, name: match[rule.name]!, line });
+      const name = typeof rule.name === "string" ? rule.name : match[rule.name]!;
+      if ((!range || (line >= range.start && line <= range.end)) && !(rule.kind === "database" && NOT_TABLES.has(name.toLowerCase()))) effects.push({ kind: rule.kind, name, line });
     }
     allEffects.push(...[...new Map(effects.map((effect) => [`${effect.kind}:${effect.name}:${effect.line}`, effect])).values()].map((effect) => ({ ...effect, file: relativeFile })));
     if (found.length === 0) continue;
@@ -237,9 +242,9 @@ export function formatCodeSeams(report: CodeSeamReport): string {
   const scope = [report.scope.path, report.scope.symbol ? `symbol ${report.scope.symbol}` : "", report.scope.since ? `changed since ${report.scope.since}` : ""].filter(Boolean).join(", ");
   const lines = [`${report.seams.length} seam(s) in ${scope} (${report.files} file(s) scanned; all inferred until executed)`];
   for (const seam of report.seams) {
-    const label = seam.kind === "http" ? `http ${seam.method ?? "ANY"} ${seam.route}` : `${seam.kind} ${seam.name ?? ""}`.trim();
+    const label = seam.kind === "http" ? `http ${seam.method ?? "ANY"} ${seam.route}` : `${seam.kind} ${seam.route ?? seam.name ?? ""}`.trim();
     lines.push(`${label}  ${seam.file}:${seam.line}${seam.framework ? ` [${seam.framework}]` : ""}`);
-    const effects = (["database", "outbound", "message"] as const).map((kind) => [kind, seam.effects.filter((effect) => effect.kind === kind).map((effect) => effect.name)] as const).filter(([, names]) => names.length > 0);
+    const effects = (["database", "outbound", "message", "cache"] as const).map((kind) => [kind, seam.effects.filter((effect) => effect.kind === kind).map((effect) => effect.name)] as const).filter(([, names]) => names.length > 0);
     if (effects.length > 0) lines.push(`  ${effects.map(([kind, names]) => `${kind === "database" ? "db" : kind === "outbound" ? "out" : "msg"}: ${names.join(", ")}`).join("   ")}`);
   }
   lines.push(report.seams.length === 0 ? "NEXT no seams found in this scope; widen --path, pass --symbol, or record traffic with `air check record`." : "NEXT run `air protect --url <running service>` to execute the safe ones; lock the rest with `air harness task`.");

@@ -10,6 +10,8 @@ export interface HarnessVerdict {
   readonly proposedNormalization: readonly NormalizationRule[];
   readonly unstable: readonly string[];
   readonly mutationDetected?: boolean;
+  // First-run observations, kept so planted changes can be compared without rerunning the normal code.
+  readonly reference: readonly { readonly id: string; readonly raw: unknown }[];
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
@@ -69,11 +71,24 @@ export async function verifyHarness(input: { readonly check: CheckDocument; read
   if (input.mutatedRoot) {
     const mutated = await observeAllScenarios({ ...input, repositoryRoot: input.mutatedRoot });
     const baseline = new Map<string, DigestNode>(observations[0]!.scenarios.map((scenario) => [scenario.id, scenario.digest]));
-    mutationDetected = mutated.issues.length > 0 || mutated.scenarios.some((scenario) => {
+    mutationDetected = mutated.issues.some((issue) => !problems.includes(`${issue.scenario}${issue.selector}: ${issue.message}`)) || mutated.scenarios.some((scenario) => {
       const before = observations[0]!.scenarios.find((item) => item.id === scenario.id);
       return !before || differingPointers(before.raw, scenario.raw).some((difference) => !tokens.has(difference.pointer)) || !baseline.has(scenario.id);
     });
     if (!mutationDetected) problems.push("the planted change was not detected; the harness does not observe the behavior it claims to cover");
   }
-  return { accepted: problems.length === 0, runs, problems, proposedNormalization: [...tokens.values()].sort((left, right) => left.pointer.localeCompare(right.pointer)), unstable: [...unstable].sort(), ...(mutationDetected === undefined ? {} : { mutationDetected }) };
+  return { accepted: problems.length === 0, runs, problems, proposedNormalization: [...tokens.values()].sort((left, right) => left.pointer.localeCompare(right.pointer)), unstable: [...unstable].sort(), ...(mutationDetected === undefined ? {} : { mutationDetected }), reference: observations[0]!.scenarios.map((scenario) => ({ id: scenario.id, raw: scenario.raw })) };
+}
+
+// Observes a planted change once and reports whether it differs from the reference outside generated values.
+// Used when the change must be deployed first (a service in a container), so the normal runs happen before it.
+export async function detectsMutation(input: { readonly check: CheckDocument; readonly target: CheckTarget; readonly mutatedRoot: string; readonly verdict: HarnessVerdict }): Promise<boolean> {
+  const mutated = await observeAllScenarios({ check: input.check, target: input.target, repositoryRoot: input.mutatedRoot });
+  const generated = new Set(input.verdict.proposedNormalization.map((rule) => rule.pointer));
+  // An issue the normal code also has (a harness bug) is not evidence that the planted change was noticed.
+  const known = new Set(input.verdict.problems);
+  return mutated.issues.some((issue) => !known.has(`${issue.scenario}${issue.selector}: ${issue.message}`)) || mutated.scenarios.length !== input.verdict.reference.length || mutated.scenarios.some((scenario) => {
+    const before = input.verdict.reference.find((item) => item.id === scenario.id);
+    return !before || differingPointers(before.raw, scenario.raw).some((difference) => !generated.has(difference.pointer));
+  });
 }
