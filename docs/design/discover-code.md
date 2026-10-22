@@ -67,7 +67,22 @@ Parsing every technology (brokers, caches, schedulers, file and mail systems) do
 
 ### Measured recall
 
-Static seam detection is checked against public RealWorld ("Conduit") implementations, which expose the same 19 endpoints in every stack. Current recall: Express 19/19, NestJS 19/19, FastAPI 19/19, Go/gin 19/19, Django REST Framework 19/19, with each repository's data stores (TypeORM entities, `.sql` query files, GORM models, Django models) reported as effects. Prefixes held in runtime variables (for example `settings.API_V1_STR`) are not resolved; scenarios stay correct relative to the router and are completed by recording or OpenAPI.
+Static seam detection is checked against public RealWorld ("Conduit") implementations, which expose the same 19 endpoints in every stack. They are scanned only; third-party code is never installed or run.
+
+| Stack | Routes found | Data effects reported |
+| --- | ---: | --- |
+| Express | 19/19 | Prisma models |
+| NestJS | 19/19 | TypeORM entities |
+| FastAPI | 19/19 | tables from `.sql` query files |
+| Django REST Framework | 19/19 | Django models |
+| Go / gin | 19/19 | GORM models |
+| Spring Boot | 19/19 | MyBatis mapper tables |
+| ASP.NET Core | 19/19 | Entity Framework `DbSet`s |
+| Rails | 19/19 | ActiveRecord models |
+| Laravel | 19/19 | Eloquent models |
+| Rust / axum | 19/19 | tables from `sqlx` queries |
+
+Prefixes held in runtime variables (for example `settings.API_V1_STR`) are not resolved; scenarios stay correct relative to the router and are completed by recording or OpenAPI.
 
 ## Everyday flow
 
