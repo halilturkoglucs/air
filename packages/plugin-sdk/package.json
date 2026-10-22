@@ -5,7 +5,7 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/halilturkoglucs/air",
+    "url": "git+https://github.com/halilturkoglucs/air.git",
     "directory": "packages/plugin-sdk"
   },
   "homepage": "https://github.com/halilturkoglucs/air#readme",
