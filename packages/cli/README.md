@@ -56,8 +56,8 @@ air --version
 air --help
 ```
 
-The current public release is `0.17.0`. For a reproducible installation, use
-`npm install --global @halilturkoglucs/air@0.17.0`.
+The current public release is `0.18.0`. For a reproducible installation, use
+`npm install --global @halilturkoglucs/air@0.18.0`.
 
 ## What can I use it for?
 
@@ -68,7 +68,7 @@ The current public release is `0.17.0`. For a reproducible installation, use
 | Extract a microservice or merge services into a monolith | External behavior; the new internal boundary is declared, not ignored | `rename` and `internal-boundary` normalizations, `lifecycle.services` |
 | Day-to-day feature work with a coding agent | Behavior you did not mean to change; intended changes are approved per scenario | `air check run --agent --reveal`, then `air check approve <scenario> --reason "..."` |
 | Gate AI-written changes in CI | Approved baseline versus the pull request | `air check run --json` exit codes, `air check coverage --fail-under` |
-| Understand an unfamiliar service before changing it | Endpoints and their data, outbound, and messaging effects | `air discover spring`, `air discover traces`, recorded traffic |
+| Understand an unfamiliar service before changing it | Endpoints, gRPC methods, consumers, and their data, cache, outbound, and messaging effects | `air discover code`, `air discover traces`, recorded traffic |
 
 ## Quick start
 
@@ -80,11 +80,15 @@ air protect --url http://localhost:3000        # once, with your service running
 air protect                                    # after every change: PASS, or exactly what changed
 ```
 
-No proxy or framework plugin is needed: the first `air protect` builds read-only scenarios from an OpenAPI file in the repository or from the routes it finds in the code, then calls the service directly. Every run prints how many of the code's HTTP routes are exercised. Grow that with `air protect --add --tests`, which runs your existing API tests through AIR's recording proxy (it detects the test command and points base-URL variables such as `API_URL` at the proxy), or `air protect --add -- <command>` for any script that calls `$AIR_PROXY_URL`. Only new requests are added and baselined. Differences show expected and actual values; values stay on your machine (`.air/expected.json`, gitignored). Accept an intended change with `air check approve <scenario> --reason "..."`.
+No proxy or framework plugin is needed: the first `air protect` builds read-only scenarios from an OpenAPI file in the repository or from the routes it finds in the code, then calls the service directly. Every run prints how many of the code's HTTP routes are exercised. Grow that with `air protect --add --tests`, which runs your existing API tests through AIR's recording proxy (it detects the test command and points base-URL variables such as `API_URL` at the proxy), or `air protect --add -- <command>` for any script that calls `$AIR_PROXY_URL`. Only new requests are added and baselined. When a recorded sign-in issues a token or cookie, later requests take it from that response at replay time, so signed-in routes are covered without storing a credential. Differences show expected and actual values; values stay on your machine (`.air/expected.json`, gitignored). Accept an intended change with `air check approve <scenario> --reason "..."`.
 
-Two flags cover what most real services need. `--header Cookie=AIR_SESSION` signs requests in with a value read from that environment variable (only the name is stored). `--reset "npm run db:reset"` restores a clean state before each scenario, so data written by one request (even a GET) cannot hide a code change. `air protect` suggests both when its first run shows a login wall or the code stores data, and `--rebaseline` re-captures behavior with the new setup while keeping the old baseline.
+Two flags cover what most real services need. `--header Cookie=AIR_SESSION` signs requests in with a value read from that environment variable (only the name is stored). `--reset "npm run db:reset"` restores a clean state before each scenario, so data written by one request (even a GET) cannot hide a code change; add `--reset-scope run` when later requests depend on earlier ones (add to cart, then check out). `air protect` suggests both when its first run shows a login wall or the code stores data, and `--rebaseline` re-captures behavior with the new setup while keeping the old baseline.
 
-Events, caches, data, jobs, files, and emails are covered without AIR parsing every technology: `air protect` prints a `TASK`, your coding agent writes a small harness in any language (`air harness new`), and AIR accepts it only after `air harness verify --mutation <patch>` proves it is stable across runs, reacts to its input, and catches a deliberately broken copy of the code. Verified harnesses are baselined and checked by every `air protect` run.
+Every new baseline is run twice. Generated IDs, timestamps, and JWTs that differ between the runs are checked by type instead of value. Content that is random by design (ads, recommendations) is named with a ready `shape` rule, which keeps keys and types but not values; you add it with the reason.
+
+Events, caches, data, jobs, files, and emails are covered without AIR parsing every technology: `air protect` prints a `TASK`, your coding agent writes a small harness in any language (`air harness new`), and AIR accepts it only after `air harness verify --mutation <patch>` proves it is stable across runs, reacts to its input, and catches a deliberately broken copy of the code. Verified harnesses are baselined and checked by every `air protect` run. For a service in containers, `--setup` builds and deploys the broken copy and `--teardown` restores the original.
+
+On the [OpenTelemetry demo](https://github.com/halilturkoglucs/air/blob/main/docs/design/discover-code.md#field-trial-opentelemetry-demo) (nine languages, gRPC, Kafka, Valkey), a planted checkout bug that sent only the first order item to Kafka passed all 14 HTTP scenarios; the harness caught it in both the Kafka event and the accounting database.
 
 ## Ways to start
 
@@ -96,7 +100,7 @@ Scenarios can come from wherever a team already is. None of them needs AIR-gener
 - **Spring source code:** `air discover spring ./service` builds an evidence-backed map, then `air check init` turns a reviewed capability into a check.
 - **By hand, for any language:** a target is just a command that reads JSON and prints an observation, or an HTTP base URL. Writing one is usually a short script.
 
-`air discover code` reads routes and data stores from source in JavaScript/TypeScript, Python, Go, Java, C#, PHP, Rust, and Ruby (19/19 RealWorld endpoints in each measured stack). It only proposes; nothing counts until AIR has executed it; see [`docs/roadmap.md`](https://github.com/halilturkoglucs/air/blob/main/docs/roadmap.md) §12a.
+`air discover code` reads HTTP routes, gRPC methods (`.proto`), message producers and consumers (Kafka, RabbitMQ, ActiveMQ/JMS, BullMQ, MassTransit, Service Bus), caches, and data stores from source in JavaScript/TypeScript, Python, Go, Java/Kotlin, C#, PHP, Rust, and Ruby (19/19 RealWorld endpoints in each measured stack). It only proposes; nothing counts until AIR has executed it; see [`docs/roadmap.md`](https://github.com/halilturkoglucs/air/blob/main/docs/roadmap.md) §12a.
 
 ## The everyday loop
 

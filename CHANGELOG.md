@@ -4,6 +4,8 @@ All notable changes are recorded here. AIR follows the pre-1.0 policy in `docs/v
 
 ## Unreleased
 
+## 0.18.0 - 2026-10-22
+
 From a field trial on the OpenTelemetry demo (gRPC, Kafka, Valkey, PostgreSQL across nine languages):
 
 - `air discover code` finds gRPC methods in `.proto` files, Kafka/RabbitMQ/JMS (ActiveMQ)/BullMQ/MassTransit/Service Bus producers and consumers (Go, C#, Java/Kotlin, Node.js, Python, Rust), caches (Redis/Valkey clients, Spring `@Cacheable`, ASP.NET cache interfaces, Rails and Laravel caches), and Next.js `pages/api` routes. Effects whose target comes from configuration are named by technology (`event kafka`, `cache redis`). String literals in `.sql` files are no longer read as table names, and Locust `@task` is no longer reported as a job.
