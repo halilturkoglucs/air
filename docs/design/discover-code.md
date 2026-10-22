@@ -47,15 +47,31 @@ scope ──► seam scan ──► proposals ──► execution gate ──►
 - A compact text summary in the same style as `--agent` output, for people and agents.
 - Ordinary check, target, and policy files the user reviews and commits. Nothing AIR-specific is added to the service itself.
 
+## Agent-first operation
+
+Developers should not have to learn or type this pipeline. A coding agent runs it, and the developer only answers the questions only a human can answer.
+
+- **One entry point:** `air protect [<path>] [--since <ref>]` runs scope, seam scan, proposals, and the execution gate in one step and is idempotent. It stops only at review decisions and ends with a single `NEXT` line, in the same compact format as `air check run --agent`.
+- **One-time setup, then automatic:** `air agent install` appends a marked, idempotent block to `AGENTS.md` and `CLAUDE.md` (created if missing, never rewritten outside the markers) that tells any agent to run `air protect --since HEAD` on the area it is about to change, then `air check run --agent --reveal` after each edit, and to ask the developer before approving or ignoring anything. It prints the one-line MCP registration for Claude Code and Codex and only performs it with `--mcp`.
+- **MCP tools:** `air_protect` and `air_discover_code` join the existing `air_check_*` tools, so agents that use MCP never shell out.
+- **Human decisions are phrased as questions.** When AIR needs a human (a `TODO review` scenario input, an unstable field that would need `ignore`, an intended behavior change), the report states the exact question and the command the agent runs once the developer answers, for example `QUESTION orders.total changes on every run; is it derived from time? If yes: air protect --ignore /http/body/total --reason "<answer>"`.
+- **Safe defaults for unattended runs.** `air protect` never baselines unreviewed scenarios, never approves changes, and never adds an `ignore` on its own. Everything it writes is ordinary, reviewable files under `.air/` plus the check files the developer commits.
+
 ## Everyday flow
 
+What the developer does: run `air agent install` once, then ask their agent for a change as usual.
+
+What the agent does, guided by the installed instructions:
+
 ```bash
-air discover code src/billing --since main --verify   # seams in the area you are changing, executed
-air check profile ... --at main && air check baseline  # lock behavior as of main
-# edit code, or let an agent edit it
-air check run --agent --reveal
-air check approve <scenario> --reason "intended change"
+air protect src/billing --since main      # discover, propose, verify; asks questions if needed
+air check baseline                        # after the developer confirms the proposed scenarios
+# edit code
+air check run --agent --reveal            # repeat until exit 0
+air check approve <scenario> --reason "..."   # only after the developer confirms the change is intended
 ```
+
+The individual commands (`air discover code`, `air check init --from-code`, `--verify`) remain available for CI and for people who want to drive each step.
 
 ## Increments
 
@@ -65,6 +81,7 @@ air check approve <scenario> --reason "intended change"
 | 4b | Start-command detection, target and scenario proposals (`check init --from-code`) | Fixtures produce valid check and target files |
 | 4c | Execution gate: three runs, stability classification, typed-token proposals | Fixture services, including deliberately nondeterministic ones |
 | 4d | Function-level adapters: JS/TS and Python templates, `agent instructions --adapter` | A symbol in each language is baselined end to end |
+| 4e | `air protect`, `air agent install`, `air_protect`/`air_discover_code` MCP tools, question-style review output | An agent-driven end-to-end test that only answers questions, never types pipeline commands |
 
 Each step ships on its own PR with deterministic tests and no model calls.
 
