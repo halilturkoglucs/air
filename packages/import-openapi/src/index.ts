@@ -84,7 +84,7 @@ function requestSchema(operation: JsonObject): unknown {
 }
 
 function inferAction(method: string, path: string): "create" | "read" | "update" | "delete" | "list" | undefined {
-  const item = /\{[^}]+\}/.test(path);
+  const item = /\{[^{}]+\}/.test(path);
   if (method === "get") return item ? "read" : "list";
   if (method === "post" && !item) return "create";
   if ((method === "put" || method === "patch") && item) return "update";

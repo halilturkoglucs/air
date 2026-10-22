@@ -18,14 +18,16 @@ export type FailureClassification = "candidate-difference" | "baseline-stale" | 
 type EnvironmentReferences = Readonly<Record<string, { readonly fromEnv: string }>>;
 type CommandDefinition = { readonly argv: readonly string[]; readonly workingDirectory?: string; readonly environment?: EnvironmentReferences };
 type CheckRequest =
-  | { readonly kind: "http"; readonly method: string; readonly path: string; readonly headers?: Readonly<Record<string, string>>; readonly body?: unknown }
+  | { readonly kind: "http"; readonly method: string; readonly path: string; readonly headers?: Readonly<Record<string, string>>; readonly headersFrom?: Readonly<Record<string, { readonly scenario: string; readonly pointer?: string; readonly setCookie?: string; readonly template: string }>>; readonly body?: unknown }
   | { readonly kind: "command"; readonly arguments?: readonly string[]; readonly input?: unknown };
-export type NormalizationRule =
+// Any rule may be limited to some scenarios; generated values usually exist only in a few responses.
+export type NormalizationRule = (
   | { readonly kind: "ignore"; readonly pointer: string; readonly reason: string }
-  | { readonly kind: "typed-token"; readonly pointer: string; readonly format: "uuid" | "timestamp"; readonly binding?: string }
+  | { readonly kind: "typed-token"; readonly pointer: string; readonly format: "uuid" | "timestamp" | "jwt"; readonly binding?: string }
   | { readonly kind: "unordered-array"; readonly pointer: string; readonly key: string }
   | { readonly kind: "rename"; readonly pointer: string; readonly to: string; readonly reason: string }
-  | { readonly kind: "internal-boundary"; readonly pointer: string; readonly match: unknown; readonly reason: string };
+  | { readonly kind: "internal-boundary"; readonly pointer: string; readonly match: unknown; readonly reason: string }
+) & { readonly scenarios?: readonly string[] };
 
 export interface CheckDocument {
   readonly apiVersion: "air.dev/check/v0.1";
@@ -54,7 +56,7 @@ export interface CheckTarget {
     readonly headers?: Readonly<Record<string, { readonly fromEnv: string }>>;
     readonly command?: CommandDefinition;
     readonly observationPath?: string;
-    readonly lifecycle?: { readonly start?: CommandDefinition; readonly reset?: CommandDefinition; readonly readiness?: { readonly path: string; readonly timeoutMs?: number }; readonly services?: readonly { readonly name: string; readonly command: CommandDefinition; readonly readinessUrl?: string; readonly timeoutMs?: number }[] };
+    readonly lifecycle?: { readonly start?: CommandDefinition; readonly reset?: CommandDefinition; readonly readiness?: { readonly path: string; readonly timeoutMs?: number }; readonly resetScope?: "scenario" | "run"; readonly services?: readonly { readonly name: string; readonly command: CommandDefinition; readonly readinessUrl?: string; readonly timeoutMs?: number }[] };
     readonly evidenceCaptureProfile?: string;
   };
 }
@@ -164,6 +166,7 @@ export function parseCheckTarget(source: string): CheckTarget {
 }
 
 export function parseCheckPolicy(source: string): CheckPolicy { return parseDocument<CheckPolicy>(source, "Check policy", validatePolicy); }
+export const JWT = /^[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}$/u;
 function isUtcTimestamp(value: string): boolean { return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z$/u.test(value) && !Number.isNaN(Date.parse(value)); }
 export function parseCheckBaseline(source: string): CheckBaseline {
   const baseline = parseDocument<CheckBaseline>(source, "Check baseline", validateBaseline);
@@ -265,7 +268,7 @@ function applyNormalization(observation: unknown, rules: readonly NormalizationR
       setAt(parent, key, [...value].sort((left, right) => canonical((left as Record<string, unknown>)[rule.key]).localeCompare(canonical((right as Record<string, unknown>)[rule.key]))));
       continue;
     }
-    if (typeof value !== "string" || (rule.format === "uuid" ? !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(value) : !isUtcTimestamp(value))) throw new CheckInputError(`Value at ${rule.pointer} is not a valid ${rule.format}.`);
+    if (typeof value !== "string" || (rule.format === "uuid" ? !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(value) : rule.format === "jwt" ? !JWT.test(value) : !isUtcTimestamp(value))) throw new CheckInputError(`Value at ${rule.pointer} is not a valid ${rule.format}.`);
     if (rule.binding) {
       const encoded = canonical(value); const existing = bindings.get(rule.binding);
       if (existing !== undefined && existing !== encoded) throw new CheckInputError(`Named binding ${rule.binding} is inconsistent within this observation.`);
@@ -418,11 +421,14 @@ function targetHeaders(target: CheckTarget): Record<string, string> {
   }));
 }
 
-async function observeHttp(base: string, scenario: CheckDocument["spec"]["scenarios"][number], categories: readonly ObservationCategory[], observationPath: string, extraHeaders: Readonly<Record<string, string>> = {}): Promise<unknown> {
+type HttpResponseMemory = { readonly body: unknown; readonly setCookies: readonly string[] };
+
+async function observeHttp(base: string, scenario: CheckDocument["spec"]["scenarios"][number], categories: readonly ObservationCategory[], observationPath: string, extraHeaders: Readonly<Record<string, string>> = {}, remember?: (memory: HttpResponseMemory) => void): Promise<unknown> {
   if (scenario.request.kind !== "http") throw new CheckInputError(`HTTP target cannot execute command scenario ${scenario.id}.`);
   const response = await fetch(scopedUrl(base, scenario.request.path), { method: scenario.request.method, headers: { "content-type": "application/json", ...extraHeaders, ...scenario.request.headers }, redirect: "manual", signal: AbortSignal.timeout(scenario.timeoutMs ?? 30_000), ...(scenario.request.body === undefined ? {} : { body: JSON.stringify(scenario.request.body) }) });
   const bodyText = await readBoundedResponse(response, `HTTP response for ${scenario.id}`); let body: unknown = bodyText;
   try { body = JSON.parse(bodyText) as unknown; } catch { /* preserve text */ }
+  remember?.({ body, setCookies: response.headers.getSetCookie() });
   const selected = new Set(categories); const observation: Record<string, unknown> = {};
   if (selected.has("http")) observation.http = { status: response.status, headers: Object.fromEntries([...response.headers.entries()].filter(([name]) => name.toLowerCase() === "content-type")), body };
   const sideCategories = categories.filter((category) => category !== "http");
@@ -468,13 +474,24 @@ async function executeScenarios(check: CheckDocument, target: CheckTarget, repos
     }
     await waitForReadiness(target);
     const output: { id: string; observation: DigestNode; raw?: unknown }[] = []; const issues: ExecutionIssue[] = [];
-    for (const scenario of check.spec.scenarios) {
-      if (target.spec.lifecycle?.reset) {
+    // Responses stay in memory so later requests can reuse credentials they issued (headersFrom); nothing is stored.
+    const responses = new Map<string, HttpResponseMemory>();
+    for (const [index, scenario] of check.spec.scenarios.entries()) {
+      if (target.spec.lifecycle?.reset && (target.spec.lifecycle.resetScope !== "run" || index === 0)) {
         const reset = await executeCommand(target.spec.lifecycle.reset, target, repositoryRoot);
         if (reset.code !== 0) throw new CheckInfrastructureError(`Fixture reset failed for ${scenario.id} with exit ${reset.code}: ${reset.stderr.trim()}`);
       }
       let raw: unknown;
-      if (target.spec.type === "http") raw = await observeHttp(targetBaseUrl(target), scenario, check.spec.observations, target.spec.observationPath ?? "/_air/observations/{scenario}", targetHeaders(target));
+      if (target.spec.type === "http") {
+        const chained: Record<string, string> = {};
+        for (const [name, source] of Object.entries(scenario.request.kind === "http" ? scenario.request.headersFrom ?? {} : {})) {
+          const memory = responses.get(source.scenario);
+          const value = !memory ? undefined : source.setCookie ? memory.setCookies.map((header) => header.split(";")[0]!).find((pair) => pair.startsWith(`${source.setCookie}=`))?.slice(source.setCookie.length + 1) : (() => { let current: unknown = memory.body; for (const part of decodePointer(source.pointer ?? "")) current = current && typeof current === "object" ? (current as Record<string, unknown>)[part] : undefined; return typeof current === "string" ? current : undefined; })();
+          if (value === undefined) issues.push({ scenario: scenario.id, kind: "missing", selector: "/http", message: `Credential for header ${name} was not available from scenario ${source.scenario}.` });
+          else chained[name] = source.template.replace("{value}", value);
+        }
+        raw = await observeHttp(targetBaseUrl(target), scenario, check.spec.observations, target.spec.observationPath ?? "/_air/observations/{scenario}", { ...targetHeaders(target), ...chained }, (memory) => responses.set(scenario.id, memory));
+      }
       else {
         if (scenario.request.kind !== "command" || !target.spec.command) throw new CheckInputError(`Command target cannot execute HTTP scenario ${scenario.id}.`);
         const execution = await executeCommand(target.spec.command, target, repositoryRoot, scenario.request.arguments ?? [], scenario.request.input, scenario.timeoutMs ?? 30_000);
@@ -488,7 +505,7 @@ async function executeScenarios(check: CheckDocument, target: CheckTarget, repos
         else selected[category] = rawRecord[category];
       }
       for (const category of Object.keys(rawRecord)) if (!check.spec.observations.includes(category as ObservationCategory)) issues.push({ scenario: scenario.id, kind: "unmatched", selector: `/${category}`, message: `Target returned undeclared ${category} evidence.` });
-      const applicableRules = (check.spec.normalization ?? []).filter((rule) => Object.hasOwn(selected, decodePointer(rule.pointer)[0] ?? ""));
+      const applicableRules = (check.spec.normalization ?? []).filter((rule) => Object.hasOwn(selected, decodePointer(rule.pointer)[0] ?? "") && (!rule.scenarios || rule.scenarios.includes(scenario.id)));
       try { const normalized = applyNormalization(selected, applicableRules); output.push({ id: scenario.id, observation: summarize(normalized), ...(keepRaw ? { raw: normalized } : {}) }); }
       catch (error) {
         issues.push({ scenario: scenario.id, kind: "normalization", selector: "/normalization", message: error instanceof Error ? error.message : String(error) });
@@ -642,6 +659,27 @@ export async function approveBaselineScenarios(input: { readonly check: CheckDoc
   const baseline: CheckBaseline = { ...material, baselineId: checkContentHash(material) };
   if (!validateBaseline(baseline)) throw validationError("Approved check baseline", validateBaseline);
   return baseline;
+}
+
+// Extends a baseline with scenarios newly added to its check (coverage grown with `air protect --add`). Existing
+// digests are kept; only the new scenarios are observed. The check hash is updated so later runs are not stale.
+export async function addBaselineScenarios(input: { readonly check: CheckDocument; readonly policy?: CheckPolicy; readonly baseline: CheckBaseline; readonly target: CheckTarget; readonly repositoryRoot: string; readonly scenarioIds: readonly string[]; readonly reason: string }): Promise<{ readonly baseline: CheckBaseline; readonly observations: ReadonlyMap<string, unknown> }> {
+  const known = new Set(input.baseline.scenarios.map((scenario) => scenario.id));
+  const fresh = input.scenarioIds.filter((id) => !known.has(id));
+  const check = { ...input.check, spec: { ...input.check.spec, scenarios: input.check.spec.scenarios.filter((scenario) => fresh.includes(scenario.id)) } };
+  const execution = fresh.length > 0 ? await executeScenarios(check, input.target, input.repositoryRoot, true) : { scenarios: [], issues: [] };
+  if (execution.issues.length > 0) throw new CheckInputError(execution.issues.map((issue) => `${issue.scenario}${issue.selector}: ${issue.message}`).join(" "));
+  const addedAt = new Date().toISOString();
+  const material = {
+    ...withoutBaselineIdentity(input.baseline) as Omit<CheckBaseline, "baselineId">,
+    createdAt: addedAt,
+    hashes: { ...input.baseline.hashes, check: checkContentHash(input.check), policy: checkContentHash(input.policy ?? DEFAULT_POLICY), normalization: checkContentHash(input.check.spec.normalization ?? []) },
+    scenarios: [...input.baseline.scenarios, ...execution.scenarios.map(({ id, observation }) => ({ id, observation }))],
+    approvals: [...(input.baseline.approvals ?? []), ...fresh.map((scenario) => ({ scenario, reason: input.reason, approvedAt: addedAt, previousBaselineId: input.baseline.baselineId, target: input.target.metadata.name }))],
+  };
+  const baseline: CheckBaseline = { ...material, baselineId: checkContentHash(material) };
+  if (!validateBaseline(baseline)) throw validationError("Extended check baseline", validateBaseline);
+  return { baseline, observations: new Map(execution.scenarios.map((scenario) => [scenario.id, scenario.raw])) };
 }
 
 // Structural differences between two baselines of the same check, e.g. before and after an approval.

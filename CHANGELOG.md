@@ -4,6 +4,13 @@ All notable changes are recorded here. AIR follows the pre-1.0 policy in `docs/v
 
 ## Unreleased
 
+- `air protect --add --tests` grows coverage from the project's own API tests: AIR finds the test command (npm scripts, pytest, go test, rspec, phpunit, Maven, Gradle, cargo), points base-URL environment variables the tests read at its recording proxy, and appends and baselines only the new requests. `--add -- <command>` and `--add --from-har` work the same way; the previous baseline is kept.
+- `air protect` prints a COVERAGE line (HTTP routes found in the code versus routes exercised) and, when the code stores data, suggests the project's own reset command (npm scripts, Prisma, Rails, Laravel, Django).
+- Recorded sign-ins are replayed: when a recorded request carries a token or cookie that an earlier recorded response issued, the scenario takes it from that response at replay time (`headersFrom` in the check), so signed-in routes are covered without storing a credential. A signed-in request is kept as its own scenario next to the signed-out one.
+- `air protect` reruns every scenario once after baselining. Values that change between identical runs and look generated (UUIDs, timestamps, JWTs) are normalized as typed tokens for the scenarios where they appear; anything else that changes is named in a NOTE because it would fail every check. Normalization rules accept `scenarios` to limit them to some scenarios.
+- `--reset-scope run` resets state once per run instead of before every scenario, for flows where later requests depend on earlier ones.
+- The COVERAGE line counts only routes whose scenarios did not answer 404, and a NOTE says when most scenarios hit 404 (usually a missing route prefix or base path).
+- `air harness verify` rejects harnesses with a declared category that is never observed and accepts repeated `--mutation` patches, each of which must be detected.
 - `air discover code` now covers Java (Spring, JAX-RS, JPA, MyBatis), C# (ASP.NET controllers and minimal APIs, Entity Framework), PHP (Laravel routes and resources, Eloquent), Rust (axum, actix, rocket, SQL in raw strings), and Ruby (a Rails routes DSL interpreter, ActiveRecord). Measured on RealWorld implementations, route recall is 19/19 in all ten supported stacks.
 Measured on public RealWorld implementations (the same 19-endpoint API in five stacks), route recall of `air discover code` went from Express 19, NestJS 16, FastAPI 11, Go/gin 13, Django REST 0 to 19/19 in all five:
 

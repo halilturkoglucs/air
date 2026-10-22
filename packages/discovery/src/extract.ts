@@ -200,7 +200,7 @@ function portArtifacts(nodes: readonly DiscoveryNode[], evidence: readonly Runti
       const parameters = Array.isArray(operation.parameters) ? operation.parameters.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object")) : [];
       const safeParameters = parameters.filter((parameter) => typeof parameter.name === "string" && !/(?:authorization|password|secret|token|cookie)/iu.test(parameter.name) && !/@RequestHeader\b/u.test(String(parameter.source ?? "")));
       const inputFields = Object.fromEntries(safeParameters.map((parameter) => [safeName(String(parameter.name)), { type: typeof parameter.type === "string" ? parameter.type : "json", required: true }]));
-      if (Object.keys(inputFields).length === 0 && typeof operation.path === "string") for (const match of operation.path.matchAll(/\{([^}]+)\}/gu)) inputFields[safeName(match[1]!)] = { type: "string", required: true };
+      if (Object.keys(inputFields).length === 0 && typeof operation.path === "string") for (const match of operation.path.matchAll(/\{([^{}]+)\}/gu)) inputFields[safeName(match[1]!)] = { type: "string", required: true };
       if (Object.keys(inputFields).length === 0) return [];
       if (typeof node.attributes.target !== "string" || typeof operation.method !== "string" || typeof operation.path !== "string") return [];
       const identity = `outbound:${node.attributes.target}:${operation.method.toUpperCase()}:${operation.path}`;

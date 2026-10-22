@@ -50,6 +50,7 @@ describe("agent-written harnesses", () => {
     expect(placeholder.code).toBe(1);
     expect(placeholder.out).toContain("every scenario produced the same observation");
     expect(placeholder.out).toContain("no --mutation patch");
+    expect(placeholder.out).toContain("category events was never observed");
 
     await writeFile(resolve(directory, "harness.mjs"), harness);
     await writeFile(resolve(directory, "check.yaml"), "apiVersion: air.dev/check/v0.1\nkind: Check\nmetadata: { name: harness-orders }\nspec:\n  capability: { id: orders }\n  observations: [events, cache]\n  scenarios:\n    - { id: small, request: { kind: command, input: { id: o-1, amount: 20 } } }\n    - { id: large, request: { kind: command, input: { id: o-2, amount: 900 } } }\n");
