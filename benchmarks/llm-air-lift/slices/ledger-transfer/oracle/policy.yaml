@@ -1,0 +1,7 @@
+apiVersion: air.dev/check-policy/v0.1
+kind: CheckPolicy
+metadata: { name: ledger-transfer-benchmark }
+spec:
+  requiredObservations: [http, database, messages, ordering, failures, retryability]
+  requireCleanBaseline: true
+  unmatchedEvidence: fail

@@ -1,0 +1,113 @@
+{
+  "apiVersion": "air.dev/check-result/v0.1",
+  "kind": "CheckResult",
+  "generatedAt": "2026-10-22T08:40:53.448Z",
+  "baselineId": "89972ae1e78bee01a1f2b692660a40c15e808584386b4370de2614ee5e6b4bba",
+  "candidate": {
+    "name": "candidate",
+    "targetHash": "665b2ecdd0ef2157bebeda0f24ae2012786e516d13d79b610d22592207a78d58"
+  },
+  "passed": false,
+  "policy": {
+    "passed": true,
+    "violations": []
+  },
+  "scenarios": [
+    {
+      "id": "lists-owned-books",
+      "passed": true
+    },
+    {
+      "id": "forbids-foreign-delete",
+      "passed": false
+    },
+    {
+      "id": "returns-ordered-page",
+      "passed": true
+    },
+    {
+      "id": "allows-owner-delete",
+      "passed": true
+    },
+    {
+      "id": "lists-owned-books-holdout",
+      "passed": true
+    },
+    {
+      "id": "forbids-foreign-delete-holdout",
+      "passed": false
+    },
+    {
+      "id": "returns-ordered-page-holdout",
+      "passed": true
+    },
+    {
+      "id": "allows-owner-delete-holdout",
+      "passed": true
+    }
+  ],
+  "mismatches": [
+    {
+      "classification": "missing-observation",
+      "scenario": "forbids-foreign-delete",
+      "category": "failures",
+      "selector": "/failures/0",
+      "expected": {
+        "type": "object",
+        "bytes": 413,
+        "sha256": "d38dec469bfebd143c9de416b38034b3e88a6a245727b105707e85d15b53c9fb"
+      },
+      "provenance": "baseline:forbids-foreign-delete/failures/0",
+      "repair": "harness"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "forbids-foreign-delete",
+      "category": "http",
+      "selector": "/http/body/error",
+      "expected": {
+        "type": "object",
+        "bytes": 155,
+        "sha256": "fa2ee70dd2ad0d01c04e19a63b9fb6e5b78ec525777ff049385ddbe8b4df237c"
+      },
+      "actual": {
+        "type": "string",
+        "bytes": 11,
+        "sha256": "d049d3c38e9b1c0f1b2eb82353d5a9c2b29172b63c4a62aaf2cebdb09eb434c8"
+      },
+      "provenance": "baseline:forbids-foreign-delete/http/body/error",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "missing-observation",
+      "scenario": "forbids-foreign-delete-holdout",
+      "category": "failures",
+      "selector": "/failures/0",
+      "expected": {
+        "type": "object",
+        "bytes": 413,
+        "sha256": "d38dec469bfebd143c9de416b38034b3e88a6a245727b105707e85d15b53c9fb"
+      },
+      "provenance": "baseline:forbids-foreign-delete-holdout/failures/0",
+      "repair": "harness"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "forbids-foreign-delete-holdout",
+      "category": "http",
+      "selector": "/http/body/error",
+      "expected": {
+        "type": "object",
+        "bytes": 155,
+        "sha256": "fa2ee70dd2ad0d01c04e19a63b9fb6e5b78ec525777ff049385ddbe8b4df237c"
+      },
+      "actual": {
+        "type": "string",
+        "bytes": 11,
+        "sha256": "d049d3c38e9b1c0f1b2eb82353d5a9c2b29172b63c4a62aaf2cebdb09eb434c8"
+      },
+      "provenance": "baseline:forbids-foreign-delete-holdout/http/body/error",
+      "repair": "candidate-code"
+    }
+  ]
+}

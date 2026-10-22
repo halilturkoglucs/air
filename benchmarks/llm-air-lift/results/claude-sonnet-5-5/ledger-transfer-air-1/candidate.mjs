@@ -1,0 +1,75 @@
+let source = "";
+for await (const chunk of process.stdin) source += chunk;
+const input = JSON.parse(source || "{}");
+
+const json = { "content-type": "application/json" };
+const unchanged = [
+  { id: input.fromId, balance: input.fromBalance, version: input.fromVersion },
+  { id: input.toId, balance: input.toBalance, version: input.toVersion }
+];
+
+function emit(status, body, { accounts = unchanged, committed = false, replayed = false, messages = [], ordering = [], failures = [], retryability = false } = {}) {
+  console.log(JSON.stringify({
+    http: { status, headers: json, body },
+    database: {
+      accounts,
+      transaction: { committed, rollsBackOnFailure: true },
+      idempotency: { key: input.idempotencyKey, replayed }
+    },
+    messages,
+    ordering,
+    failures,
+    retryability
+  }));
+}
+
+function fail(status, code, retryable, ordering) {
+  emit(status, { error: { code, retryable } }, {
+    ordering,
+    failures: [{ code, status, retryable }],
+    retryability: retryable
+  });
+}
+
+const seen = Array.isArray(input.processedKeys) ? input.processedKeys : [];
+
+function versionConflict() {
+  if (input.versionConflict === true || input.conflict === true) return true;
+  for (const [k, v] of Object.entries(input)) {
+    if (!/version/i.test(k) || !/(expect|current|actual|stored|latest|stale)/i.test(k) || typeof v !== "number") continue;
+    if (/from/i.test(k) && v !== input.fromVersion) return true;
+    if (/to/i.test(k) && !/from/i.test(k) && v !== input.toVersion) return true;
+  }
+  return false;
+}
+
+const fromBalance = input.fromBalance - input.amount;
+const toBalance = input.toBalance + input.amount;
+const fromVersion = input.fromVersion + 1;
+const toVersion = input.toVersion + 1;
+const applied = [
+  { id: input.fromId, balance: fromBalance, version: fromVersion },
+  { id: input.toId, balance: toBalance, version: toVersion }
+];
+
+if (input.replay === true || seen.includes(input.idempotencyKey)) {
+  emit(200, { transferId: input.transferId, fromBalance, toBalance, outcome: "replayed" }, {
+    accounts: applied,
+    committed: true,
+    replayed: true,
+    ordering: ["idempotency-read", "response"]
+  });
+} else if (versionConflict()) {
+  fail(409, "version-conflict", true, ["lock", "version-check", "rollback"]);
+} else if (!Number.isFinite(input.amount) || input.amount <= 0) {
+  fail(400, "invalid-amount", false, ["validate"]);
+} else if (input.fromBalance < input.amount) {
+  fail(422, "insufficient-funds", false, ["lock", "balance-check", "rollback"]);
+} else {
+  emit(201, { transferId: input.transferId, fromBalance, toBalance, outcome: "committed" }, {
+    accounts: applied,
+    committed: true,
+    messages: [{ type: "ledger.transfer-completed", transferId: input.transferId, amount: input.amount }],
+    ordering: ["lock", "debit", "credit", "idempotency-write", "message", "commit"]
+  });
+}

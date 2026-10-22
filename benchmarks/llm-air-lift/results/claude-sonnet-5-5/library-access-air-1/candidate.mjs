@@ -1,0 +1,47 @@
+let source = "";
+for await (const chunk of process.stdin) source += chunk;
+const input = JSON.parse(source || "{}");
+const books = Array.isArray(input.books) ? input.books : [];
+const principal = input.principal ?? null;
+const query = { ...(input.filters ?? {}), ...(input.query ?? {}) };
+const param = (name) => query[name] ?? input[name];
+
+const json = { "content-type": "application/json" };
+const respond = (status, body, data = books, deleted = [], failures = []) => {
+  console.log(JSON.stringify({
+    http: { status, headers: body === null ? {} : json, body },
+    database: { books: data, deleted },
+    failures
+  }));
+};
+
+const isLibrarian = principal?.role === "librarian";
+const isPrivate = (b) => b.visibility === "private" || b.private === true || b.public === false;
+const canSee = (b) => isLibrarian || b.ownerId === principal.id;
+const fail = (status, code) => respond(status, { error: { code } }, books, [], [{ code, status, retryable: false }]);
+const project = (b) => ({ id: b.id, title: b.title, genre: b.genre, ownerId: b.ownerId });
+
+if (!principal || principal.id == null) {
+  fail(401, "unauthorized");
+} else if (input.operation === "delete") {
+  const book = books.find((b) => b.id === input.bookId);
+  if (!book) fail(404, "not_found");
+  else if (!(isLibrarian || book.ownerId === principal.id)) fail(403, "forbidden");
+  else respond(204, null, books.filter((b) => b.id !== input.bookId), [input.bookId]);
+} else {
+  const genre = param("genre");
+  const ownerId = param("ownerId");
+  const search = param("q") ?? param("title");
+  let items = books.filter(canSee);
+  if (genre != null) items = items.filter((b) => b.genre === genre);
+  if (ownerId != null) items = items.filter((b) => b.ownerId === ownerId);
+  if (search != null) items = items.filter((b) => String(b.title ?? "").toLowerCase().includes(String(search).toLowerCase()));
+  const cmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+  items.sort((a, b) => cmp(String(a.title ?? ""), String(b.title ?? "")) || cmp(String(a.id), String(b.id)));
+  const total = items.length;
+  const offset = Math.max(0, Number.parseInt(param("offset") ?? 0, 10) || 0);
+  const limitRaw = param("limit");
+  const limit = limitRaw == null ? total : Math.max(0, Number.parseInt(limitRaw, 10) || 0);
+  items = items.slice(offset, offset + limit).map(project);
+  respond(200, { items, total, offset, limit });
+}

@@ -1,0 +1,6 @@
+{
+  "name": "air-benchmark-document-create",
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "node --test ordinary.test.mjs" }
+}

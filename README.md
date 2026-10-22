@@ -9,6 +9,54 @@ AIR is an open, model-neutral verification layer for capability replacement. Fre
 
 AIR v0.12 makes agent verification the primary product journey. AIR’s existing Application IR, compiler, providers, discovery, and import commands remain compatible, but coding agents no longer need AIR-generated code or an Application AIR document to verify a replacement.
 
+<!-- AIR_LLM_BENCHMARK:START -->
+## Does AIR improve an LLM migration?
+
+![LLM alone pass@3](https://raw.githubusercontent.com/halilturkoglucs/air/main/benchmarks/llm-air-lift/badges/claude-sonnet-5-5-control-pass-at-3.svg) ![LLM + AIR pass@3](https://raw.githubusercontent.com/halilturkoglucs/air/main/benchmarks/llm-air-lift/badges/claude-sonnet-5-5-air-pass-at-3.svg) ![Escaped defects](https://raw.githubusercontent.com/halilturkoglucs/air/main/benchmarks/llm-air-lift/badges/claude-sonnet-5-5-escaped-defects.svg)
+
+> **Same model. Same task. Same 3-round repair budget.** With AIR feedback, `claude-sonnet-5-5` passed **100%** of hidden behavioral scenarios, compared with **21%** on ordinary tests alone. Escaped defects: **222 → 0**. Fully correct migrations: **9/9** vs 0/9.
+
+| Metric | LLM alone | LLM + AIR | Lift |
+| --- | ---: | ---: | ---: |
+| ✅ Behaviorally correct (pass@3) | 0/9 (0%) | **9/9 (100%)** | **+100 pts** |
+| ⚡ Correct on first attempt (pass@1) | 0/9 (0%) | 0/9 (0%) | = |
+| 🐛 Escaped defects (hidden suite) | 222 | **0** | **−100%** |
+| 🟢 Tests green, behavior wrong | 9/9 | 0/9 | **−100%** |
+| 🎯 Hidden scenarios passed | 21% | 100% | **+79 pts** |
+| 🔁 Median repair rounds | 3 | 2 | **−33%** |
+| 🪙 Median tokens per run | 62k | 49k | **−21%** |
+
+| Capability slice | LLM alone | LLM + AIR |
+| --- | ---: | ---: |
+| Document creation | 0/3 | **3/3** |
+| Ledger transfer | 0/3 | **3/3** |
+| Library access | 0/3 | **3/3** |
+
+<details>
+<summary>Escaped defects by category</summary>
+
+| Category | LLM alone | LLM + AIR |
+| --- | ---: | ---: |
+| authorization | 8 | 0 |
+| database | 52 | 0 |
+| failures | 24 | 0 |
+| filtering | 4 | 0 |
+| http | 52 | 0 |
+| idempotency | 12 | 0 |
+| messages | 24 | 0 |
+| ordering | 14 | 0 |
+| outbound | 12 | 0 |
+| pagination | 2 | 0 |
+| retryability | 12 | 0 |
+| rollback | 6 | 0 |
+
+</details>
+
+Pinned result: `claude-sonnet-5-5`, medium reasoning, claude-code 2.1.308 · suite 1.3.0 · 18 isolated runs · 2026-10-22 · source `4702092c2dfe`. pass@3 95% Wilson interval: alone 0%–30%, AIR 70%–100%. Both arms see the same task and ordinary tests. The AIR arm also receives `air check` differences on feedback scenarios. A held-out hidden suite scores both arms. [Methodology and evidence](https://github.com/halilturkoglucs/air/tree/main/benchmarks/llm-air-lift).
+
+This result applies only to the named model and suite. Runtime throughput is measured separately.
+<!-- AIR_LLM_BENCHMARK:END -->
+
 For existing enterprise systems, AIR does **not** promise one-click repository-to-YAML conversion. It builds an evidence-backed architecture map, then helps teams review, verify, and replace one business capability at a time. Architecture inventory is the entry point; verified modernization is the outcome.
 
 AIR CLI v0.12 accepts application documents from v0.1 through v0.10, System documents through v0.2, Deployment v0.1, and framework-neutral UI v0.1 documents. Discovery and agent verification are supported product boundaries; extraction, differential import verification, and adoption remain experimental:
