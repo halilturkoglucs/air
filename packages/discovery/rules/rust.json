@@ -1,0 +1,43 @@
+{
+  "ecosystem": "rust",
+  "extensions": [
+    ".rs"
+  ],
+  "lineComment": "//",
+  "seams": [
+    {
+      "kind": "http",
+      "framework": "axum",
+      "pattern": "\\.route\\(\\s*\"([^\"]*)\"\\s*,\\s*((?:\\w+::)*(?:get|post|put|patch|delete)\\([\\s\\S]*?\\))\\s*,?\\s*\\)",
+      "route": 1,
+      "methodList": 2
+    },
+    {
+      "kind": "http",
+      "framework": "actix-rocket",
+      "pattern": "#\\[(get|post|put|patch|delete)\\(\\s*\"([^\"]*)\"",
+      "method": 1,
+      "route": 2
+    },
+    {
+      "kind": "cli",
+      "framework": "rust",
+      "pattern": "^(?:#\\[[^\\]]+\\]\\s*)*(?:async\\s+)?fn\\s+main\\s*\\(",
+      "name": 0
+    }
+  ],
+  "effects": [
+    {
+      "kind": "database",
+      "pattern": "[\"'`]\\s*(?:SELECT\\b[^\"'`;]{0,200}?\\bFROM|INSERT\\s+INTO|DELETE\\s+FROM)\\s+[`\"\\[]?([A-Za-z_][\\w.]*)",
+      "name": 1,
+      "flags": "i"
+    },
+    {
+      "kind": "database",
+      "pattern": "[\"'`]\\s*UPDATE\\s+[`\"\\[]?([A-Za-z_][\\w.]*)[`\"\\]]?\\s+SET\\b",
+      "name": 1,
+      "flags": "i"
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "ecosystem": "ruby",
+  "extensions": [
+    ".rb"
+  ],
+  "lineComment": "#",
+  "railsRoutes": true,
+  "seams": [],
+  "effects": [
+    {
+      "kind": "database",
+      "pattern": "[\"'`]\\s*(?:SELECT\\b[^\"'`;]{0,200}?\\bFROM|INSERT\\s+INTO|DELETE\\s+FROM)\\s+[`\"\\[]?([A-Za-z_][\\w.]*)",
+      "name": 1,
+      "flags": "i"
+    },
+    {
+      "kind": "database",
+      "pattern": "[\"'`]\\s*UPDATE\\s+[`\"\\[]?([A-Za-z_][\\w.]*)[`\"\\]]?\\s+SET\\b",
+      "name": 1,
+      "flags": "i"
+    },
+    {
+      "kind": "database",
+      "pattern": "\\bclass\\s+(\\w+)\\s*<\\s*(?:ApplicationRecord|ActiveRecord::Base)\\b",
+      "name": 1
+    }
+  ]
+}

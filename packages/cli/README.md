@@ -80,7 +80,7 @@ air protect --url http://localhost:3000        # once, with your service running
 air protect                                    # after every change: PASS, or exactly what changed
 ```
 
-No proxy or framework plugin is needed: the first `air protect` builds read-only scenarios from an OpenAPI file in the repository or from the routes it finds in the code, then calls the service directly. For richer coverage, let it record a command that exercises the service, for example your API tests: `air protect --url http://localhost:3000 -- sh -c 'BASE_URL=$AIR_PROXY_URL npm test'`. Differences show expected and actual values; values stay on your machine (`.air/expected.json`, gitignored). Accept an intended change with `air check approve <scenario> --reason "..."`.
+No proxy or framework plugin is needed: the first `air protect` builds read-only scenarios from an OpenAPI file in the repository or from the routes it finds in the code, then calls the service directly. Every run prints how many of the code's HTTP routes are exercised. Grow that with `air protect --add --tests`, which runs your existing API tests through AIR's recording proxy (it detects the test command and points base-URL variables such as `API_URL` at the proxy), or `air protect --add -- <command>` for any script that calls `$AIR_PROXY_URL`. Only new requests are added and baselined. Differences show expected and actual values; values stay on your machine (`.air/expected.json`, gitignored). Accept an intended change with `air check approve <scenario> --reason "..."`.
 
 Two flags cover what most real services need. `--header Cookie=AIR_SESSION` signs requests in with a value read from that environment variable (only the name is stored). `--reset "npm run db:reset"` restores a clean state before each scenario, so data written by one request (even a GET) cannot hide a code change. `air protect` suggests both when its first run shows a login wall or the code stores data, and `--rebaseline` re-captures behavior with the new setup while keeping the old baseline.
 
@@ -96,7 +96,7 @@ Scenarios can come from wherever a team already is. None of them needs AIR-gener
 - **Spring source code:** `air discover spring ./service` builds an evidence-backed map, then `air check init` turns a reviewed capability into a check.
 - **By hand, for any language:** a target is just a command that reads JSON and prints an observation, or an HTTP base URL. Writing one is usually a short script.
 
-Discovering other codebases directly from source (any language, the whole repository or one part of it) is the next roadmap milestone. It ends in a runnable, verified baseline for the code you are about to change, not a code map; see [`docs/roadmap.md`](https://github.com/halilturkoglucs/air/blob/main/docs/roadmap.md) §12a.
+`air discover code` reads routes and data stores from source in JavaScript/TypeScript, Python, Go, Java, C#, PHP, Rust, and Ruby (19/19 RealWorld endpoints in each measured stack). It only proposes; nothing counts until AIR has executed it; see [`docs/roadmap.md`](https://github.com/halilturkoglucs/air/blob/main/docs/roadmap.md) §12a.
 
 ## The everyday loop
 

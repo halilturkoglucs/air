@@ -31,6 +31,10 @@ graphify update .             # refresh after code changes, no LLM cost
 - Commits follow Conventional Commits and need a DCO `Signed-off-by` line (`git commit -s`).
 - Never add `Co-Authored-By` trailers, "Generated with" lines, or any other AI attribution to commits, PR descriptions, tags, or release notes.
 - Match surrounding code: dense single-line helpers in `scripts/`, few comments, no new dependencies without need.
+- CodeQL runs on every PR and has flagged these repeatedly; write code that avoids them up front:
+  - Regexes on input (paths, files, responses, templates): a quantified class must exclude the character that starts the next match, so no input can be rescanned from many start positions. Write `\{[^{}]+\}`, not `\{[^}]+\}`; `\[([^[\]/]+)\]`, not `\[(.+?)\]`. Avoid nested or adjacent overlapping quantifiers (`(a+)+`, `\s*\w*\s*`). Time a 100k-character worst case (`"{".repeat(1e5)`) when unsure.
+  - Outbound requests: never build a URL host from recorded or user input. Keep a fixed origin and validate the path (`^\/(?![/\\])[^\s]*$`).
+  - Never log, store, or write credentials or header values to files; keep only environment variable names.
 - Generated README blocks between `<!-- AIR_LLM_BENCHMARK:START -->` and `<!-- AIR_LLM_BENCHMARK:END -->` are owned by `pnpm benchmark:render`. Never hand-edit them.
 
 ## Before pushing
@@ -76,4 +80,4 @@ Any agent can stop at any time. State lives in Git, in `pnpm benchmark:status`, 
 ### Current work
 
 - v0.16.0 (milestones 2 and 3 of `docs/roadmap.md` §12a) is tagged and released through `release.yml`; the npm CLI tarball for 0.15.0 never appeared on the registry even though publish succeeded, so 0.16.0 supersedes it.
-- v0.17.0 is released and the field-trial fixes (#49) are merged. `feat/discover-prefixes` raises `air discover code` route recall to 19/19 on RealWorld implementations in Express, NestJS, FastAPI, Go/gin, and Django REST (evaluation script approach: compare against the 19 known endpoints; never run third-party code). Next: milestone 5 (`ui` observations) and the developer-experience items in `docs/roadmap.md` §12a.
+- Weak-point plan in progress: languages (#51), coverage and trust (`feat/protect-coverage`: `--add --tests`, COVERAGE line, reset suggestions, stricter harness gate), then a narrower CLI/README surface, then a Docker-sandboxed end-to-end trial on a public RealWorld service, then release v0.18.0.

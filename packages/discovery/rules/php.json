@@ -1,0 +1,70 @@
+{
+  "ecosystem": "php",
+  "extensions": [
+    ".php"
+  ],
+  "lineComment": "//",
+  "pathPrefixes": [
+    {
+      "file": "(?:^|/)routes/api\\.php$",
+      "prefix": "/api"
+    }
+  ],
+  "seams": [
+    {
+      "kind": "http",
+      "framework": "laravel",
+      "pattern": "\\bRoute::(get|post|put|patch|delete)\\(\\s*['\"]([^'\"]*)['\"]",
+      "method": 1,
+      "route": 2,
+      "routePrefix": "/"
+    },
+    {
+      "kind": "http",
+      "framework": "laravel",
+      "pattern": "\\bRoute::match\\(\\s*\\[([^\\]]*)\\]\\s*,\\s*['\"]([^'\"]*)['\"]",
+      "methodList": 1,
+      "route": 2,
+      "routePrefix": "/"
+    },
+    {
+      "kind": "http",
+      "framework": "laravel",
+      "pattern": "\\bRoute::(?:api)?[Rr]esource\\(\\s*['\"]([^'\"]+)['\"]",
+      "route": 1,
+      "routePrefix": "/",
+      "expand": [
+        "GET {route}",
+        "POST {route}",
+        "GET {route}/:id",
+        "PUT {route}/:id",
+        "PATCH {route}/:id",
+        "DELETE {route}/:id"
+      ]
+    }
+  ],
+  "effects": [
+    {
+      "kind": "database",
+      "pattern": "[\"'`]\\s*(?:SELECT\\b[^\"'`;]{0,200}?\\bFROM|INSERT\\s+INTO|DELETE\\s+FROM)\\s+[`\"\\[]?([A-Za-z_][\\w.]*)",
+      "name": 1,
+      "flags": "i"
+    },
+    {
+      "kind": "database",
+      "pattern": "[\"'`]\\s*UPDATE\\s+[`\"\\[]?([A-Za-z_][\\w.]*)[`\"\\]]?\\s+SET\\b",
+      "name": 1,
+      "flags": "i"
+    },
+    {
+      "kind": "database",
+      "pattern": "\\bclass\\s+(\\w+)\\s+extends\\s+(?:Model|Authenticatable)\\b",
+      "name": 1
+    },
+    {
+      "kind": "database",
+      "pattern": "\\bDB::table\\(\\s*['\"](\\w+)['\"]",
+      "name": 1
+    }
+  ]
+}

@@ -24,7 +24,7 @@ import { importPostgres } from "@air/import-postgres";
 import { importOpenApiSource } from "@air/import-openapi";
 import { importNextjs } from "@air/import-nextjs";
 import { importSpring } from "@air/import-spring";
-import { CheckInfrastructureError, CheckInputError, adoptExtractedCapability, createCheckBaseline, discoverSpring, discoveryFromAirCandidate, extractCapability, ingestEvidence, initializeMigrationCheck, loadCheckBaseline, loadCheckPolicy, loadCheckTarget, loadMigrationCheck, mergeDiscoveryBundles, parseCheckResult, readDiscoveryBundle, runMigrationCheckDetailed, observeCheckTarget, approveBaselineScenarios, diffBaselines, checkFromExchanges, exchangesFromHar, recordHttpTraffic, writeRecordedCheck, traceMapFromOtlp, formatTraceMap, verifyHarness, createCheckBaselineDetailed, observationDigest, checkFromOpenApi, checkCoverage, formatCoverage, type CheckBaseline, sameDigest, buildAgentReport, formatAgentReport, differenceKey, AGENT_PROTOCOL, startWorkbench, validateMigrationCheck, verifyImportedCapability, writeCheckBaseline, writeCheckResult, writeDiscoveryBundle, writeDiscoveryReport, type CheckMismatch, type CheckDocument, type DiscoveryBundle, scanCodeSeams, formatCodeSeams } from "@air/discovery";
+import { CheckInfrastructureError, CheckInputError, adoptExtractedCapability, createCheckBaseline, discoverSpring, discoveryFromAirCandidate, extractCapability, ingestEvidence, initializeMigrationCheck, loadCheckBaseline, loadCheckPolicy, loadCheckTarget, loadMigrationCheck, mergeDiscoveryBundles, parseCheckResult, readDiscoveryBundle, runMigrationCheckDetailed, observeCheckTarget, approveBaselineScenarios, diffBaselines, checkFromExchanges, exchangesFromHar, recordHttpTraffic, writeRecordedCheck, traceMapFromOtlp, formatTraceMap, observeAllScenarios, generatedFormat, differingPointers, type NormalizationRule, addBaselineScenarios, templatePattern, verifyHarness, createCheckBaselineDetailed, observationDigest, checkFromOpenApi, checkCoverage, formatCoverage, type CheckBaseline, sameDigest, buildAgentReport, formatAgentReport, differenceKey, AGENT_PROTOCOL, startWorkbench, validateMigrationCheck, verifyImportedCapability, writeCheckBaseline, writeCheckResult, writeDiscoveryBundle, writeDiscoveryReport, type CheckMismatch, type CheckDocument, type DiscoveryBundle, scanCodeSeams, formatCodeSeams } from "@air/discovery";
 import { startLanguageServer } from "@air/language-server";
 import { NextjsTargetAdapter, type NextjsTargetOptions } from "@air/target-nextjs";
 import { RustTargetAdapter, type RustTargetOptions } from "@air/target-rust";
@@ -1592,17 +1592,72 @@ function splitCommand(command: string): string[] {
   return argv;
 }
 
+// Reset commands a project already has, most specific first. Suggested, never run without the developer's choice.
+async function resetCandidates(root: string): Promise<string[]> {
+  const exists = async (path: string): Promise<boolean> => { try { await stat(resolve(root, path)); return true; } catch { return false; } };
+  const found: string[] = [];
+  try {
+    const scripts = (JSON.parse(await readFile(resolve(root, "package.json"), "utf8")) as { scripts?: Record<string, string> }).scripts ?? {};
+    for (const name of Object.keys(scripts).filter((item) => /(?:db|database)[:_-]?(?:reset|seed|fresh|truncate)|(?:reset|seed)[:_-]?(?:db|database)|^seed$|migrate:(?:fresh|reset)/iu.test(item)).sort()) found.push(`npm run ${name}`);
+  } catch { /* not a Node project */ }
+  if (await exists("prisma/schema.prisma")) found.push("npx prisma migrate reset --force");
+  if (await exists("bin/rails")) found.push("bin/rails db:reset");
+  if (await exists("artisan")) found.push("php artisan migrate:fresh --seed");
+  if (await exists("manage.py")) found.push("python manage.py flush --noinput");
+  return found;
+}
+
+// Runs every scenario once more right after baselining. Values that changed between two identical runs are either
+// generated (UUIDs, timestamps, JWTs: normalized automatically, still type-checked, then re-baselined) or real
+// instability that would fail every run (reported with the exact fields so a person decides).
+async function stabilize(root: string, profile: CheckProfile, io: CliIo): Promise<void> {
+  const checkPath = resolve(root, profile.check);
+  const [check, target, policy] = await Promise.all([loadMigrationCheck(checkPath), loadCheckTarget(resolve(root, profile.legacy)), loadCheckPolicy(profile.policy ? resolve(root, profile.policy) : undefined)]);
+  const repository = gitRepositoryState(); const cache = await readExpectedCache(root);
+  const second = await observeAllScenarios({ check, target, repositoryRoot: repository.root });
+  const rules = new Map<string, NormalizationRule & { scenarios: string[] }>(); const unstable: string[] = [];
+  for (const scenario of second.scenarios) {
+    const key = `${check.metadata.name}::${scenario.id}`; if (!Object.hasOwn(cache, key)) continue;
+    for (const difference of differingPointers(cache[key], scenario.raw)) {
+      const format = generatedFormat(difference.left, difference.right);
+      if (!format) { unstable.push(`${scenario.id}${difference.pointer}`); continue; }
+      const rule = rules.get(`${format} ${difference.pointer}`) ?? { kind: "typed-token" as const, pointer: difference.pointer, format, scenarios: [] };
+      rule.scenarios.push(scenario.id); rules.set(`${format} ${difference.pointer}`, rule);
+    }
+  }
+  if (rules.size > 0) {
+    const normalized: CheckDocument = { ...check, spec: { ...check.spec, normalization: [...(check.spec.normalization ?? []), ...rules.values()] } };
+    await writeFile(checkPath, stringifyYaml(normalized), "utf8");
+    await rename(resolve(root, profile.baseline), resolve(root, `${profile.baseline}-unnormalized-${new Date().toISOString().replace(/[:.]/gu, "-")}`));
+    const { baseline, observations } = await createCheckBaselineDetailed({ check: normalized, target, policy, repositoryRoot: repository.root, repositoryHash: repository.hash, clean: repository.clean, allowDirty: true, keepObservations: true });
+    await writeCheckBaseline(resolve(root, profile.baseline), baseline);
+    await writeExpectedCache(root, check.metadata.name, observations);
+    io.stdout(`NOTE normalized ${rules.size} generated value(s) that change on every run (${[...rules.values()].map((rule) => `${rule.pointer} as ${rule.kind === "typed-token" ? rule.format : ""}`).slice(0, 4).join(", ")}${rules.size > 4 ? ", ..." : ""}); they are still type-checked.\n`);
+  }
+  if (unstable.length > 0) io.stdout(`NOTE ${unstable.length} value(s) changed between two identical runs and will fail every check: ${unstable.slice(0, 6).join(", ")}${unstable.length > 6 ? ", ..." : ""}. If they depend on stored state, add --reset; if they are random or counters, add an ignore rule with a reason to the check file.\n`);
+}
+
+function credentialNotes(recorded: { readonly chained: number; readonly untraced: number }, io: CliIo): void {
+  if (recorded.chained > 0) io.stderr(`NOTE ${recorded.chained} credential header(s) are taken from earlier responses at replay time (for example a login token); no credential is stored.\n`);
+  if (recorded.untraced > 0) io.stderr(`NOTE ${recorded.untraced} credential header(s) came from outside the recording and were dropped, so those requests replay signed out. Include the sign-in in the recorded command, or use --header Name=ENV_VAR.\n`);
+}
+
 // Field-trial lessons turned into guidance: login walls, missing configuration, and state that hides changes.
 async function setupNotes(root: string, target: Awaited<ReturnType<typeof loadCheckTarget>>, observations: ReadonlyMap<string, unknown>): Promise<string[]> {
   const statuses = [...observations.values()].map((value) => (value as { http?: { status?: number } } | undefined)?.http?.status).filter((status): status is number => typeof status === "number");
   const notes: string[] = [];
   const walled = statuses.filter((status) => status === 401 || status === 403 || (status >= 300 && status < 400)).length;
   if (statuses.length > 0 && walled * 2 >= statuses.length && !target.spec.headers) notes.push(`${walled} of ${statuses.length} scenarios only reached a login wall or redirect. To check signed-in behavior, put a session cookie or token in an environment variable (ask the developer how to sign in) and run: air protect --header Cookie=AIR_SESSION --rebaseline`);
+  const missing = statuses.filter((status) => status === 404).length;
+  if (missing > 0 && missing * 2 >= statuses.length) notes.push(`${missing} of ${statuses.length} scenarios returned 404, so their routes were probably not reached (for example a prefix AIR could not see). Check the paths in the check file before relying on them.`);
   const failing = statuses.filter((status) => status >= 500).length;
   if (failing > 0) notes.push(`${failing} scenario(s) returned 5xx; the service may be missing configuration in this environment. Those scenarios lock the failure, not the feature.`);
   if (!target.spec.lifecycle?.reset) {
     const report = await scanCodeSeams({ root }).catch(() => undefined);
-    if (report?.effects.some((effect) => effect.kind === "database")) notes.push("this code stores data, and requests (even GETs) can change what later requests return, which can hide code changes. Give AIR a command that restores a clean state before each scenario: air protect --reset \"<command>\" --rebaseline");
+    if (report?.effects.some((effect) => effect.kind === "database")) {
+      const candidates = await resetCandidates(root);
+      notes.push(`this code stores data, and requests (even GETs) can change what later requests return, which can hide code changes. Give AIR a command that restores a clean state before each scenario: air protect --reset "${candidates[0] ?? "<command>"}" --rebaseline${candidates.length > 0 ? ` (found in this project: ${candidates.join("; ")}; confirm it only touches a local or test database)` : ""}`);
+    }
   }
   return notes;
 }
@@ -1655,11 +1710,19 @@ async function protectCommand(args: readonly string[], io: CliIo): Promise<numbe
     if (!match) { io.stderr(`${usage}--header takes Name=ENV_VAR; the value is read from that environment variable and never stored.\n`); return 2; }
     headers.push([match[1]!, match[2]!]); index += 1;
   }
-  const parsed = parseFlags(rest, ["--url", "--from-har", "--output", "--max-lines", "--reset"], ["--json", "--rebaseline"]);
+  const parsed = parseFlags(rest, ["--url", "--from-har", "--output", "--max-lines", "--reset", "--reset-scope"], ["--json", "--rebaseline", "--tests", "--add"]);
   if (!parsed || parsed.positional.length > 0) { io.stderr(usage); return 2; }
   const passThrough = [...(parsed.values.has("--max-lines") ? ["--max-lines", parsed.values.get("--max-lines")!] : []), ...(parsed.flags.has("--json") ? ["--json"] : [])];
   try {
     const root = projectRoot(); let profile = await readCheckProfile(root);
+    // --tests runs the project's own test suite through the recording proxy instead of a hand-written command.
+    const detected = parsed.flags.has("--tests") && command.length === 0 ? await detectTestRun(root) : undefined;
+    if (parsed.flags.has("--tests") && command.length === 0 && !detected) throw new CheckInputError("No test command found (package.json scripts, pytest, go test, rspec, phpunit, Maven, Gradle, cargo). Pass one after --, e.g. air protect --add -- npm run test:e2e");
+    const trafficCommand = detected ? { argv: detected.argv, env: detected.env } : { argv: command, env: [] as string[] };
+    if (parsed.flags.has("--add")) {
+      if (!profile) throw new CheckInputError("--add extends an existing setup; run air protect --url <service> first.");
+      return await protectAdd({ root, profile, trafficCommand, har: parsed.values.get("--from-har"), io });
+    }
     if (!profile) {
       const url = parsed.values.get("--url");
       if (!url) {
@@ -1669,7 +1732,7 @@ async function protectCommand(args: readonly string[], io: CliIo): Promise<numbe
       const upstream = new URL(url).toString();
       const name = `${new URL(upstream).hostname.replace(/[^a-z0-9]+/giu, "-")}-${new URL(upstream).port || "80"}`;
       let check: CheckDocument | undefined; let note = ""; let built: string | undefined;
-      if (command.length === 0 && !parsed.values.has("--from-har")) {
+      if (trafficCommand.argv.length === 0 && !parsed.values.has("--from-har")) {
         // No proxy needed: build read-only scenarios from an OpenAPI file or from routes found in the code.
         const source = await scenariosWithoutProxy(root, name);
         if (!source.check) {
@@ -1681,25 +1744,10 @@ async function protectCommand(args: readonly string[], io: CliIo): Promise<numbe
         if (source.skipped > 0) note = `NOTE ${source.skipped} route(s) that need inputs or change data were not called. Add them later with a recorded run (air protect --url ${url} -- <command>) or by editing the check file.\n`;
       }
       let exchanges: Parameters<typeof checkFromExchanges>[0] = [];
-      if (check) { /* built above */ }
-      else if (parsed.values.has("--from-har")) exchanges = exchangesFromHar(JSON.parse(await readFile(resolve(parsed.values.get("--from-har")!), "utf8")), upstream);
-      else {
-        const controller = new AbortController(); let commandExit = 0; let commandTail = "";
-        const recording = recordHttpTraffic({ upstream, signal: controller.signal, onListening: (proxy) => {
-          const [program, ...programArgs] = command;
-          const child = spawn(program!, programArgs, { cwd: process.cwd(), env: { ...process.env, AIR_PROXY_URL: proxy }, shell: false, stdio: ["ignore", "pipe", "pipe"] });
-          const keep = (chunk: Buffer): void => { commandTail = `${commandTail}${chunk.toString()}`.slice(-2000); };
-          child.stdout.on("data", keep); child.stderr.on("data", keep);
-          child.once("error", (error) => { commandExit = 127; commandTail = error.message; controller.abort(); });
-          child.once("close", (code) => { commandExit = code ?? 1; controller.abort(); });
-        } });
-        exchanges = await recording;
-        if (commandExit !== 0) io.stderr(`NOTE the traffic command exited ${commandExit}; recorded what it sent. Last output: ${commandTail.trim().split("\n").slice(-2).join(" | ")}\n`);
-        if (exchanges.length === 0) throw new CheckInputError("The command sent no requests through $AIR_PROXY_URL. Point its base URL at AIR_PROXY_URL, e.g. sh -c 'BASE_URL=$AIR_PROXY_URL npm test'.");
-      }
+      if (!check) exchanges = await recordFromSource({ root, upstream, command: trafficCommand, har: parsed.values.get("--from-har"), io });
       const output = resolve(parsed.values.get("--output") ?? "air-checks");
       let skipped = 0;
-      if (!check) ({ check, skipped } = checkFromExchanges(exchanges, { name }));
+      if (!check) { const recorded = checkFromExchanges(exchanges, { name }); ({ check, skipped } = recorded); credentialNotes(recorded, io); }
       const paths = await writeRecordedCheck(output, check, upstream);
       if (note) io.stderr(note);
       io.stderr(`${built ? `Built ${check.spec.scenarios.length} read-only scenario(s) from ${built}` : `Recorded ${check.spec.scenarios.length} scenario(s)${skipped > 0 ? ` (skipped ${skipped} non-JSON or static)` : ""}`}.\n`);
@@ -1721,7 +1769,11 @@ async function protectCommand(args: readonly string[], io: CliIo): Promise<numbe
         const argv = splitCommand(parsed.values.get("--reset")!);
         if (argv.length === 0) throw new CheckInputError("--reset needs a command, e.g. --reset \"npm run db:reset\".");
         target.spec.fixtureIsolation = "reset-command";
-        target.spec.lifecycle = { ...(target.spec.lifecycle as object | undefined), reset: { argv } };
+        // Recorded flows (sign in, then use the token) need state to survive between scenarios: reset once per run.
+        const chainedCheck = (await loadMigrationCheck(resolve(root, profile.check))).spec.scenarios.some((scenario) => scenario.request.kind === "http" && scenario.request.headersFrom);
+        const scope = parsed.values.get("--reset-scope") ?? (chainedCheck ? "run" : "scenario");
+        if (scope !== "run" && scope !== "scenario") throw new CheckInputError("--reset-scope is run or scenario.");
+        target.spec.lifecycle = { ...(target.spec.lifecycle as object | undefined), reset: { argv }, resetScope: scope };
       }
       const source = stringifyYaml(target);
       await writeFile(targetPath, source, "utf8"); await loadCheckTarget(targetPath);
@@ -1739,7 +1791,9 @@ async function protectCommand(args: readonly string[], io: CliIo): Promise<numbe
       const { baseline, observations } = await createCheckBaselineDetailed({ check, target, policy, repositoryRoot: repository.root, repositoryHash: repository.hash, clean: repository.clean, allowDirty: true, keepObservations: true });
       await writeCheckBaseline(resolve(root, profile.baseline), baseline);
       await writeExpectedCache(root, check.metadata.name, observations);
+      await stabilize(root, profile, io);
       for (const note of await setupNotes(root, target, observations)) io.stdout(`NOTE ${note}\n`);
+      io.stdout(await coverageLine(root, check));
       io.stdout(`PROTECTED ${baseline.scenarios.length} scenario(s) (baseline ${baseline.baselineId.slice(0, 12)}). Commit ${dirname(profile.check)}/ and .air/check.json.\nNEXT change the code, restart the service, then run \`air protect\`.\n`);
       return Math.max(0, await protectHarnesses(root, profile, passThrough, io));
     }
@@ -1749,6 +1803,101 @@ async function protectCommand(args: readonly string[], io: CliIo): Promise<numbe
     io.stderr(`${error instanceof Error && "code" in error && error.code === "EEXIST" ? "AIR files already exist in the output directory; remove them or pass --output." : error instanceof Error ? error.message.split("\n")[0] : String(error)}\n`);
     return checkFailureCode(error);
   }
+}
+
+type TrafficCommand = { readonly argv: readonly string[]; readonly env: readonly string[] };
+
+// Records requests sent through the proxy by a command (or read from a HAR file). Every listed environment variable
+// is pointed at the proxy, so test suites that read a base URL from the environment need no changes.
+async function recordFromSource(input: { readonly root: string; readonly upstream: string; readonly command: TrafficCommand; readonly har: string | undefined; readonly io: CliIo }): Promise<Parameters<typeof checkFromExchanges>[0]> {
+  if (input.har) return exchangesFromHar(JSON.parse(await readFile(resolve(input.har), "utf8")), input.upstream);
+  if (input.command.argv.length === 0) throw new CheckInputError("Nothing to record: pass --tests, -- <command>, or --from-har <file>.");
+  const controller = new AbortController(); let commandExit = 0; let commandTail = "";
+  const exchanges = await recordHttpTraffic({ upstream: input.upstream, signal: controller.signal, onListening: (proxy) => {
+    const [program, ...programArgs] = input.command.argv;
+    const env = { ...process.env, AIR_PROXY_URL: proxy, ...Object.fromEntries(input.command.env.map((name) => [name, proxy])) };
+    const child = spawn(program!, programArgs, { cwd: input.root, env, shell: false, stdio: ["ignore", "pipe", "pipe"] });
+    const keep = (chunk: Buffer): void => { commandTail = `${commandTail}${chunk.toString()}`.slice(-2000); };
+    child.stdout.on("data", keep); child.stderr.on("data", keep);
+    child.once("error", (error) => { commandExit = 127; commandTail = error.message; controller.abort(); });
+    child.once("close", (code) => { commandExit = code ?? 1; controller.abort(); });
+  } });
+  if (commandExit !== 0) input.io.stderr(`NOTE the traffic command exited ${commandExit}; recorded what it sent. Last output: ${commandTail.trim().split("\n").slice(-2).join(" | ")}\n`);
+  if (exchanges.length === 0) throw new CheckInputError(`The command sent no requests through the proxy${input.command.env.length > 0 ? ` (it was given ${input.command.env.join(", ")} pointing at it)` : ""}. Its tests probably call the code in-process; point their base URL at $AIR_PROXY_URL or use a request script.`);
+  return exchanges;
+}
+
+const BASE_URL_NAMES = ["BASE_URL", "API_URL", "APIURL", "API_BASE_URL", "SERVER_URL", "APP_URL", "TEST_URL", "HOST_URL"];
+
+// Finds the project's test command and the environment variables its tests read for a server URL.
+async function detectTestRun(root: string): Promise<TrafficCommand | undefined> {
+  const exists = async (path: string): Promise<boolean> => { try { await stat(resolve(root, path)); return true; } catch { return false; } };
+  let argv: string[] | undefined;
+  try {
+    const scripts = (JSON.parse(await readFile(resolve(root, "package.json"), "utf8")) as { scripts?: Record<string, string> }).scripts ?? {};
+    const name = ["test:e2e", "test:api", "e2e", "test:integration", "test"].find((candidate) => scripts[candidate] && !/no test specified/u.test(scripts[candidate]!));
+    if (name) argv = name === "test" ? ["npm", "test"] : ["npm", "run", name];
+  } catch { /* not a Node project */ }
+  if (!argv && (await exists("pytest.ini") || await exists("conftest.py") || await exists("tests/conftest.py"))) argv = ["python", "-m", "pytest", "-q"];
+  if (!argv && await exists("go.mod")) argv = ["go", "test", "./..."];
+  if (!argv && await exists(".rspec")) argv = ["bundle", "exec", "rspec"];
+  if (!argv && await exists("phpunit.xml")) argv = ["vendor/bin/phpunit"];
+  if (!argv && await exists("pom.xml")) argv = ["mvn", "-q", "test"];
+  if (!argv && await exists("gradlew")) argv = ["./gradlew", "test"];
+  if (!argv && await exists("Cargo.toml")) argv = ["cargo", "test"];
+  if (!argv) return undefined;
+  const names = new Set(BASE_URL_NAMES);
+  const reads = /(?:process\.env\.|os\.environ(?:\.get)?\(?\[?\s*["']|os\.Getenv\(\s*"|ENV\[\s*["']|System\.getenv\(\s*"|env\(\s*["'])([A-Z][A-Z0-9_]*(?:URL|HOST|ENDPOINT|BASE)[A-Z0-9_]*)/gu;
+  const walk = async (directory: string, depth: number): Promise<void> => {
+    if (depth > 6) return;
+    let entries; try { entries = await readdir(directory, { withFileTypes: true }); } catch { return; }
+    for (const entry of entries) {
+      if (entry.name.startsWith(".") || ["node_modules", "vendor", "dist", "build", "target", "venv"].includes(entry.name)) continue;
+      const path = resolve(directory, entry.name);
+      if (entry.isDirectory()) await walk(path, depth + 1);
+      else if (/(test|spec|e2e)/iu.test(relative(root, path)) && /\.(?:[cm]?[jt]sx?|py|go|rb|java|kt|php|rs|json)$/u.test(entry.name)) for (const match of (await readFile(path, "utf8")).matchAll(reads)) names.add(match[1]!);
+    }
+  };
+  await walk(root, 0);
+  return { argv, env: [...names].sort() };
+}
+
+// Grows coverage without touching existing scenarios: records more traffic, appends only new requests, and
+// baselines just those against the running service. The previous baseline is kept.
+async function protectAdd(input: { readonly root: string; readonly profile: CheckProfile; readonly trafficCommand: TrafficCommand; readonly har: string | undefined; readonly io: CliIo }): Promise<number> {
+  const { root, profile, io } = input;
+  const checkPath = resolve(root, profile.check);
+  const [check, target, policy, baseline] = await Promise.all([loadMigrationCheck(checkPath), loadCheckTarget(resolve(root, profile.legacy)), loadCheckPolicy(profile.policy ? resolve(root, profile.policy) : undefined), loadCheckBaseline(resolve(root, profile.baseline))]);
+  if (target.spec.type !== "http" || !(target.spec.baseUrl)) throw new CheckInputError("--add records HTTP traffic; this setup's target is not an HTTP base URL.");
+  const exchanges = await recordFromSource({ root, upstream: target.spec.baseUrl, command: input.trafficCommand, har: input.har, io });
+  const recorded = checkFromExchanges(exchanges, { name: check.metadata.name, existing: check.spec.scenarios });
+  const added = recorded.check.spec.scenarios;
+  credentialNotes(recorded, io);
+  if (added.length === 0) { io.stdout(`No new requests: all ${exchanges.length} recorded request(s) are already covered.\n${await coverageLine(root, check)}`); return 0; }
+  const extended: CheckDocument = { ...check, spec: { ...check.spec, scenarios: [...check.spec.scenarios, ...added] } };
+  const repository = gitRepositoryState();
+  const result = await addBaselineScenarios({ check: extended, policy, baseline, target, repositoryRoot: repository.root, scenarioIds: added.map((scenario) => scenario.id), reason: "coverage added by air protect --add" });
+  const previous = resolve(root, `${profile.baseline}-before-add-${new Date().toISOString().replace(/[:.]/gu, "-")}`);
+  await writeFile(checkPath, stringifyYaml(extended), "utf8");
+  await rename(resolve(root, profile.baseline), previous);
+  await writeCheckBaseline(resolve(root, profile.baseline), result.baseline);
+  await writeExpectedCache(root, check.metadata.name, result.observations);
+  await stabilize(root, profile, io);
+  io.stdout(`ADDED ${added.length} scenario(s); ${extended.spec.scenarios.length} in total (previous baseline kept at ${relative(root, previous)}).\n${await coverageLine(root, extended)}`);
+  return 0;
+}
+
+// How many HTTP routes found in the code are exercised by the check, so a thin first baseline is visible.
+async function coverageLine(root: string, check: CheckDocument): Promise<string> {
+  const report = await scanCodeSeams({ root }).catch(() => undefined);
+  const routes = [...new Map((report?.seams ?? []).filter((seam) => seam.kind === "http" && seam.route).map((seam) => [`${seam.method ?? "ANY"} ${seam.route}`, { method: seam.method ?? "ANY", route: seam.route! }])).values()];
+  if (routes.length === 0) return "";
+  // A scenario that only ever saw 404 did not reach a route, so it does not count as coverage.
+  const cache = await readExpectedCache(root);
+  const reached = (id: string): boolean => (cache[`${check.metadata.name}::${id}`] as { http?: { status?: number } } | undefined)?.http?.status !== 404;
+  const requests = check.spec.scenarios.flatMap((scenario) => (scenario.request.kind === "http" && reached(scenario.id) ? [{ method: scenario.request.method, path: scenario.request.path.split("?")[0]! }] : []));
+  const covered = routes.filter((route) => requests.some((request) => (route.method === "ANY" || route.method === request.method) && templatePattern(route.route.replace(/<(?:\w+:)?(\w+)>/gu, ":$1").replace(/(.)\/$/u, "$1")).test(request.path))).length;
+  return `COVERAGE ${covered} of ${routes.length} HTTP routes found in the code are exercised${covered < routes.length ? "; add more with: air protect --add --tests (or --add -- <command that calls $AIR_PROXY_URL>)" : ""}.\n`;
 }
 
 const AGENT_BLOCK_START = "<!-- AIR:START (managed by `air agent install`; edits inside are replaced) -->";
@@ -1856,8 +2005,11 @@ console.log(JSON.stringify(observation));
 
 async function harnessCommand(args: readonly string[], io: CliIo): Promise<number> {
   const [action, ...rest] = args;
-  const usage = "Usage:\n  air harness task\n  air harness new <name> [--observe <category,...>]\n  air harness verify <name> [--mutation <patch>] [--runs <n>] [--setup <command>] [--json]\n";
-  const parsed = parseFlags(rest, ["--observe", "--mutation", "--runs", "--setup"], ["--json"]);
+  const usage = "Usage:\n  air harness task\n  air harness new <name> [--observe <category,...>]\n  air harness verify <name> --mutation <patch> [--mutation <patch>]... [--runs <n>] [--setup <command>] [--json]\n";
+  // --mutation may repeat: every planted break must be detected.
+  const patches: string[] = []; const others: string[] = [];
+  for (let index = 0; index < rest.length; index += 1) { if (rest[index] === "--mutation" && rest[index + 1]) { patches.push(rest[index + 1]!); index += 1; } else others.push(rest[index]!); }
+  const parsed = parseFlags(others, ["--observe", "--runs", "--setup"], ["--json"]);
   if (!parsed || !action) { io.stderr(usage); return 2; }
   try {
     const root = projectRoot(); const profile = await readCheckProfile(root);
@@ -1895,17 +2047,18 @@ Never weaken a harness or its check to make a run pass.
     if (!Number.isInteger(runs) || runs < 2 || runs > 20) { io.stderr(usage); return 2; }
     const [check, target] = await Promise.all([loadMigrationCheck(resolve(directory, "check.yaml")), loadCheckTarget(resolve(directory, "target.yaml"))]);
     const repository = gitRepositoryState();
-    const mutation = parsed.values.get("--mutation");
-    const verdict = mutation
-      ? await withMutatedCopy({ root: repository.root, patch: resolve(mutation), setup: parsed.values.get("--setup"), run: (mutatedRoot) => verifyHarness({ check, target, repositoryRoot: repository.root, runs, mutatedRoot }) })
-      : await verifyHarness({ check, target, repositoryRoot: repository.root, runs });
+    const verdict = await verifyHarness({ check, target, repositoryRoot: repository.root, runs });
     const problems = [...verdict.problems];
-    if (!mutation) problems.push("no --mutation patch: AIR cannot confirm that the harness notices a broken behavior");
+    if (patches.length === 0) problems.push("no --mutation patch: AIR cannot confirm that the harness notices a broken behavior");
+    for (const patch of patches) {
+      const planted = await withMutatedCopy({ root: repository.root, patch: resolve(patch), setup: parsed.values.get("--setup"), run: (mutatedRoot) => verifyHarness({ check, target, repositoryRoot: repository.root, runs: 2, mutatedRoot }) });
+      if (!planted.mutationDetected) problems.push(`the planted change in ${relative(repository.root, resolve(patch))} was not detected; the harness does not observe the behavior it claims to cover`);
+    }
     if (verdict.proposedNormalization.length > 0) problems.push(`generated values change between runs; add to check.yaml normalization: ${verdict.proposedNormalization.map((rule) => `{ kind: typed-token, pointer: ${rule.pointer}, format: ${rule.kind === "typed-token" ? rule.format : ""} }`).join(", ")}`);
     const accepted = problems.length === 0;
-    if (accepted) await writeFile(resolve(directory, "verified.json"), `${JSON.stringify({ v: 1, fingerprint: await harnessFingerprint(directory), runs, mutationDetected: verdict.mutationDetected === true }, null, 2)}\n`, "utf8");
+    if (accepted) await writeFile(resolve(directory, "verified.json"), `${JSON.stringify({ v: 1, fingerprint: await harnessFingerprint(directory), runs, mutations: patches.length }, null, 2)}\n`, "utf8");
     if (parsed.flags.has("--json")) io.stdout(`${JSON.stringify({ ...verdict, accepted, problems })}\n`);
-    else io.stdout(`${accepted ? `HARNESS ACCEPTED ${name}: stable over ${runs} runs, input-sensitive, and caught the planted change.` : `HARNESS REJECTED ${name}:\n${problems.map((problem) => `- ${problem}`).join("\n")}`}\nNEXT ${accepted ? "run `air protect` to baseline it; it is checked on every run from now on." : "fix the harness or its scenarios (never weaken them to pass), then verify again."}\n`);
+    else io.stdout(`${accepted ? `HARNESS ACCEPTED ${name}: stable over ${runs} runs, input-sensitive, every declared category observed, and caught ${patches.length} planted change(s).` : `HARNESS REJECTED ${name}:\n${problems.map((problem) => `- ${problem}`).join("\n")}`}\nNEXT ${accepted ? "run `air protect` to baseline it; it is checked on every run from now on." : "fix the harness or its scenarios (never weaken them to pass), then verify again."}\n`);
     return accepted ? 0 : 1;
   } catch (error) {
     io.stderr(`${error instanceof Error && "code" in error && error.code === "EEXIST" ? "That harness already exists." : error instanceof Error ? error.message.split("\n")[0] : String(error)}\n`);
