@@ -28,7 +28,10 @@ async function filesBelow(directory) {
 
 export async function suiteSha256() {
   const files = (await filesBelow(benchmarkRoot))
-    .filter((path) => !path.includes(`${sep}results${sep}`) && !path.includes(`${sep}badges${sep}`))
+    .filter((path) => {
+      const first = relative(benchmarkRoot, path).split(sep)[0];
+      return !["results", "results-batches", "badges", ".checkpoints"].includes(first);
+    })
     .sort();
   const material = [];
   for (const path of files) material.push(`${relative(benchmarkRoot, path)}\0${await sha256File(path)}`);
@@ -207,8 +210,9 @@ export async function runProcess(program, args, options = {}) {
   });
 }
 
-export async function createRunWorkspace(sliceId) {
-  const directory = await mkdtemp(resolve(tmpdir(), `air-llm-${sliceId}-`));
+export async function createRunWorkspace(sliceId, destination) {
+  const directory = destination ?? await mkdtemp(resolve(tmpdir(), `air-llm-${sliceId}-`));
+  if (destination) await mkdir(directory, { recursive: true });
   const slice = resolve(benchmarkRoot, "slices", sliceId);
   await cp(resolve(slice, "workspace"), directory, { recursive: true });
   await cp(resolve(slice, "task.md"), resolve(directory, "task.md"));
@@ -261,6 +265,10 @@ export function tokenUsage(jsonl) {
     } catch { /* preserve non-JSON diagnostics, but they have no usage data */ }
   }
   return { inputTokens, outputTokens };
+}
+
+export function isUsageLimitFailure(output) {
+  return /(?:hit|reached|exceeded)[^\n]{0,80}usage limit|usage limit[^\n]{0,120}(?:upgrade|credits|try again|reset)/iu.test(output);
 }
 
 export function measurementFromResult(slice, result, rounds, passAt1, buildFailures, infrastructureRetries, durationMs, usage) {

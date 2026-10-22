@@ -6,6 +6,7 @@ import {
   aggregateEvidence,
   benchmarkRoot,
   evaluateCandidate,
+  isUsageLimitFailure,
   loadSuite,
   renderScorecard,
   root,
@@ -70,6 +71,11 @@ describe("LLM verification-lift benchmark", () => {
       JSON.stringify({ type: "turn.completed", usage: { input_tokens: 80, output_tokens: 10 } }),
     ].join("\n");
     expect(tokenUsage(transcript)).toEqual({ inputTokens: 180, outputTokens: 30 });
+  });
+
+  it("recognizes account usage limits without treating ordinary failures as limits", () => {
+    expect(isUsageLimitFailure("You've hit your usage limit. Purchase more credits or try again later.")).toBe(true);
+    expect(isUsageLimitFailure("request failed with HTTP 500")).toBe(false);
   });
 
   it("renders a deterministic evidence-backed scorecard", () => {
