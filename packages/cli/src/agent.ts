@@ -12,6 +12,11 @@ AIR locks what a service observably does, so changes do not alter behavior by ac
   from the routes in the code and records a baseline. If AIR asks a QUESTION, ask the developer.
   For richer coverage, add a command that sends realistic requests:
   \`air protect --url http://localhost:<port> -- sh -c 'BASE_URL=$AIR_PROXY_URL npm test'\`.
+- Read every NOTE after the first run. If most scenarios hit a login wall, ask the developer how to sign in,
+  put the session cookie or token in an environment variable, and run
+  \`air protect --header Cookie=<ENV_VAR> --rebaseline\` (only the variable name is stored). If the code stores
+  data, ask for a command that restores a clean state and run \`air protect --reset "<command>" --rebaseline\`;
+  otherwise earlier requests can change later answers and hide real changes.
 - After each change: restart the service and run \`air protect\`.
   Exit 0 = behavior unchanged. Exit 1 = each "- scenario" block lists pointers with expected and actual
   values; "(n)" means n differences under that pointer. Exit 2 = setup question. Exit 3 = the service or

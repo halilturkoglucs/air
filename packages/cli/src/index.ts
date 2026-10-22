@@ -1,9 +1,9 @@
 import { basename, dirname, relative, resolve } from "node:path";
 import { createHash } from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
-import { copyFile, mkdir, mkdtemp, readFile, readdir, stat, symlink, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readFile, readdir, rename, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { parse as parseYaml } from "yaml";
+import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import {
   AirMigrationError,
   AirParseError,
@@ -1570,6 +1570,35 @@ async function checkCoverageCommand(args: readonly string[], io: CliIo): Promise
   } catch (error) { io.stderr(`${error instanceof Error ? error.message : String(error)}\n`); return checkFailureCode(error); }
 }
 
+// Splits a command line into argv without a shell; supports "double" and 'single' quotes.
+function splitCommand(command: string): string[] {
+  const argv: string[] = []; let current = ""; let quote: string | undefined; let started = false;
+  for (const character of command) {
+    if (quote) { if (character === quote) quote = undefined; else current += character; continue; }
+    if (character === "\"" || character === "'") { quote = character; started = true; continue; }
+    if (/\s/u.test(character)) { if (started) { argv.push(current); current = ""; started = false; } continue; }
+    current += character; started = true;
+  }
+  if (quote) throw new CheckInputError("Unclosed quote in --reset command.");
+  if (started) argv.push(current);
+  return argv;
+}
+
+// Field-trial lessons turned into guidance: login walls, missing configuration, and state that hides changes.
+async function setupNotes(root: string, target: Awaited<ReturnType<typeof loadCheckTarget>>, observations: ReadonlyMap<string, unknown>): Promise<string[]> {
+  const statuses = [...observations.values()].map((value) => (value as { http?: { status?: number } } | undefined)?.http?.status).filter((status): status is number => typeof status === "number");
+  const notes: string[] = [];
+  const walled = statuses.filter((status) => status === 401 || status === 403 || (status >= 300 && status < 400)).length;
+  if (statuses.length > 0 && walled * 2 >= statuses.length && !target.spec.headers) notes.push(`${walled} of ${statuses.length} scenarios only reached a login wall or redirect. To check signed-in behavior, put a session cookie or token in an environment variable (ask the developer how to sign in) and run: air protect --header Cookie=AIR_SESSION --rebaseline`);
+  const failing = statuses.filter((status) => status >= 500).length;
+  if (failing > 0) notes.push(`${failing} scenario(s) returned 5xx; the service may be missing configuration in this environment. Those scenarios lock the failure, not the feature.`);
+  if (!target.spec.lifecycle?.reset) {
+    const report = await scanCodeSeams({ root }).catch(() => undefined);
+    if (report?.effects.some((effect) => effect.kind === "database")) notes.push("this code stores data, and requests (even GETs) can change what later requests return, which can hide code changes. Give AIR a command that restores a clean state before each scenario: air protect --reset \"<command>\" --rebaseline");
+  }
+  return notes;
+}
+
 const AIR_GITIGNORE = [".air/runs/", ".air/last-run*.json", ".air/expected.json"];
 const OPENAPI_CANDIDATES = ["openapi.yaml", "openapi.yml", "openapi.json", "swagger.yaml", "swagger.yml", "swagger.json", "docs/openapi.yaml", "docs/openapi.json", "api/openapi.yaml"];
 const SAFE_METHODS = new Set(["GET", "HEAD"]);
@@ -1607,9 +1636,18 @@ async function ensureGitignore(root: string): Promise<boolean> {
 
 // One entry point for people and agents: first run records and baselines a running service, later runs check it.
 async function protectCommand(args: readonly string[], io: CliIo): Promise<number> {
-  const usage = "Usage: air protect [--url <base-url> [--from-har <file> | -- <command that sends requests to $AIR_PROXY_URL>] [--output <dir>]] [--max-lines <n>] [--json]\n";
+  const usage = "Usage: air protect [--url <base-url> [--from-har <file> | -- <command that sends requests to $AIR_PROXY_URL>] [--output <dir>]] [--header <Name>=<ENV_VAR>]... [--reset \"<command>\"] [--rebaseline] [--max-lines <n>] [--json]\n";
   const separator = args.indexOf("--"); const command = separator >= 0 ? args.slice(separator + 1) : [];
-  const parsed = parseFlags(separator >= 0 ? args.slice(0, separator) : args, ["--url", "--from-har", "--output", "--max-lines"], ["--json"]);
+  const own = separator >= 0 ? args.slice(0, separator) : args;
+  // --header may repeat; it is collected before the single-value flags are parsed.
+  const headers: [string, string][] = []; const rest: string[] = [];
+  for (let index = 0; index < own.length; index += 1) {
+    if (own[index] !== "--header") { rest.push(own[index]!); continue; }
+    const match = /^([A-Za-z0-9-]{1,64})=([A-Za-z_][A-Za-z0-9_]*)$/u.exec(own[index + 1] ?? "");
+    if (!match) { io.stderr(`${usage}--header takes Name=ENV_VAR; the value is read from that environment variable and never stored.\n`); return 2; }
+    headers.push([match[1]!, match[2]!]); index += 1;
+  }
+  const parsed = parseFlags(rest, ["--url", "--from-har", "--output", "--max-lines", "--reset"], ["--json", "--rebaseline"]);
   if (!parsed || parsed.positional.length > 0) { io.stderr(usage); return 2; }
   const passThrough = [...(parsed.values.has("--max-lines") ? ["--max-lines", parsed.values.get("--max-lines")!] : []), ...(parsed.flags.has("--json") ? ["--json"] : [])];
   try {
@@ -1622,16 +1660,17 @@ async function protectCommand(args: readonly string[], io: CliIo): Promise<numbe
       }
       const upstream = new URL(url).toString();
       const name = `${new URL(upstream).hostname.replace(/[^a-z0-9]+/giu, "-")}-${new URL(upstream).port || "80"}`;
-      let check: CheckDocument | undefined; let note = "";
+      let check: CheckDocument | undefined; let note = ""; let built: string | undefined;
       if (command.length === 0 && !parsed.values.has("--from-har")) {
         // No proxy needed: build read-only scenarios from an OpenAPI file or from routes found in the code.
-        const built = await scenariosWithoutProxy(root, name);
-        if (!built.check) {
-          io.stdout(`QUESTION AIR found no OpenAPI file and no parameter-free GET routes to call safely${built.skipped > 0 ? ` (${built.skipped} route(s) need inputs or change data)` : ""}. What sends this service realistic requests?\nNEXT run: air protect --url ${url} -- <command that calls $AIR_PROXY_URL> (for example: sh -c 'BASE_URL=$AIR_PROXY_URL npm test'), or air protect --url ${url} --from-har <file>.\n`);
+        const source = await scenariosWithoutProxy(root, name);
+        if (!source.check) {
+          io.stdout(`QUESTION AIR found no OpenAPI file and no parameter-free GET routes to call safely${source.skipped > 0 ? ` (${source.skipped} route(s) need inputs or change data)` : ""}. What sends this service realistic requests?\nNEXT run: air protect --url ${url} -- <command that calls $AIR_PROXY_URL> (for example: sh -c 'BASE_URL=$AIR_PROXY_URL npm test'), or air protect --url ${url} --from-har <file>.\n`);
           return 2;
         }
-        check = built.check;
-        if (built.skipped > 0) note = `NOTE ${built.skipped} route(s) that need inputs or change data were not called. Add them later with a recorded run (air protect --url ${url} -- <command>) or by editing the check file.\n`;
+        check = source.check;
+        built = check.spec.scenarios[0]?.description?.startsWith("From OpenAPI") ? "the OpenAPI file" : "routes found in the code";
+        if (source.skipped > 0) note = `NOTE ${source.skipped} route(s) that need inputs or change data were not called. Add them later with a recorded run (air protect --url ${url} -- <command>) or by editing the check file.\n`;
       }
       let exchanges: Parameters<typeof checkFromExchanges>[0] = [];
       if (check) { /* built above */ }
@@ -1655,22 +1694,44 @@ async function protectCommand(args: readonly string[], io: CliIo): Promise<numbe
       if (!check) ({ check, skipped } = checkFromExchanges(exchanges, { name }));
       const paths = await writeRecordedCheck(output, check, upstream);
       if (note) io.stderr(note);
+      io.stderr(`${built ? `Built ${check.spec.scenarios.length} read-only scenario(s) from ${built}` : `Recorded ${check.spec.scenarios.length} scenario(s)${skipped > 0 ? ` (skipped ${skipped} non-JSON or static)` : ""}`}.\n`);
       const policyPath = resolve(output, "policy.yaml");
       await writeFile(policyPath, "apiVersion: air.dev/check-policy/v0.1\nkind: CheckPolicy\nmetadata: { name: air-protect }\nspec:\n  allowedNormalizations: [ignore, typed-token, unordered-array, rename, internal-boundary]\n  # The baseline comes from the running service, not from a committed tree.\n  requireCleanBaseline: false\n", { encoding: "utf8", flag: "wx" });
       profile = { check: relative(root, paths.check), policy: relative(root, policyPath), baseline: relative(root, resolve(output, "baseline")), legacy: relative(root, paths.target), candidate: relative(root, paths.target), output: ".air/runs" };
       await mkdir(resolve(root, ".air"), { recursive: true });
       await writeFile(resolve(root, ".air/check.json"), `${JSON.stringify(profile, null, 2)}\n`, "utf8");
       if (await ensureGitignore(root)) io.stderr("NOTE added AIR's local state (.air/runs, last-run, expected values) to .gitignore.\n");
-      io.stderr(`Recorded ${check.spec.scenarios.length} scenario(s)${skipped > 0 ? ` (skipped ${skipped} non-JSON or static)` : ""}.\n`);
     }
     let baselineExists = true;
     try { await stat(resolve(root, profile.baseline, "baseline.json")); } catch { baselineExists = false; }
+    if (headers.length > 0 || parsed.values.has("--reset")) {
+      // Auth headers and state resets live in the target as environment-variable names and argv; values are never stored.
+      const targetPath = resolve(root, profile.legacy);
+      const target = parseYaml(await readFile(targetPath, "utf8")) as { spec: Record<string, unknown> };
+      if (headers.length > 0) target.spec.headers = { ...(target.spec.headers as object | undefined), ...Object.fromEntries(headers.map(([name, variable]) => [name, { fromEnv: variable }])) };
+      if (parsed.values.has("--reset")) {
+        const argv = splitCommand(parsed.values.get("--reset")!);
+        if (argv.length === 0) throw new CheckInputError("--reset needs a command, e.g. --reset \"npm run db:reset\".");
+        target.spec.fixtureIsolation = "reset-command";
+        target.spec.lifecycle = { ...(target.spec.lifecycle as object | undefined), reset: { argv } };
+      }
+      const source = stringifyYaml(target);
+      await writeFile(targetPath, source, "utf8"); await loadCheckTarget(targetPath);
+      if (baselineExists && !parsed.flags.has("--rebaseline")) io.stderr("NOTE the target changed; run `air protect --rebaseline` to capture behavior with the new setup.\n");
+    }
+    if (baselineExists && parsed.flags.has("--rebaseline")) {
+      const previous = resolve(root, `${profile.baseline}-replaced-${new Date().toISOString().replace(/[:.]/gu, "-")}`);
+      await rename(resolve(root, profile.baseline), previous);
+      io.stderr(`NOTE previous baseline kept at ${relative(root, previous)}.\n`);
+      baselineExists = false;
+    }
     if (!baselineExists) {
       const repository = gitRepositoryState();
       const [check, target, policy] = await Promise.all([loadMigrationCheck(resolve(root, profile.check)), loadCheckTarget(resolve(root, profile.legacy)), loadCheckPolicy(profile.policy ? resolve(root, profile.policy) : undefined)]);
       const { baseline, observations } = await createCheckBaselineDetailed({ check, target, policy, repositoryRoot: repository.root, repositoryHash: repository.hash, clean: repository.clean, allowDirty: true, keepObservations: true });
       await writeCheckBaseline(resolve(root, profile.baseline), baseline);
       await writeExpectedCache(root, check.metadata.name, observations);
+      for (const note of await setupNotes(root, target, observations)) io.stdout(`NOTE ${note}\n`);
       io.stdout(`PROTECTED ${baseline.scenarios.length} scenario(s) (baseline ${baseline.baselineId.slice(0, 12)}). Commit ${dirname(profile.check)}/ and .air/check.json.\nNEXT change the code, restart the service, then run \`air protect\`.\n`);
       return Math.max(0, await protectHarnesses(root, profile, passThrough, io));
     }

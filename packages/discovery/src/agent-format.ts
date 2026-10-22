@@ -78,7 +78,7 @@ export function buildAgentReport(input: { readonly result: CheckResult; readonly
   const harness = result.mismatches.some((item) => item.repair === "harness" && item.classification !== "missing-observation");
   const next = result.passed ? "DONE candidate matches the baseline; stop."
     : harness ? "NEXT stale baseline or policy violation: fix the check/policy or re-baseline legacy; do not edit the candidate for these."
-      : "NEXT edit candidate code only, then rerun `air check run --agent`.";
+      : "NEXT fix the code (never the checks) unless the change is intended, then rerun the same AIR command.";
   return {
     v: AGENT_PROTOCOL, ok: result.passed, passed: result.scenarios.filter((scenario) => scenario.passed).length, total: result.scenarios.length,
     differences: result.mismatches.length, ...delta, diffs: shown, omitted: grouped.length - shown.length, notes, next,

@@ -144,6 +144,8 @@ air protect                                    # after every change: PASS, or ex
 
 No proxy or framework plugin is needed: the first `air protect` builds read-only scenarios from an OpenAPI file in the repository or from the routes it finds in the code, then calls the service directly. For richer coverage, let it record a command that exercises the service, for example your API tests: `air protect --url http://localhost:3000 -- sh -c 'BASE_URL=$AIR_PROXY_URL npm test'`. Differences show expected and actual values; values stay on your machine (`.air/expected.json`, gitignored). Accept an intended change with `air check approve <scenario> --reason "..."`.
 
+Two flags cover what most real services need. `--header Cookie=AIR_SESSION` signs requests in with a value read from that environment variable (only the name is stored). `--reset "npm run db:reset"` restores a clean state before each scenario, so data written by one request (even a GET) cannot hide a code change. `air protect` suggests both when its first run shows a login wall or the code stores data, and `--rebaseline` re-captures behavior with the new setup while keeping the old baseline.
+
 Events, caches, data, jobs, files, and emails are covered without AIR parsing every technology: `air protect` prints a `TASK`, your coding agent writes a small harness in any language (`air harness new`), and AIR accepts it only after `air harness verify --mutation <patch>` proves it is stable across runs, reacts to its input, and catches a deliberately broken copy of the code. Verified harnesses are baselined and checked by every `air protect` run.
 
 ### Ways to start

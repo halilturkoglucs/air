@@ -50,6 +50,8 @@ export interface CheckTarget {
     readonly environment?: EnvironmentReferences;
     readonly baseUrl?: string;
     readonly baseUrlEnv?: string;
+    // Request headers for HTTP targets (e.g. a session cookie). Only the environment variable name is stored.
+    readonly headers?: Readonly<Record<string, { readonly fromEnv: string }>>;
     readonly command?: CommandDefinition;
     readonly observationPath?: string;
     readonly lifecycle?: { readonly start?: CommandDefinition; readonly reset?: CommandDefinition; readonly readiness?: { readonly path: string; readonly timeoutMs?: number }; readonly services?: readonly { readonly name: string; readonly command: CommandDefinition; readonly readinessUrl?: string; readonly timeoutMs?: number }[] };
@@ -408,9 +410,17 @@ async function waitForReadiness(target: CheckTarget): Promise<void> {
   throw new CheckInfrastructureError(`Target ${target.metadata.name} did not become ready within ${readiness.timeoutMs ?? 30_000}ms.`);
 }
 
-async function observeHttp(base: string, scenario: CheckDocument["spec"]["scenarios"][number], categories: readonly ObservationCategory[], observationPath: string): Promise<unknown> {
+function targetHeaders(target: CheckTarget): Record<string, string> {
+  return Object.fromEntries(Object.entries(target.spec.headers ?? {}).map(([name, reference]) => {
+    const value = process.env[reference.fromEnv];
+    if (value === undefined) throw new CheckInputError(`Header ${name} needs environment variable ${reference.fromEnv}, which is not set.`);
+    return [name, value];
+  }));
+}
+
+async function observeHttp(base: string, scenario: CheckDocument["spec"]["scenarios"][number], categories: readonly ObservationCategory[], observationPath: string, extraHeaders: Readonly<Record<string, string>> = {}): Promise<unknown> {
   if (scenario.request.kind !== "http") throw new CheckInputError(`HTTP target cannot execute command scenario ${scenario.id}.`);
-  const response = await fetch(scopedUrl(base, scenario.request.path), { method: scenario.request.method, headers: { "content-type": "application/json", ...scenario.request.headers }, redirect: "manual", signal: AbortSignal.timeout(scenario.timeoutMs ?? 30_000), ...(scenario.request.body === undefined ? {} : { body: JSON.stringify(scenario.request.body) }) });
+  const response = await fetch(scopedUrl(base, scenario.request.path), { method: scenario.request.method, headers: { "content-type": "application/json", ...extraHeaders, ...scenario.request.headers }, redirect: "manual", signal: AbortSignal.timeout(scenario.timeoutMs ?? 30_000), ...(scenario.request.body === undefined ? {} : { body: JSON.stringify(scenario.request.body) }) });
   const bodyText = await readBoundedResponse(response, `HTTP response for ${scenario.id}`); let body: unknown = bodyText;
   try { body = JSON.parse(bodyText) as unknown; } catch { /* preserve text */ }
   const selected = new Set(categories); const observation: Record<string, unknown> = {};
@@ -464,7 +474,7 @@ async function executeScenarios(check: CheckDocument, target: CheckTarget, repos
         if (reset.code !== 0) throw new CheckInfrastructureError(`Fixture reset failed for ${scenario.id} with exit ${reset.code}: ${reset.stderr.trim()}`);
       }
       let raw: unknown;
-      if (target.spec.type === "http") raw = await observeHttp(targetBaseUrl(target), scenario, check.spec.observations, target.spec.observationPath ?? "/_air/observations/{scenario}");
+      if (target.spec.type === "http") raw = await observeHttp(targetBaseUrl(target), scenario, check.spec.observations, target.spec.observationPath ?? "/_air/observations/{scenario}", targetHeaders(target));
       else {
         if (scenario.request.kind !== "command" || !target.spec.command) throw new CheckInputError(`Command target cannot execute HTTP scenario ${scenario.id}.`);
         const execution = await executeCommand(target.spec.command, target, repositoryRoot, scenario.request.arguments ?? [], scenario.request.input, scenario.timeoutMs ?? 30_000);
