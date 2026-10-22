@@ -11,5 +11,5 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": { "@air/schema": "workspace:*" },
-  "devDependencies": { "tsup": "^8.5.0" }
+  "devDependencies": { "tsup": "^9.0.0" }
 }
