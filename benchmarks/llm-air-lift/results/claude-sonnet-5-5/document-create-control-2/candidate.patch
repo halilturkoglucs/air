@@ -1,11 +1,8 @@
 diff --git a/candidate.mjs b/candidate.mjs
-index 63a496d..20a3955 100644
+index 63a496d..0b1ff42 100644
 --- a/candidate.mjs
 +++ b/candidate.mjs
-@@ -1,13 +1,87 @@
-+import { randomUUID } from "node:crypto";
-+
- let source = "";
+@@ -2,12 +2,62 @@ let source = "";
  for await (const chunk of process.stdin) source += chunk;
  const input = JSON.parse(source || "{}");
  
@@ -18,84 +15,62 @@ index 63a496d..20a3955 100644
 -  failures: [],
 -  retryability: false
 -}));
-+const JSON_HEADERS = { "content-type": "application/json" };
-+const { title, idempotencyKey } = input;
-+const documentId = input.documentId ?? randomUUID();
-+const timestamp = input.timestamp ?? new Date().toISOString();
++const id = input.documentId;
++const title = input.title;
++const timestamp = input.timestamp;
++const key = input.idempotencyKey;
++const vendorStatus = input.vendorStatus ?? 200;
++const headers = { "content-type": "application/json" };
++const body = { id, title, createdAt: timestamp };
 +
-+function observe(status, body, extra = {}) {
-+  return {
-+    http: { status, headers: { ...JSON_HEADERS, ...(extra.headers || {}) }, body },
-+    database: { rows: extra.rows || [], transaction: { committed: Boolean(extra.committed) } },
-+    messages: extra.messages || [],
-+    outbound: extra.outbound || [],
-+    ordering: extra.ordering || [],
-+    failures: extra.failures || [],
-+    retryability: Boolean(extra.retryable)
-+  };
-+}
++const emit = (o) => console.log(JSON.stringify(o));
 +
-+function fail(status, code, extra = {}) {
-+  return observe(status, { error: code }, { ...extra, failures: [{ code, status, ...(extra.detail || {}) }] });
-+}
++const replayed = input.replay === true || input.replayed === true || input.existing != null ||
++  (key != null && Array.isArray(input.seenKeys) && input.seenKeys.includes(key));
 +
-+// Maps a vendor HTTP status to an outward failure.
-+function mapVendorFailure(vendorStatus) {
-+  if (vendorStatus === 401 || vendorStatus === 403) return { status: 403, code: "forbidden", retryable: false };
-+  if (vendorStatus === 408 || vendorStatus === 429 || vendorStatus >= 500) {
-+    return { status: 503, code: "vendor_unavailable", retryable: true };
-+  }
-+  return { status: 502, code: "vendor_rejected", retryable: false };
-+}
-+
-+function run() {
-+  if (input.operation !== undefined && input.operation !== "create") return fail(400, "unsupported_operation");
-+  if (typeof title !== "string" || title.trim() === "") return fail(400, "invalid_title");
-+  if (typeof documentId !== "string" || documentId === "") return fail(400, "invalid_document_id");
-+
-+  // Idempotent replay: a prior record under the same key returns the original result without side effects.
-+  const prior = input.existing;
-+  if (idempotencyKey && prior && prior.idempotencyKey === idempotencyKey) {
-+    if (prior.title !== title) return fail(409, "idempotency_conflict");
-+    return observe(
-+      201,
-+      { id: prior.documentId, title: prior.title, createdAt: prior.timestamp },
-+      { headers: { "idempotent-replay": "true" }, ordering: ["replay"] }
-+    );
-+  }
-+
-+  const outbound = [];
-+  const ordering = [];
-+  const steps = [
-+    ["authorize", "/authorize", input.authorizeStatus ?? input.vendorStatus ?? 200],
-+    ["index", "/index", input.indexStatus ?? input.vendorStatus ?? 200]
-+  ];
-+  for (const [name, path, vendorStatus] of steps) {
-+    outbound.push({ vendor: name, method: "POST", path, documentId, timestamp, status: vendorStatus });
-+    ordering.push(`vendor.${name}`);
-+    if (vendorStatus < 200 || vendorStatus >= 300) {
-+      const m = mapVendorFailure(vendorStatus);
-+      return fail(m.status, m.code, {
-+        outbound,
-+        ordering,
-+        retryable: m.retryable,
-+        detail: { step: name, vendorStatus }
-+      });
-+    }
-+  }
-+
-+  ordering.push("database.insert", "database.commit", "message.document.created");
-+  return observe(201, { id: documentId, title, createdAt: timestamp }, {
-+    rows: [{ id: documentId, title, created_at: timestamp }],
-+    committed: true,
-+    outbound,
-+    ordering,
-+    messages: [{
-+      topic: "document.created",
-+      key: documentId,
-+      payload: { id: documentId, title, createdAt: timestamp, idempotencyKey: idempotencyKey ?? null }
-+    }]
++if (replayed) {
++  emit({
++    http: { status: 200, headers: { ...headers, "idempotent-replay": "true" }, body },
++    database: { rows: [{ id, title, createdAt: timestamp }], transaction: { committed: false, writes: 0 } },
++    messages: [],
++    outbound: [],
++    ordering: ["replay"],
++    failures: [],
++    retryability: false
++  });
++} else if (!title || typeof title !== "string" || !id) {
++  emit({
++    http: { status: 400, headers, body: { error: "invalid_request" } },
++    database: { rows: [], transaction: { committed: false, rolledBack: false } },
++    messages: [],
++    outbound: [],
++    ordering: [],
++    failures: [{ type: "validation", status: 400 }],
++    retryability: false
++  });
++} else if (vendorStatus >= 200 && vendorStatus < 300) {
++  emit({
++    http: { status: 201, headers, body },
++    database: { rows: [{ id, title, createdAt: timestamp, idempotencyKey: key }], transaction: { committed: true } },
++    messages: [{ type: "document.created", documentId: id, title, occurredAt: timestamp }],
++    outbound: [
++      { service: "vendor", action: "authorize", documentId: id, status: vendorStatus },
++      { service: "vendor", action: "index", documentId: id, status: vendorStatus }
++    ],
++    ordering: ["vendor.authorize", "vendor.index", "database.commit", "message.document.created"],
++    failures: [],
++    retryability: false
++  });
++} else {
++  const retryable = vendorStatus === 429 || vendorStatus === 408 || vendorStatus >= 500;
++  const status = vendorStatus === 429 ? 503 : 502;
++  emit({
++    http: { status, headers, body: { error: "vendor_failure" } },
++    database: { rows: [], transaction: { committed: false, rolledBack: true } },
++    messages: [],
++    outbound: [{ service: "vendor", action: "authorize", documentId: id, status: vendorStatus }],
++    ordering: ["vendor.authorize"],
++    failures: [{ type: "vendor", vendorStatus, status }],
++    retryability: retryable
 +  });
 +}
-+
-+console.log(JSON.stringify(run()));

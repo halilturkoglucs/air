@@ -1,13 +1,13 @@
 {
   "apiVersion": "air.dev/check-result/v0.1",
   "kind": "CheckResult",
-  "generatedAt": "2026-10-22T08:31:11.145Z",
-  "baselineId": "279a7e187b103c4b8f28360641b72c14fc204fbb459a11bf2ad03e0d3a0bb639",
+  "generatedAt": "2026-10-22T08:43:49.774Z",
+  "baselineId": "3d6a3f78a9042a50b44e75c27edd2379831990be0aa1db4047131a7b6379f060",
   "candidate": {
     "name": "candidate",
     "targetHash": "665b2ecdd0ef2157bebeda0f24ae2012786e516d13d79b610d22592207a78d58"
   },
-  "passed": false,
+  "passed": true,
   "policy": {
     "passed": true,
     "violations": []
@@ -23,97 +23,20 @@
     },
     {
       "id": "replays-idempotently",
-      "passed": false
+      "passed": true
+    },
+    {
+      "id": "creates-document-holdout",
+      "passed": true
+    },
+    {
+      "id": "maps-vendor-failure-holdout",
+      "passed": true
+    },
+    {
+      "id": "replays-idempotently-holdout",
+      "passed": true
     }
   ],
-  "mismatches": [
-    {
-      "classification": "missing-observation",
-      "scenario": "replays-idempotently",
-      "category": "database",
-      "selector": "/database/rows/0",
-      "expected": {
-        "type": "object",
-        "bytes": 537,
-        "sha256": "96eda3b56a2cc38e563f2d4a361de66686e0213e1c114d42f99e6d4180531378"
-      },
-      "provenance": "baseline:replays-idempotently/database/rows/0",
-      "repair": "harness"
-    },
-    {
-      "classification": "candidate-difference",
-      "scenario": "replays-idempotently",
-      "category": "database",
-      "selector": "/database/transaction/committed",
-      "expected": {
-        "type": "boolean",
-        "bytes": 4,
-        "sha256": "b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b"
-      },
-      "actual": {
-        "type": "boolean",
-        "bytes": 5,
-        "sha256": "fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa"
-      },
-      "provenance": "baseline:replays-idempotently/database/transaction/committed",
-      "repair": "candidate-code"
-    },
-    {
-      "classification": "missing-observation",
-      "scenario": "replays-idempotently",
-      "category": "http",
-      "selector": "/http/body/outcome",
-      "expected": {
-        "type": "string",
-        "bytes": 10,
-        "sha256": "5bef571cf903a75d99d6d1cfa35bc113501f6d40463c3fe05019c45b5c7428c3"
-      },
-      "provenance": "baseline:replays-idempotently/http/body/outcome",
-      "repair": "harness"
-    },
-    {
-      "classification": "candidate-difference",
-      "scenario": "replays-idempotently",
-      "category": "http",
-      "selector": "/http/headers/idempotent-replay",
-      "actual": {
-        "type": "string",
-        "bytes": 6,
-        "sha256": "18d10c7d2b4b04aaf04254d1ae5d655a5dc0407cbcdd5a8c3986e985370f36ee"
-      },
-      "provenance": "baseline:replays-idempotently/http/headers/idempotent-replay",
-      "repair": "candidate-code"
-    },
-    {
-      "classification": "candidate-difference",
-      "scenario": "replays-idempotently",
-      "category": "ordering",
-      "selector": "/ordering/0",
-      "expected": {
-        "type": "string",
-        "bytes": 18,
-        "sha256": "8dad140e6b50a8f8a4f4583ed944f098f0a16b3c2e73b4d48a59d62d7f5c1eab"
-      },
-      "actual": {
-        "type": "string",
-        "bytes": 8,
-        "sha256": "2aa310588c26f507b89c938ebd02d51af164bb3dede5b25c1a1c3264b31d9f07"
-      },
-      "provenance": "baseline:replays-idempotently/ordering/0",
-      "repair": "candidate-code"
-    },
-    {
-      "classification": "missing-observation",
-      "scenario": "replays-idempotently",
-      "category": "ordering",
-      "selector": "/ordering/1",
-      "expected": {
-        "type": "string",
-        "bytes": 10,
-        "sha256": "9e2600195d657991fb57288e7458a0cc17a0c0fea215c849b16df7ca65ee9a7c"
-      },
-      "provenance": "baseline:replays-idempotently/ordering/1",
-      "repair": "harness"
-    }
-  ]
+  "mismatches": []
 }

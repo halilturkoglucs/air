@@ -1,10 +1,10 @@
 {
   "format": "air.dev/llm-benchmark/v0.1",
-  "suiteVersion": "1.2.0",
-  "generatedAt": "2026-10-22T08:32:10.032Z",
+  "suiteVersion": "1.3.0",
+  "generatedAt": "2026-10-22T08:44:28.162Z",
   "source": {
-    "commit": "b04b5f7d0869ff0e288360e2916bab22096713f8",
-    "suiteSha256": "3dcf79d2381b5867c4ff3194bf6e4abd3204bd8c6f51c66879aad32f7a23f38f"
+    "commit": "4702092c2dfe0b33cf081ff4b63ed5976fc7eb76",
+    "suiteSha256": "93b8925edae88bf2c2b7040ccb8d6ceed7f5be7307d48ec676be60495e5f40fc"
   },
   "model": {
     "id": "claude-sonnet-5-5",
@@ -23,41 +23,40 @@
       "trial": 1,
       "inputs": {
         "taskSha256": "a276a439f07ca422841cb3a21e6f9fe9da22381b17d5d896a060695db4691700",
-        "promptSha256": "db907b4126a8ddfffabb4859c35eb4b669a4d29d87946368229fe42e7773787d",
+        "promptSha256": "9e584d255f09e4371eb244e37a4e8cc0d59729d347f8f2f2e83d55d00e98ca23",
         "starterSha256": "0869cd363b9fd11660b37507ba69d3cf9957208793c9c06f90cefc81fc1009cd"
       },
       "measurements": {
         "passAt1": false,
-        "passAt3": false,
+        "passAt3": true,
         "ordinaryTestsPassed": true,
-        "roundsUsed": 3,
-        "passedScenarios": 2,
-        "totalScenarios": 3,
-        "escapedDefects": 4,
+        "roundsUsed": 2,
+        "passedScenarios": 6,
+        "totalScenarios": 6,
+        "escapedDefects": 0,
         "buildFailures": 0,
         "infrastructureRetries": 0,
-        "mismatchesByCategory": {
-          "http": 1,
-          "database": 1,
-          "messages": 1,
-          "idempotency": 1
-        },
-        "durationMs": 74348,
-        "inputTokens": 140282,
-        "outputTokens": 8207
+        "mismatchesByCategory": {},
+        "durationMs": 34188,
+        "inputTokens": 44492,
+        "outputTokens": 4051,
+        "hiddenScenariosByRound": [
+          0,
+          6
+        ]
       },
       "artifacts": {
         "patch": {
           "path": "results/claude-sonnet-5-5/document-create-air-1/candidate.patch",
-          "sha256": "90222e682d20fca65a537dfde6530d6cb66088587fccafef0787900b987fa2cb"
+          "sha256": "17bc367725e0821633c778ddbd477cbeddad866f756afc2f481849674d7ec6ec"
         },
         "transcript": {
           "path": "results/claude-sonnet-5-5/document-create-air-1/transcript.jsonl",
-          "sha256": "0d882e2571cba8f0f3021d6a15aec5a4b4d142c7da7bbe54f0c007a5efbc1b2b"
+          "sha256": "54a0d08a5e6df17ef3394239284f802d967e6d7ab8f4be982b9a2a9ebd5ab273"
         },
         "result": {
           "path": "results/claude-sonnet-5-5/document-create-air-1/result.json",
-          "sha256": "538b9b92f3cf109fc1892291c0a4d8e20c65f0d34ed75dbcd3ebffc179e7c86a"
+          "sha256": "3272de8c81136979df5331a8cc88ed10f3cad50f8ed093a4ee695930461af0c6"
         }
       }
     },
@@ -68,41 +67,40 @@
       "trial": 2,
       "inputs": {
         "taskSha256": "a276a439f07ca422841cb3a21e6f9fe9da22381b17d5d896a060695db4691700",
-        "promptSha256": "db907b4126a8ddfffabb4859c35eb4b669a4d29d87946368229fe42e7773787d",
+        "promptSha256": "9e584d255f09e4371eb244e37a4e8cc0d59729d347f8f2f2e83d55d00e98ca23",
         "starterSha256": "0869cd363b9fd11660b37507ba69d3cf9957208793c9c06f90cefc81fc1009cd"
       },
       "measurements": {
         "passAt1": false,
-        "passAt3": false,
+        "passAt3": true,
         "ordinaryTestsPassed": true,
-        "roundsUsed": 3,
-        "passedScenarios": 2,
-        "totalScenarios": 3,
-        "escapedDefects": 4,
+        "roundsUsed": 2,
+        "passedScenarios": 6,
+        "totalScenarios": 6,
+        "escapedDefects": 0,
         "buildFailures": 0,
         "infrastructureRetries": 0,
-        "mismatchesByCategory": {
-          "http": 1,
-          "database": 1,
-          "messages": 1,
-          "idempotency": 1
-        },
-        "durationMs": 116839,
-        "inputTokens": 175691,
-        "outputTokens": 8949
+        "mismatchesByCategory": {},
+        "durationMs": 38216,
+        "inputTokens": 44650,
+        "outputTokens": 3903,
+        "hiddenScenariosByRound": [
+          0,
+          6
+        ]
       },
       "artifacts": {
         "patch": {
           "path": "results/claude-sonnet-5-5/document-create-air-2/candidate.patch",
-          "sha256": "6dd913e27e3ce89c0d26349f32ac8da6cce5590ad9dbf0646af783d043b0023b"
+          "sha256": "e3d6196b08d9b727422a83a9967e95aeecd88e8d9b13cbf577ea1e101fe62772"
         },
         "transcript": {
           "path": "results/claude-sonnet-5-5/document-create-air-2/transcript.jsonl",
-          "sha256": "c70853cbef7147f42cf23e99e922f68afb69de0e4a607a4a53350f03e471b4a2"
+          "sha256": "c77f559ee92cf800b994952ecb6c878061fab2fc155d77b024ff1efbead9330c"
         },
         "result": {
           "path": "results/claude-sonnet-5-5/document-create-air-2/result.json",
-          "sha256": "2a9e28fc5755712ac4681f3b85d45e9d86211c3a443f4724424494f74ae508ea"
+          "sha256": "ed4ef2da7d0df2c13e3ca01d934eb2452f8a36e8535d95fdd4663476c69d3dfb"
         }
       }
     },
@@ -113,41 +111,40 @@
       "trial": 3,
       "inputs": {
         "taskSha256": "a276a439f07ca422841cb3a21e6f9fe9da22381b17d5d896a060695db4691700",
-        "promptSha256": "db907b4126a8ddfffabb4859c35eb4b669a4d29d87946368229fe42e7773787d",
+        "promptSha256": "9e584d255f09e4371eb244e37a4e8cc0d59729d347f8f2f2e83d55d00e98ca23",
         "starterSha256": "0869cd363b9fd11660b37507ba69d3cf9957208793c9c06f90cefc81fc1009cd"
       },
       "measurements": {
         "passAt1": false,
-        "passAt3": false,
+        "passAt3": true,
         "ordinaryTestsPassed": true,
-        "roundsUsed": 3,
-        "passedScenarios": 2,
-        "totalScenarios": 3,
-        "escapedDefects": 4,
+        "roundsUsed": 2,
+        "passedScenarios": 6,
+        "totalScenarios": 6,
+        "escapedDefects": 0,
         "buildFailures": 0,
         "infrastructureRetries": 0,
-        "mismatchesByCategory": {
-          "http": 1,
-          "database": 1,
-          "messages": 1,
-          "idempotency": 1
-        },
-        "durationMs": 81919,
-        "inputTokens": 153005,
-        "outputTokens": 8369
+        "mismatchesByCategory": {},
+        "durationMs": 37549,
+        "inputTokens": 44167,
+        "outputTokens": 3870,
+        "hiddenScenariosByRound": [
+          0,
+          6
+        ]
       },
       "artifacts": {
         "patch": {
           "path": "results/claude-sonnet-5-5/document-create-air-3/candidate.patch",
-          "sha256": "687549bcdb091be0bea8e3211ed925e32b5f9a2ec3496bb55672a9c13c97d0c9"
+          "sha256": "254e02d6658a003c074f9e1eeb8e9ffe69276b20d411c42205975d3b5659afe7"
         },
         "transcript": {
           "path": "results/claude-sonnet-5-5/document-create-air-3/transcript.jsonl",
-          "sha256": "8604532023af59a7aa0faa848dc22329b850044c7974954626d76130c24a0ae7"
+          "sha256": "946306088386a8e52b689c94f0bd1539b13a4e604d85b10f5863002eff06d3fa"
         },
         "result": {
           "path": "results/claude-sonnet-5-5/document-create-air-3/result.json",
-          "sha256": "f85827a55e01650f06d3690b048134eba2774ad1fb35ec3063b537d752908bef"
+          "sha256": "b9ba121265253cf0957ba6423efad713f178dedec93b203700cbf6874e28cac4"
         }
       }
     },
@@ -158,7 +155,7 @@
       "trial": 1,
       "inputs": {
         "taskSha256": "a276a439f07ca422841cb3a21e6f9fe9da22381b17d5d896a060695db4691700",
-        "promptSha256": "db907b4126a8ddfffabb4859c35eb4b669a4d29d87946368229fe42e7773787d",
+        "promptSha256": "9e584d255f09e4371eb244e37a4e8cc0d59729d347f8f2f2e83d55d00e98ca23",
         "starterSha256": "0869cd363b9fd11660b37507ba69d3cf9957208793c9c06f90cefc81fc1009cd"
       },
       "measurements": {
@@ -167,36 +164,41 @@
         "ordinaryTestsPassed": true,
         "roundsUsed": 3,
         "passedScenarios": 0,
-        "totalScenarios": 3,
-        "escapedDefects": 14,
+        "totalScenarios": 6,
+        "escapedDefects": 28,
         "buildFailures": 0,
         "infrastructureRetries": 0,
         "mismatchesByCategory": {
-          "http": 3,
-          "database": 3,
-          "messages": 2,
-          "outbound": 2,
-          "ordering": 1,
-          "failures": 1,
-          "retryability": 1,
-          "idempotency": 1
+          "http": 6,
+          "database": 6,
+          "messages": 4,
+          "outbound": 4,
+          "ordering": 2,
+          "failures": 2,
+          "retryability": 2,
+          "idempotency": 2
         },
-        "durationMs": 64882,
-        "inputTokens": 112613,
-        "outputTokens": 5348
+        "durationMs": 45540,
+        "inputTokens": 60400,
+        "outputTokens": 2121,
+        "hiddenScenariosByRound": [
+          0,
+          0,
+          0
+        ]
       },
       "artifacts": {
         "patch": {
           "path": "results/claude-sonnet-5-5/document-create-control-1/candidate.patch",
-          "sha256": "241bb0577f35476003b434ea6795252d2c4a93bdbf6955ae2b28463178a0ba69"
+          "sha256": "3c97778fdb1275fd7f065207085631ac5cc07b8de4259fc7b4bf13d4f2cd5287"
         },
         "transcript": {
           "path": "results/claude-sonnet-5-5/document-create-control-1/transcript.jsonl",
-          "sha256": "f3a2bb40b526e244b810b53d2a212f8479b524f5ebaa572abb41175e42a225cd"
+          "sha256": "69da15dc0e647e2650b737da6d6d2a6da971b3810978074da45b76547186d307"
         },
         "result": {
           "path": "results/claude-sonnet-5-5/document-create-control-1/result.json",
-          "sha256": "030313b9010dfe73bc59ea4df27163eb2be930e6cd2b5571b07f5d5d5ad753a1"
+          "sha256": "33eebd343c28a52f06afb8c8dcda48403cac9ac9ad0e11238c68b50f79a4db04"
         }
       }
     },
@@ -207,7 +209,7 @@
       "trial": 2,
       "inputs": {
         "taskSha256": "a276a439f07ca422841cb3a21e6f9fe9da22381b17d5d896a060695db4691700",
-        "promptSha256": "db907b4126a8ddfffabb4859c35eb4b669a4d29d87946368229fe42e7773787d",
+        "promptSha256": "9e584d255f09e4371eb244e37a4e8cc0d59729d347f8f2f2e83d55d00e98ca23",
         "starterSha256": "0869cd363b9fd11660b37507ba69d3cf9957208793c9c06f90cefc81fc1009cd"
       },
       "measurements": {
@@ -216,36 +218,41 @@
         "ordinaryTestsPassed": true,
         "roundsUsed": 3,
         "passedScenarios": 0,
-        "totalScenarios": 3,
-        "escapedDefects": 14,
+        "totalScenarios": 6,
+        "escapedDefects": 28,
         "buildFailures": 0,
         "infrastructureRetries": 0,
         "mismatchesByCategory": {
-          "http": 3,
-          "database": 3,
-          "messages": 2,
-          "outbound": 2,
-          "ordering": 1,
-          "failures": 1,
-          "retryability": 1,
-          "idempotency": 1
+          "http": 6,
+          "database": 6,
+          "messages": 4,
+          "outbound": 4,
+          "ordering": 2,
+          "failures": 2,
+          "retryability": 2,
+          "idempotency": 2
         },
-        "durationMs": 81355,
-        "inputTokens": 149468,
-        "outputTokens": 6064
+        "durationMs": 28538,
+        "inputTokens": 59389,
+        "outputTokens": 2010,
+        "hiddenScenariosByRound": [
+          0,
+          0,
+          0
+        ]
       },
       "artifacts": {
         "patch": {
           "path": "results/claude-sonnet-5-5/document-create-control-2/candidate.patch",
-          "sha256": "ae87893badb35d54084f9c231a5909ddce7c0b71dcadf76f935e8342079f073a"
+          "sha256": "c8f1b58ddb11f55b44ecaaea5b31fb91182218c53501ba5a2d72253e66668db8"
         },
         "transcript": {
           "path": "results/claude-sonnet-5-5/document-create-control-2/transcript.jsonl",
-          "sha256": "ab0e053cc53ee9b2012484750f55371192b92dc8463d409c03929cda5ab23a44"
+          "sha256": "da0ecf8c9d8da094bd1de81df321af72698f862f6747bd1d442748d97926a996"
         },
         "result": {
           "path": "results/claude-sonnet-5-5/document-create-control-2/result.json",
-          "sha256": "867816e2a3519628bbc047469652247930886866036e43d746cd5e262f9813a4"
+          "sha256": "a520165476fba024a375cf950224dde17155d2e9b6ce8c8e2568c5bfac8accb5"
         }
       }
     },
@@ -256,7 +263,7 @@
       "trial": 3,
       "inputs": {
         "taskSha256": "a276a439f07ca422841cb3a21e6f9fe9da22381b17d5d896a060695db4691700",
-        "promptSha256": "db907b4126a8ddfffabb4859c35eb4b669a4d29d87946368229fe42e7773787d",
+        "promptSha256": "9e584d255f09e4371eb244e37a4e8cc0d59729d347f8f2f2e83d55d00e98ca23",
         "starterSha256": "0869cd363b9fd11660b37507ba69d3cf9957208793c9c06f90cefc81fc1009cd"
       },
       "measurements": {
@@ -265,36 +272,41 @@
         "ordinaryTestsPassed": true,
         "roundsUsed": 3,
         "passedScenarios": 0,
-        "totalScenarios": 3,
-        "escapedDefects": 14,
+        "totalScenarios": 6,
+        "escapedDefects": 28,
         "buildFailures": 0,
         "infrastructureRetries": 0,
         "mismatchesByCategory": {
-          "http": 3,
-          "database": 3,
-          "messages": 2,
-          "outbound": 2,
-          "ordering": 1,
-          "failures": 1,
-          "retryability": 1,
-          "idempotency": 1
+          "http": 6,
+          "database": 6,
+          "messages": 4,
+          "outbound": 4,
+          "ordering": 2,
+          "failures": 2,
+          "retryability": 2,
+          "idempotency": 2
         },
-        "durationMs": 78450,
-        "inputTokens": 147937,
-        "outputTokens": 5839
+        "durationMs": 27604,
+        "inputTokens": 59139,
+        "outputTokens": 2068,
+        "hiddenScenariosByRound": [
+          0,
+          0,
+          0
+        ]
       },
       "artifacts": {
         "patch": {
           "path": "results/claude-sonnet-5-5/document-create-control-3/candidate.patch",
-          "sha256": "22500395bb7a63759c296dcbddf021aacf70a89e3d0542d10416ff8b63d86e50"
+          "sha256": "7b872bb47374b1eead16bafdc1db33b423419646f300c6678d4bbc27d8fc3eb7"
         },
         "transcript": {
           "path": "results/claude-sonnet-5-5/document-create-control-3/transcript.jsonl",
-          "sha256": "8b21e5c471e0ce38e8d71a3f82ffc596d81eb2c17faafee32a03bfffcdd96381"
+          "sha256": "16e04b98058a7f46e382bf6cabbf56249e690062bbdbfabfb6790c26d28660e9"
         },
         "result": {
           "path": "results/claude-sonnet-5-5/document-create-control-3/result.json",
-          "sha256": "bc7f880c46da4ef82c948794c7708d35fec01165c5048468a567f09d2e899d38"
+          "sha256": "95d1c22f1e2151603c4272eca5c8f90fce7c3a93ae4a23fa41074e01f91aec7b"
         }
       }
     },
@@ -305,44 +317,40 @@
       "trial": 1,
       "inputs": {
         "taskSha256": "77eb7c91e0b05efc068b5ad1f8fc3210d20d74ba96bbe6171b0070cab50c4a53",
-        "promptSha256": "e7fe03257e62143e61ed11094a3579278fddd5dbe2328a4623a54e59187fb197",
-        "starterSha256": "25d3c4ecceaf01de7717efe0471b16591057fb898c89a8bfefceb6f9e0248e52"
+        "promptSha256": "1fae47ad1bca4ca45d4931f9526e09e216e99705cd09c7141aae12bf1b95824f",
+        "starterSha256": "f3d26254735787d338fc978954a847b8fbb58c9271815060ca8d441ffa960a60"
       },
       "measurements": {
         "passAt1": false,
-        "passAt3": false,
+        "passAt3": true,
         "ordinaryTestsPassed": true,
-        "roundsUsed": 3,
-        "passedScenarios": 1,
-        "totalScenarios": 4,
-        "escapedDefects": 12,
-        "buildFailures": 1,
+        "roundsUsed": 2,
+        "passedScenarios": 8,
+        "totalScenarios": 8,
+        "escapedDefects": 0,
+        "buildFailures": 0,
         "infrastructureRetries": 0,
-        "mismatchesByCategory": {
-          "http": 3,
-          "database": 3,
-          "messages": 2,
-          "ordering": 1,
-          "idempotency": 1,
-          "failures": 1,
-          "retryability": 1
-        },
-        "durationMs": 69226,
-        "inputTokens": 145369,
-        "outputTokens": 7250
+        "mismatchesByCategory": {},
+        "durationMs": 36826,
+        "inputTokens": 44622,
+        "outputTokens": 4108,
+        "hiddenScenariosByRound": [
+          0,
+          8
+        ]
       },
       "artifacts": {
         "patch": {
           "path": "results/claude-sonnet-5-5/ledger-transfer-air-1/candidate.patch",
-          "sha256": "60d905ff75b97817843f5cd95e40f9e2097e28c25401984a6f2a63eead6dd94a"
+          "sha256": "4256dd398a4b33fe6bfaf31e0f501a16741455c91f28585a2b3be196354f522e"
         },
         "transcript": {
           "path": "results/claude-sonnet-5-5/ledger-transfer-air-1/transcript.jsonl",
-          "sha256": "bbdbdbf651e32941b048e0d91d3a818bd606f9dbbb7b7733e676bf17bf98cf56"
+          "sha256": "4d82c1cb11d4737ced6b78a74090df8566465d21763a52477d403dfb657ce635"
         },
         "result": {
           "path": "results/claude-sonnet-5-5/ledger-transfer-air-1/result.json",
-          "sha256": "452b47cac6f81a4b80eef5419b3509046434fd65cecf8250c079db858b3e7124"
+          "sha256": "3a8ab23f903f03da9e2670cff5477d7466cdb1a76449a45367d3d599bd93cfe2"
         }
       }
     },
@@ -353,44 +361,40 @@
       "trial": 2,
       "inputs": {
         "taskSha256": "77eb7c91e0b05efc068b5ad1f8fc3210d20d74ba96bbe6171b0070cab50c4a53",
-        "promptSha256": "e7fe03257e62143e61ed11094a3579278fddd5dbe2328a4623a54e59187fb197",
-        "starterSha256": "25d3c4ecceaf01de7717efe0471b16591057fb898c89a8bfefceb6f9e0248e52"
+        "promptSha256": "1fae47ad1bca4ca45d4931f9526e09e216e99705cd09c7141aae12bf1b95824f",
+        "starterSha256": "f3d26254735787d338fc978954a847b8fbb58c9271815060ca8d441ffa960a60"
       },
       "measurements": {
         "passAt1": false,
-        "passAt3": false,
+        "passAt3": true,
         "ordinaryTestsPassed": true,
-        "roundsUsed": 3,
-        "passedScenarios": 1,
-        "totalScenarios": 4,
-        "escapedDefects": 12,
-        "buildFailures": 1,
+        "roundsUsed": 2,
+        "passedScenarios": 8,
+        "totalScenarios": 8,
+        "escapedDefects": 0,
+        "buildFailures": 0,
         "infrastructureRetries": 0,
-        "mismatchesByCategory": {
-          "http": 3,
-          "database": 3,
-          "messages": 2,
-          "ordering": 1,
-          "idempotency": 1,
-          "failures": 1,
-          "retryability": 1
-        },
-        "durationMs": 81714,
-        "inputTokens": 148920,
-        "outputTokens": 7520
+        "mismatchesByCategory": {},
+        "durationMs": 38816,
+        "inputTokens": 45462,
+        "outputTokens": 4556,
+        "hiddenScenariosByRound": [
+          0,
+          8
+        ]
       },
       "artifacts": {
         "patch": {
           "path": "results/claude-sonnet-5-5/ledger-transfer-air-2/candidate.patch",
-          "sha256": "f29e220e1c42ce7e9b1c68a5d6c4482fb3eec8f153fed7f24779e878ac17376f"
+          "sha256": "d7d630f1bc3c67cfc3201f5a9c7ea9cc2dc61ae01c1986327de1d0f87eb6a1c1"
         },
         "transcript": {
           "path": "results/claude-sonnet-5-5/ledger-transfer-air-2/transcript.jsonl",
-          "sha256": "ed4e014af92d9a4502f42b4799e3fd4852f845474961874c66570b86f2c6f5d1"
+          "sha256": "1863f3d8312c152a6261b8ca79a9513f5c66018f944e87b6fb527de1f723b144"
         },
         "result": {
           "path": "results/claude-sonnet-5-5/ledger-transfer-air-2/result.json",
-          "sha256": "f8297f4b9fa06a628586f09100fb5c6972e7f204f542c5170342e6258c895e2c"
+          "sha256": "3448016b97ccc71cde1601cd2b8f34c23a3dfa3e016e7e485fa6b0f503961a80"
         }
       }
     },
@@ -401,44 +405,41 @@
       "trial": 3,
       "inputs": {
         "taskSha256": "77eb7c91e0b05efc068b5ad1f8fc3210d20d74ba96bbe6171b0070cab50c4a53",
-        "promptSha256": "e7fe03257e62143e61ed11094a3579278fddd5dbe2328a4623a54e59187fb197",
-        "starterSha256": "25d3c4ecceaf01de7717efe0471b16591057fb898c89a8bfefceb6f9e0248e52"
+        "promptSha256": "1fae47ad1bca4ca45d4931f9526e09e216e99705cd09c7141aae12bf1b95824f",
+        "starterSha256": "f3d26254735787d338fc978954a847b8fbb58c9271815060ca8d441ffa960a60"
       },
       "measurements": {
         "passAt1": false,
-        "passAt3": false,
+        "passAt3": true,
         "ordinaryTestsPassed": true,
         "roundsUsed": 3,
-        "passedScenarios": 1,
-        "totalScenarios": 4,
-        "escapedDefects": 12,
-        "buildFailures": 1,
+        "passedScenarios": 8,
+        "totalScenarios": 8,
+        "escapedDefects": 0,
+        "buildFailures": 0,
         "infrastructureRetries": 0,
-        "mismatchesByCategory": {
-          "http": 3,
-          "database": 3,
-          "messages": 2,
-          "ordering": 1,
-          "idempotency": 1,
-          "failures": 1,
-          "retryability": 1
-        },
-        "durationMs": 80494,
-        "inputTokens": 134064,
-        "outputTokens": 7700
+        "mismatchesByCategory": {},
+        "durationMs": 56257,
+        "inputTokens": 94499,
+        "outputTokens": 6147,
+        "hiddenScenariosByRound": [
+          0,
+          4,
+          8
+        ]
       },
       "artifacts": {
         "patch": {
           "path": "results/claude-sonnet-5-5/ledger-transfer-air-3/candidate.patch",
-          "sha256": "954578db069ca36ab3102eded871d3fb75bfc192e5cb9fc5566c50f67f904a3d"
+          "sha256": "1dbe3cdb386c44c443959f786ac5c335e9df5636b2cfcd782ddde375be719288"
         },
         "transcript": {
           "path": "results/claude-sonnet-5-5/ledger-transfer-air-3/transcript.jsonl",
-          "sha256": "ef8c68e20129f84229b8f7cbdf2d367a0ea16363cc0294877d8828793278647a"
+          "sha256": "2ea67a40f39eee05cf63402022b95c587f40125d83e4151af05b724850930592"
         },
         "result": {
           "path": "results/claude-sonnet-5-5/ledger-transfer-air-3/result.json",
-          "sha256": "ca81e24b9e1c4a22f8aa82e1f48ba8b3ca911ad2c11a3aaf2fe634c883ca8c7f"
+          "sha256": "bef45ae6a27f6071526ab6c4612e828e69ce99f72b1c842f74c2acdc08a41d03"
         }
       }
     },
@@ -449,8 +450,8 @@
       "trial": 1,
       "inputs": {
         "taskSha256": "77eb7c91e0b05efc068b5ad1f8fc3210d20d74ba96bbe6171b0070cab50c4a53",
-        "promptSha256": "e7fe03257e62143e61ed11094a3579278fddd5dbe2328a4623a54e59187fb197",
-        "starterSha256": "25d3c4ecceaf01de7717efe0471b16591057fb898c89a8bfefceb6f9e0248e52"
+        "promptSha256": "1fae47ad1bca4ca45d4931f9526e09e216e99705cd09c7141aae12bf1b95824f",
+        "starterSha256": "f3d26254735787d338fc978954a847b8fbb58c9271815060ca8d441ffa960a60"
       },
       "measurements": {
         "passAt1": false,
@@ -458,36 +459,41 @@
         "ordinaryTestsPassed": true,
         "roundsUsed": 3,
         "passedScenarios": 0,
-        "totalScenarios": 4,
-        "escapedDefects": 16,
+        "totalScenarios": 8,
+        "escapedDefects": 32,
         "buildFailures": 0,
         "infrastructureRetries": 0,
         "mismatchesByCategory": {
-          "http": 4,
-          "database": 4,
-          "messages": 2,
-          "ordering": 1,
-          "failures": 2,
-          "rollback": 1,
-          "idempotency": 1,
-          "retryability": 1
+          "http": 8,
+          "database": 8,
+          "messages": 4,
+          "ordering": 2,
+          "failures": 4,
+          "rollback": 2,
+          "idempotency": 2,
+          "retryability": 2
         },
-        "durationMs": 61152,
-        "inputTokens": 113818,
-        "outputTokens": 5222
+        "durationMs": 48525,
+        "inputTokens": 60209,
+        "outputTokens": 1989,
+        "hiddenScenariosByRound": [
+          0,
+          0,
+          0
+        ]
       },
       "artifacts": {
         "patch": {
           "path": "results/claude-sonnet-5-5/ledger-transfer-control-1/candidate.patch",
-          "sha256": "e66a2961c331d119b51567a5d0e9ebeeadc926b66b38a7f2f05153ff18f9feb2"
+          "sha256": "bc59825a6f34d2cb5267a027f4c30d03575298b8e199f493620a68c12a6b2caf"
         },
         "transcript": {
           "path": "results/claude-sonnet-5-5/ledger-transfer-control-1/transcript.jsonl",
-          "sha256": "15cb14c7c7d3ab2646b9fa9e70869f0a222b64653b28b37c909ebbbf957ac494"
+          "sha256": "0eb4189a7de681ce7ceafda658cc11df3e8d3fddfb6034252476b9a69f8e412e"
         },
         "result": {
           "path": "results/claude-sonnet-5-5/ledger-transfer-control-1/result.json",
-          "sha256": "0ddfe0e1fe8f4068e319d70d835fa76f4f11cacc0087ec7cbbaa300946596a4f"
+          "sha256": "f8038832a15a13955034cff59af13a08746a163be34ccf02dac52b174b6687c5"
         }
       }
     },
@@ -498,8 +504,8 @@
       "trial": 2,
       "inputs": {
         "taskSha256": "77eb7c91e0b05efc068b5ad1f8fc3210d20d74ba96bbe6171b0070cab50c4a53",
-        "promptSha256": "e7fe03257e62143e61ed11094a3579278fddd5dbe2328a4623a54e59187fb197",
-        "starterSha256": "25d3c4ecceaf01de7717efe0471b16591057fb898c89a8bfefceb6f9e0248e52"
+        "promptSha256": "1fae47ad1bca4ca45d4931f9526e09e216e99705cd09c7141aae12bf1b95824f",
+        "starterSha256": "f3d26254735787d338fc978954a847b8fbb58c9271815060ca8d441ffa960a60"
       },
       "measurements": {
         "passAt1": false,
@@ -507,36 +513,41 @@
         "ordinaryTestsPassed": true,
         "roundsUsed": 3,
         "passedScenarios": 0,
-        "totalScenarios": 4,
-        "escapedDefects": 16,
+        "totalScenarios": 8,
+        "escapedDefects": 32,
         "buildFailures": 0,
         "infrastructureRetries": 0,
         "mismatchesByCategory": {
-          "http": 4,
-          "database": 4,
-          "messages": 2,
-          "ordering": 1,
-          "failures": 2,
-          "rollback": 1,
-          "idempotency": 1,
-          "retryability": 1
+          "http": 8,
+          "database": 8,
+          "messages": 4,
+          "ordering": 2,
+          "failures": 4,
+          "rollback": 2,
+          "idempotency": 2,
+          "retryability": 2
         },
-        "durationMs": 67957,
-        "inputTokens": 112242,
-        "outputTokens": 5490
+        "durationMs": 31195,
+        "inputTokens": 60119,
+        "outputTokens": 1889,
+        "hiddenScenariosByRound": [
+          0,
+          0,
+          0
+        ]
       },
       "artifacts": {
         "patch": {
           "path": "results/claude-sonnet-5-5/ledger-transfer-control-2/candidate.patch",
-          "sha256": "ceb6e846f1198837f802769ef122fa6f7227d65637d1042f46c0d501dcdf0b05"
+          "sha256": "1c1208db110369c744a98c30604f643b322bb33beb1a4b5c643856942235cda7"
         },
         "transcript": {
           "path": "results/claude-sonnet-5-5/ledger-transfer-control-2/transcript.jsonl",
-          "sha256": "c750cf822d3ad161597c9e6f7c332248283e11f337ad56669180587ec5849cc9"
+          "sha256": "f7caabc57a139bd84ee3a4e5956873afb63bc35a7c004ce1612e6245da76b52d"
         },
         "result": {
           "path": "results/claude-sonnet-5-5/ledger-transfer-control-2/result.json",
-          "sha256": "5994f90c62087567c7b242e542f7a832a5c9432988b84bc66c78de7d42223fd4"
+          "sha256": "0a0c18fbe69e37c4a4fcbce5cb5a2c1d29b41bcff9723294d3f0053730a2bcbe"
         }
       }
     },
@@ -547,8 +558,8 @@
       "trial": 3,
       "inputs": {
         "taskSha256": "77eb7c91e0b05efc068b5ad1f8fc3210d20d74ba96bbe6171b0070cab50c4a53",
-        "promptSha256": "e7fe03257e62143e61ed11094a3579278fddd5dbe2328a4623a54e59187fb197",
-        "starterSha256": "25d3c4ecceaf01de7717efe0471b16591057fb898c89a8bfefceb6f9e0248e52"
+        "promptSha256": "1fae47ad1bca4ca45d4931f9526e09e216e99705cd09c7141aae12bf1b95824f",
+        "starterSha256": "f3d26254735787d338fc978954a847b8fbb58c9271815060ca8d441ffa960a60"
       },
       "measurements": {
         "passAt1": false,
@@ -556,36 +567,41 @@
         "ordinaryTestsPassed": true,
         "roundsUsed": 3,
         "passedScenarios": 0,
-        "totalScenarios": 4,
-        "escapedDefects": 16,
+        "totalScenarios": 8,
+        "escapedDefects": 32,
         "buildFailures": 0,
         "infrastructureRetries": 0,
         "mismatchesByCategory": {
-          "http": 4,
-          "database": 4,
-          "messages": 2,
-          "ordering": 1,
-          "failures": 2,
-          "rollback": 1,
-          "idempotency": 1,
-          "retryability": 1
+          "http": 8,
+          "database": 8,
+          "messages": 4,
+          "ordering": 2,
+          "failures": 4,
+          "rollback": 2,
+          "idempotency": 2,
+          "retryability": 2
         },
-        "durationMs": 61121,
-        "inputTokens": 123515,
-        "outputTokens": 5295
+        "durationMs": 27776,
+        "inputTokens": 60478,
+        "outputTokens": 2064,
+        "hiddenScenariosByRound": [
+          0,
+          0,
+          0
+        ]
       },
       "artifacts": {
         "patch": {
           "path": "results/claude-sonnet-5-5/ledger-transfer-control-3/candidate.patch",
-          "sha256": "c083af8ec90005a9c9b7aa5e69ef51f300783946a8672f01dc8b17421f0c88c9"
+          "sha256": "29ac8ca77059a73117636856829c3e3cbecbfa4944056f14540bc6c34868950b"
         },
         "transcript": {
           "path": "results/claude-sonnet-5-5/ledger-transfer-control-3/transcript.jsonl",
-          "sha256": "7742362bef440229d7badff81078803c3b29035663db3854e8a22f11d583ff33"
+          "sha256": "7d9c8c4128db92064929fab61028f589668a6a9e364caf9791b2b1d0455c5b61"
         },
         "result": {
           "path": "results/claude-sonnet-5-5/ledger-transfer-control-3/result.json",
-          "sha256": "b42e97c37aeea1da35f3e028a8c9c2af2f4ab0d299cf112a68628963eee78cd7"
+          "sha256": "d630d38ad25cede545ae9b3ae928e352fefbf3a191e7cc9ae18ce9035ac4a9bc"
         }
       }
     },
@@ -596,42 +612,40 @@
       "trial": 1,
       "inputs": {
         "taskSha256": "e97b3e9aebd4066fb77eefa7d75a5ac5a26668018d78384a1075cd4c3d1a4fc6",
-        "promptSha256": "4159335775ccca3e9ae3727c2219ab9945870a13ab4cc86dbf20e38ae2cfa8dd",
+        "promptSha256": "ffa8fbe8d01cbf7a2f349b3717e6bccc4adc775ba2d84f80487b768b8e00715d",
         "starterSha256": "da58edaabca84a1ab757d2dbdb4f65e1de7f9f1393b445dda03eb7dfe858771c"
       },
       "measurements": {
         "passAt1": false,
-        "passAt3": false,
+        "passAt3": true,
         "ordinaryTestsPassed": true,
-        "roundsUsed": 3,
-        "passedScenarios": 3,
-        "totalScenarios": 4,
-        "escapedDefects": 5,
+        "roundsUsed": 2,
+        "passedScenarios": 8,
+        "totalScenarios": 8,
+        "escapedDefects": 0,
         "buildFailures": 0,
         "infrastructureRetries": 0,
-        "mismatchesByCategory": {
-          "http": 1,
-          "database": 1,
-          "pagination": 1,
-          "filtering": 1,
-          "ordering": 1
-        },
-        "durationMs": 84691,
-        "inputTokens": 123323,
-        "outputTokens": 5694
+        "mismatchesByCategory": {},
+        "durationMs": 28230,
+        "inputTokens": 40114,
+        "outputTokens": 2541,
+        "hiddenScenariosByRound": [
+          4,
+          8
+        ]
       },
       "artifacts": {
         "patch": {
           "path": "results/claude-sonnet-5-5/library-access-air-1/candidate.patch",
-          "sha256": "06d9afc68dafe1563eb43286fd3cf0014a72a864270d40f0f4a4a76820182421"
+          "sha256": "e894659635f7ba582109e25b9e5328f4ba0962af9f693fb16367afce4024a161"
         },
         "transcript": {
           "path": "results/claude-sonnet-5-5/library-access-air-1/transcript.jsonl",
-          "sha256": "013a2f6fa520a5e0430c1dd8318abe9361611ba9d0e17531b84249aa1b0285ff"
+          "sha256": "6c598056bb7592d84dec3e830eb43ad3d6d1897cd3348c2bc6f09070185d2dec"
         },
         "result": {
           "path": "results/claude-sonnet-5-5/library-access-air-1/result.json",
-          "sha256": "ed1668f14edbd23959386f4e7ed067cb5046557825d0fe205788deb430a92a7e"
+          "sha256": "82e16fc2cdb9b31993684d94d3a6f1d9ae718ca882896df1e38ddb5af82e8256"
         }
       }
     },
@@ -642,42 +656,40 @@
       "trial": 2,
       "inputs": {
         "taskSha256": "e97b3e9aebd4066fb77eefa7d75a5ac5a26668018d78384a1075cd4c3d1a4fc6",
-        "promptSha256": "4159335775ccca3e9ae3727c2219ab9945870a13ab4cc86dbf20e38ae2cfa8dd",
+        "promptSha256": "ffa8fbe8d01cbf7a2f349b3717e6bccc4adc775ba2d84f80487b768b8e00715d",
         "starterSha256": "da58edaabca84a1ab757d2dbdb4f65e1de7f9f1393b445dda03eb7dfe858771c"
       },
       "measurements": {
         "passAt1": false,
-        "passAt3": false,
+        "passAt3": true,
         "ordinaryTestsPassed": true,
-        "roundsUsed": 3,
-        "passedScenarios": 3,
-        "totalScenarios": 4,
-        "escapedDefects": 5,
+        "roundsUsed": 2,
+        "passedScenarios": 8,
+        "totalScenarios": 8,
+        "escapedDefects": 0,
         "buildFailures": 0,
         "infrastructureRetries": 0,
-        "mismatchesByCategory": {
-          "http": 1,
-          "database": 1,
-          "pagination": 1,
-          "filtering": 1,
-          "ordering": 1
-        },
-        "durationMs": 71218,
-        "inputTokens": 126946,
-        "outputTokens": 6230
+        "mismatchesByCategory": {},
+        "durationMs": 26787,
+        "inputTokens": 40538,
+        "outputTokens": 2545,
+        "hiddenScenariosByRound": [
+          6,
+          8
+        ]
       },
       "artifacts": {
         "patch": {
           "path": "results/claude-sonnet-5-5/library-access-air-2/candidate.patch",
-          "sha256": "bacb069ec3d634e57552aaf39c372e284cef7b56340fb5d27d6e96d323330d99"
+          "sha256": "285ed59a0e8762e91becf8a73924ba80b3f64b7fef1fe6c2aa509c4f60689775"
         },
         "transcript": {
           "path": "results/claude-sonnet-5-5/library-access-air-2/transcript.jsonl",
-          "sha256": "4525dd5f5f79a23303fc4b038f068e8cda611fd94101061a4d7c58ab4c411eda"
+          "sha256": "b6b07a658f2ff75daec1f2e0f9af74ef935a96002cf8700a4632d0b8ec2a11c6"
         },
         "result": {
           "path": "results/claude-sonnet-5-5/library-access-air-2/result.json",
-          "sha256": "6f5b193fd14f8d933788d424c0fcedee3e44ff0db64660f8fb0fecd3adadc418"
+          "sha256": "16186d6c57981d23236b960d15a7cc1ccfedb62a92b0e104804db36ed68bcf00"
         }
       }
     },
@@ -688,7 +700,7 @@
       "trial": 3,
       "inputs": {
         "taskSha256": "e97b3e9aebd4066fb77eefa7d75a5ac5a26668018d78384a1075cd4c3d1a4fc6",
-        "promptSha256": "4159335775ccca3e9ae3727c2219ab9945870a13ab4cc86dbf20e38ae2cfa8dd",
+        "promptSha256": "ffa8fbe8d01cbf7a2f349b3717e6bccc4adc775ba2d84f80487b768b8e00715d",
         "starterSha256": "da58edaabca84a1ab757d2dbdb4f65e1de7f9f1393b445dda03eb7dfe858771c"
       },
       "measurements": {
@@ -696,28 +708,32 @@
         "passAt3": true,
         "ordinaryTestsPassed": true,
         "roundsUsed": 2,
-        "passedScenarios": 4,
-        "totalScenarios": 4,
+        "passedScenarios": 8,
+        "totalScenarios": 8,
         "escapedDefects": 0,
         "buildFailures": 0,
         "infrastructureRetries": 0,
         "mismatchesByCategory": {},
-        "durationMs": 52121,
-        "inputTokens": 80907,
-        "outputTokens": 4326
+        "durationMs": 31002,
+        "inputTokens": 51909,
+        "outputTokens": 2827,
+        "hiddenScenariosByRound": [
+          6,
+          8
+        ]
       },
       "artifacts": {
         "patch": {
           "path": "results/claude-sonnet-5-5/library-access-air-3/candidate.patch",
-          "sha256": "0a3ad218ceee0c8d59c4a33b0ad9db1bef20071a478bb34c0d2d2774ac27917e"
+          "sha256": "794a8d5493ab89331700924435718705d36d910de894952a511f66dd4f95d48d"
         },
         "transcript": {
           "path": "results/claude-sonnet-5-5/library-access-air-3/transcript.jsonl",
-          "sha256": "3227774e9acebf42d7d14005da2d673ba8bddc0e9262a65c40767d6e1099fceb"
+          "sha256": "1a1a5aeb1bf461a9e84f358eee33d253bed3e2cc1604f366d2966dfa8a8025d9"
         },
         "result": {
           "path": "results/claude-sonnet-5-5/library-access-air-3/result.json",
-          "sha256": "5aeadc3a33584d3c084e32e6bb90b1b50fd90fabf09059a2312d9b60223dc006"
+          "sha256": "bd43065c027f0c67a4badf3acfec720e0b88e2c6b8b6ab88aaad95bff7bc61b8"
         }
       }
     },
@@ -728,7 +744,7 @@
       "trial": 1,
       "inputs": {
         "taskSha256": "e97b3e9aebd4066fb77eefa7d75a5ac5a26668018d78384a1075cd4c3d1a4fc6",
-        "promptSha256": "4159335775ccca3e9ae3727c2219ab9945870a13ab4cc86dbf20e38ae2cfa8dd",
+        "promptSha256": "ffa8fbe8d01cbf7a2f349b3717e6bccc4adc775ba2d84f80487b768b8e00715d",
         "starterSha256": "da58edaabca84a1ab757d2dbdb4f65e1de7f9f1393b445dda03eb7dfe858771c"
       },
       "measurements": {
@@ -736,36 +752,38 @@
         "passAt3": false,
         "ordinaryTestsPassed": true,
         "roundsUsed": 3,
-        "passedScenarios": 1,
-        "totalScenarios": 4,
-        "escapedDefects": 13,
+        "passedScenarios": 6,
+        "totalScenarios": 8,
+        "escapedDefects": 8,
         "buildFailures": 0,
         "infrastructureRetries": 0,
         "mismatchesByCategory": {
-          "http": 3,
-          "database": 3,
+          "http": 2,
+          "database": 2,
           "authorization": 2,
-          "filtering": 2,
-          "failures": 1,
-          "pagination": 1,
-          "ordering": 1
+          "failures": 2
         },
-        "durationMs": 68956,
-        "inputTokens": 121594,
-        "outputTokens": 5013
+        "durationMs": 35360,
+        "inputTokens": 59574,
+        "outputTokens": 2132,
+        "hiddenScenariosByRound": [
+          6,
+          6,
+          6
+        ]
       },
       "artifacts": {
         "patch": {
           "path": "results/claude-sonnet-5-5/library-access-control-1/candidate.patch",
-          "sha256": "d649e5652813cafd7b1a46414006550cea87190067dcd283f390e34422c11908"
+          "sha256": "d6de73ef697743497c815c44f38a058696c52c3d345ca27f7d51bf1dc8dd1bd9"
         },
         "transcript": {
           "path": "results/claude-sonnet-5-5/library-access-control-1/transcript.jsonl",
-          "sha256": "31002e6785f3c213d2a97fe1e629cec0bd86651e5f14daa08e03a2f71d8d0a83"
+          "sha256": "c307efc8601827f4305124171777e9668e7e53a0f0a9bca28454c7aeaa7263e2"
         },
         "result": {
           "path": "results/claude-sonnet-5-5/library-access-control-1/result.json",
-          "sha256": "19853efe40abf1c5e020b6d389318d961cbc0cc560280a39f4882dca303d1bc2"
+          "sha256": "802c6cafaa4b68c7848940a85b004551ec28215af79c6db9eb556df993ac3739"
         }
       }
     },
@@ -776,7 +794,7 @@
       "trial": 2,
       "inputs": {
         "taskSha256": "e97b3e9aebd4066fb77eefa7d75a5ac5a26668018d78384a1075cd4c3d1a4fc6",
-        "promptSha256": "4159335775ccca3e9ae3727c2219ab9945870a13ab4cc86dbf20e38ae2cfa8dd",
+        "promptSha256": "ffa8fbe8d01cbf7a2f349b3717e6bccc4adc775ba2d84f80487b768b8e00715d",
         "starterSha256": "da58edaabca84a1ab757d2dbdb4f65e1de7f9f1393b445dda03eb7dfe858771c"
       },
       "measurements": {
@@ -785,35 +803,40 @@
         "ordinaryTestsPassed": true,
         "roundsUsed": 3,
         "passedScenarios": 2,
-        "totalScenarios": 4,
-        "escapedDefects": 9,
+        "totalScenarios": 8,
+        "escapedDefects": 26,
         "buildFailures": 0,
         "infrastructureRetries": 0,
         "mismatchesByCategory": {
-          "http": 2,
-          "database": 2,
-          "authorization": 1,
-          "failures": 1,
-          "pagination": 1,
-          "filtering": 1,
-          "ordering": 1
+          "http": 6,
+          "database": 6,
+          "authorization": 4,
+          "filtering": 4,
+          "failures": 2,
+          "pagination": 2,
+          "ordering": 2
         },
-        "durationMs": 61369,
-        "inputTokens": 121619,
-        "outputTokens": 4988
+        "durationMs": 31335,
+        "inputTokens": 58672,
+        "outputTokens": 1869,
+        "hiddenScenariosByRound": [
+          2,
+          2,
+          2
+        ]
       },
       "artifacts": {
         "patch": {
           "path": "results/claude-sonnet-5-5/library-access-control-2/candidate.patch",
-          "sha256": "8e4d4af1aa8ed0bbd3159160aab7c450a9b36450046ed251b0ea8ca762776004"
+          "sha256": "ff1436928fd8dfd6a1c182fab51bacbde6b1e7da662169b49450f92e4bc6426e"
         },
         "transcript": {
           "path": "results/claude-sonnet-5-5/library-access-control-2/transcript.jsonl",
-          "sha256": "9c20927c4ad1509438acd6de9a9f36a0f873e36f1355b0b638f6e49cd9901816"
+          "sha256": "061c4f70c23ca02f74fb76bd58527835156c6722037ac2eec319f7ec18386b15"
         },
         "result": {
           "path": "results/claude-sonnet-5-5/library-access-control-2/result.json",
-          "sha256": "220eaff189ff18c9fc143cd5abd64b4099d342742e2e6575dc69d6dafa020946"
+          "sha256": "d5555ab5352b8a0324e2d2c0b74803bf245b4cc133d708a36391e83c464be61e"
         }
       }
     },
@@ -824,7 +847,7 @@
       "trial": 3,
       "inputs": {
         "taskSha256": "e97b3e9aebd4066fb77eefa7d75a5ac5a26668018d78384a1075cd4c3d1a4fc6",
-        "promptSha256": "4159335775ccca3e9ae3727c2219ab9945870a13ab4cc86dbf20e38ae2cfa8dd",
+        "promptSha256": "ffa8fbe8d01cbf7a2f349b3717e6bccc4adc775ba2d84f80487b768b8e00715d",
         "starterSha256": "da58edaabca84a1ab757d2dbdb4f65e1de7f9f1393b445dda03eb7dfe858771c"
       },
       "measurements": {
@@ -832,36 +855,38 @@
         "passAt3": false,
         "ordinaryTestsPassed": true,
         "roundsUsed": 3,
-        "passedScenarios": 1,
-        "totalScenarios": 4,
-        "escapedDefects": 13,
+        "passedScenarios": 6,
+        "totalScenarios": 8,
+        "escapedDefects": 8,
         "buildFailures": 0,
         "infrastructureRetries": 0,
         "mismatchesByCategory": {
-          "http": 3,
-          "database": 3,
+          "http": 2,
+          "database": 2,
           "authorization": 2,
-          "filtering": 2,
-          "failures": 1,
-          "pagination": 1,
-          "ordering": 1
+          "failures": 2
         },
-        "durationMs": 68131,
-        "inputTokens": 124088,
-        "outputTokens": 5021
+        "durationMs": 31752,
+        "inputTokens": 59108,
+        "outputTokens": 2059,
+        "hiddenScenariosByRound": [
+          6,
+          6,
+          6
+        ]
       },
       "artifacts": {
         "patch": {
           "path": "results/claude-sonnet-5-5/library-access-control-3/candidate.patch",
-          "sha256": "60adb9655db24a6e0664a5bd6e950a22ba73ab2e555bdd46c385dfcb02f91dd3"
+          "sha256": "44024cffb8e538be0747828ded2f2bb423959c7aeb5eb1cf799def0accc40250"
         },
         "transcript": {
           "path": "results/claude-sonnet-5-5/library-access-control-3/transcript.jsonl",
-          "sha256": "0709c7808e307a89880663a6b7d811b9455561ef19a9b86559f5f1a8636e488c"
+          "sha256": "ab4ec42fb96824714298df102b643e1d4cdc1da4cfc3af2196e46b6eac43983b"
         },
         "result": {
           "path": "results/claude-sonnet-5-5/library-access-control-3/result.json",
-          "sha256": "d443867cabcd5a32e3ab2e1123302c32a789a6c70eb98e22d0da6842a8e4ce6e"
+          "sha256": "eca5d0db972310178bf816e00bfec48179eda89a62748d7951d52ca4b45918bb"
         }
       }
     }

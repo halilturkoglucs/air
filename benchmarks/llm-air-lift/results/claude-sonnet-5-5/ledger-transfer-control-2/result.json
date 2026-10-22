@@ -1,8 +1,8 @@
 {
   "apiVersion": "air.dev/check-result/v0.1",
   "kind": "CheckResult",
-  "generatedAt": "2026-10-22T08:25:02.403Z",
-  "baselineId": "9b0c2662ef2a5be9191dc7120d5fff771d109b8b0d002b7b08783412a191fe81",
+  "generatedAt": "2026-10-22T08:41:37.866Z",
+  "baselineId": "2f696b6c88eead7c1d4b8381b424adb584d729326f016400e92d6460d6addc03",
   "candidate": {
     "name": "candidate",
     "targetHash": "665b2ecdd0ef2157bebeda0f24ae2012786e516d13d79b610d22592207a78d58"
@@ -28,6 +28,22 @@
     {
       "id": "rejects-version-conflict",
       "passed": false
+    },
+    {
+      "id": "moves-funds-atomically-holdout",
+      "passed": false
+    },
+    {
+      "id": "rolls-back-insufficient-funds-holdout",
+      "passed": false
+    },
+    {
+      "id": "replays-transfer-holdout",
+      "passed": false
+    },
+    {
+      "id": "rejects-version-conflict-holdout",
+      "passed": false
     }
   ],
   "mismatches": [
@@ -45,19 +61,6 @@
       "repair": "harness"
     },
     {
-      "classification": "candidate-difference",
-      "scenario": "moves-funds-atomically",
-      "category": "database",
-      "selector": "/database/transaction/rolledBack",
-      "actual": {
-        "type": "boolean",
-        "bytes": 5,
-        "sha256": "fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa"
-      },
-      "provenance": "baseline:moves-funds-atomically/database/transaction/rolledBack",
-      "repair": "candidate-code"
-    },
-    {
       "classification": "missing-observation",
       "scenario": "moves-funds-atomically",
       "category": "database",
@@ -69,6 +72,19 @@
       },
       "provenance": "baseline:moves-funds-atomically/database/transaction/rollsBackOnFailure",
       "repair": "harness"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "moves-funds-atomically",
+      "category": "http",
+      "selector": "/http/body/fromVersion",
+      "actual": {
+        "type": "number",
+        "bytes": 1,
+        "sha256": "ef2d127de37b942baad06145e54b0c619a1f22327b2ebbcfbec78f5564afe39d"
+      },
+      "provenance": "baseline:moves-funds-atomically/http/body/fromVersion",
+      "repair": "candidate-code"
     },
     {
       "classification": "missing-observation",
@@ -87,18 +103,13 @@
       "classification": "candidate-difference",
       "scenario": "moves-funds-atomically",
       "category": "http",
-      "selector": "/http/status",
-      "expected": {
-        "type": "number",
-        "bytes": 3,
-        "sha256": "43974ed74066b207c30ffd0fed5146762e6c60745ac977004bc14507c7c42b50"
-      },
+      "selector": "/http/body/toVersion",
       "actual": {
         "type": "number",
-        "bytes": 3,
-        "sha256": "27badc983df1780b60c2b3fa9d3a19a00e46aac798451f0febdca52920faaddf"
+        "bytes": 1,
+        "sha256": "4e07408562bedb8b60ce05c1decfe3ad16b72230967de01f640b7e4729b49fce"
       },
-      "provenance": "baseline:moves-funds-atomically/http/status",
+      "provenance": "baseline:moves-funds-atomically/http/body/toVersion",
       "repair": "candidate-code"
     },
     {
@@ -170,8 +181,8 @@
       },
       "actual": {
         "type": "string",
-        "bytes": 10,
-        "sha256": "2c9877104bf173f3ecf6b4d44be3e77da3b1b3c87e448be5f6cec01b12ccf804"
+        "bytes": 17,
+        "sha256": "bc14a2af3930adc1b907e264048aacc22f1f3930ce182d60e7e665e0c8416864"
       },
       "provenance": "baseline:moves-funds-atomically/ordering/0",
       "repair": "candidate-code"
@@ -188,14 +199,14 @@
       },
       "actual": {
         "type": "string",
-        "bytes": 15,
-        "sha256": "375a0d02b71629ad00cf2de6ac0fa8510fb5876296aeae109eaed111dabc0712"
+        "bytes": 17,
+        "sha256": "ac3bbc121c092350ccc7ef8c27b30cbb7731abdcfe3fc57bdcfe6d39ba2f0632"
       },
       "provenance": "baseline:moves-funds-atomically/ordering/1",
       "repair": "candidate-code"
     },
     {
-      "classification": "candidate-difference",
+      "classification": "missing-observation",
       "scenario": "moves-funds-atomically",
       "category": "ordering",
       "selector": "/ordering/2",
@@ -204,16 +215,11 @@
         "bytes": 8,
         "sha256": "8130bd48b98087f2683ed000fba66907267bd2e7599681efabe53c7da65dd336"
       },
-      "actual": {
-        "type": "string",
-        "bytes": 15,
-        "sha256": "2691948a99f67280dbfabd63b99dc691b1e78b5143981e65974520fbdccca1e8"
-      },
       "provenance": "baseline:moves-funds-atomically/ordering/2",
-      "repair": "candidate-code"
+      "repair": "harness"
     },
     {
-      "classification": "candidate-difference",
+      "classification": "missing-observation",
       "scenario": "moves-funds-atomically",
       "category": "ordering",
       "selector": "/ordering/3",
@@ -222,16 +228,11 @@
         "bytes": 19,
         "sha256": "b9d46c2f22ea551c0ad5065f49602ae83d215421341d4fcc13fb3cc32e2dd3c0"
       },
-      "actual": {
-        "type": "string",
-        "bytes": 17,
-        "sha256": "4cb94ec9757b3baabad4bf2b8c32ed496531bb80fad461ea49b118df258d283e"
-      },
       "provenance": "baseline:moves-funds-atomically/ordering/3",
-      "repair": "candidate-code"
+      "repair": "harness"
     },
     {
-      "classification": "candidate-difference",
+      "classification": "missing-observation",
       "scenario": "moves-funds-atomically",
       "category": "ordering",
       "selector": "/ordering/4",
@@ -240,16 +241,11 @@
         "bytes": 9,
         "sha256": "fd3830a0864dd9dfe2cf351f669ec8a152d4065b8b08d51c2ccf7d780e130543"
       },
-      "actual": {
-        "type": "string",
-        "bytes": 8,
-        "sha256": "5ea9c58673a69c87d0e5540a6f9978aad8f8e0a0b9ce3471cff139c730d97888"
-      },
       "provenance": "baseline:moves-funds-atomically/ordering/4",
-      "repair": "candidate-code"
+      "repair": "harness"
     },
     {
-      "classification": "candidate-difference",
+      "classification": "missing-observation",
       "scenario": "moves-funds-atomically",
       "category": "ordering",
       "selector": "/ordering/5",
@@ -258,13 +254,8 @@
         "bytes": 8,
         "sha256": "5ea9c58673a69c87d0e5540a6f9978aad8f8e0a0b9ce3471cff139c730d97888"
       },
-      "actual": {
-        "type": "string",
-        "bytes": 15,
-        "sha256": "266a859cefe4f931c01f91926ac5f554303a47ba07d201ec8d5ca5b3dbb47790"
-      },
       "provenance": "baseline:moves-funds-atomically/ordering/5",
-      "repair": "candidate-code"
+      "repair": "harness"
     },
     {
       "classification": "missing-observation",
@@ -278,19 +269,6 @@
       },
       "provenance": "baseline:rolls-back-insufficient-funds/database/idempotency",
       "repair": "harness"
-    },
-    {
-      "classification": "candidate-difference",
-      "scenario": "rolls-back-insufficient-funds",
-      "category": "database",
-      "selector": "/database/transaction/rolledBack",
-      "actual": {
-        "type": "boolean",
-        "bytes": 4,
-        "sha256": "b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b"
-      },
-      "provenance": "baseline:rolls-back-insufficient-funds/database/transaction/rolledBack",
-      "repair": "candidate-code"
     },
     {
       "classification": "missing-observation",
@@ -327,13 +305,13 @@
       "classification": "missing-observation",
       "scenario": "rolls-back-insufficient-funds",
       "category": "failures",
-      "selector": "/failures/0/retryable",
+      "selector": "/failures/0/status",
       "expected": {
-        "type": "boolean",
-        "bytes": 5,
-        "sha256": "fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa"
+        "type": "number",
+        "bytes": 3,
+        "sha256": "5658b88806a236b6439a7ecd0a87af2475a02a848095304c6d25981ae5e7e9a9"
       },
-      "provenance": "baseline:rolls-back-insufficient-funds/failures/0/retryable",
+      "provenance": "baseline:rolls-back-insufficient-funds/failures/0/status",
       "repair": "harness"
     },
     {
@@ -357,6 +335,19 @@
     {
       "classification": "candidate-difference",
       "scenario": "rolls-back-insufficient-funds",
+      "category": "http",
+      "selector": "/http/body/transferId",
+      "actual": {
+        "type": "string",
+        "bytes": 12,
+        "sha256": "5a122be6383798e724a3b7190ecb9342ec629c7a69f4fb006606da0b9feaa0e9"
+      },
+      "provenance": "baseline:rolls-back-insufficient-funds/http/body/transferId",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "missing-observation",
+      "scenario": "rolls-back-insufficient-funds",
       "category": "ordering",
       "selector": "/ordering/0",
       "expected": {
@@ -364,16 +355,11 @@
         "bytes": 6,
         "sha256": "e9deb04763ac1bbf5687ea1ee52a5a92a54b495c3330cc1ebcee646634daa471"
       },
-      "actual": {
-        "type": "string",
-        "bytes": 10,
-        "sha256": "2c9877104bf173f3ecf6b4d44be3e77da3b1b3c87e448be5f6cec01b12ccf804"
-      },
       "provenance": "baseline:rolls-back-insufficient-funds/ordering/0",
-      "repair": "candidate-code"
+      "repair": "harness"
     },
     {
-      "classification": "candidate-difference",
+      "classification": "missing-observation",
       "scenario": "rolls-back-insufficient-funds",
       "category": "ordering",
       "selector": "/ordering/1",
@@ -382,16 +368,11 @@
         "bytes": 15,
         "sha256": "2691948a99f67280dbfabd63b99dc691b1e78b5143981e65974520fbdccca1e8"
       },
-      "actual": {
-        "type": "string",
-        "bytes": 15,
-        "sha256": "375a0d02b71629ad00cf2de6ac0fa8510fb5876296aeae109eaed111dabc0712"
-      },
       "provenance": "baseline:rolls-back-insufficient-funds/ordering/1",
-      "repair": "candidate-code"
+      "repair": "harness"
     },
     {
-      "classification": "candidate-difference",
+      "classification": "missing-observation",
       "scenario": "rolls-back-insufficient-funds",
       "category": "ordering",
       "selector": "/ordering/2",
@@ -400,25 +381,79 @@
         "bytes": 10,
         "sha256": "3770b198a03f18cbf37a3bfd4eba2fbbab9ea2eb9795b207678b45c957a6ce18"
       },
-      "actual": {
-        "type": "string",
-        "bytes": 15,
-        "sha256": "2691948a99f67280dbfabd63b99dc691b1e78b5143981e65974520fbdccca1e8"
-      },
       "provenance": "baseline:rolls-back-insufficient-funds/ordering/2",
+      "repair": "harness"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "replays-transfer",
+      "category": "database",
+      "selector": "/database/accounts/0/balance",
+      "expected": {
+        "type": "number",
+        "bytes": 2,
+        "sha256": "ff5a1ae012afa5d4c889c50ad427aaf545d31a4fac04ffc1c4d03d403ba4250a"
+      },
+      "actual": {
+        "type": "number",
+        "bytes": 3,
+        "sha256": "ad57366865126e55649ecb23ae1d48887544976efea46a48eb5d85a6eeb4d306"
+      },
+      "provenance": "baseline:replays-transfer/database/accounts/0/balance",
       "repair": "candidate-code"
     },
     {
       "classification": "candidate-difference",
-      "scenario": "rolls-back-insufficient-funds",
-      "category": "ordering",
-      "selector": "/ordering/3",
-      "actual": {
-        "type": "string",
-        "bytes": 10,
-        "sha256": "3770b198a03f18cbf37a3bfd4eba2fbbab9ea2eb9795b207678b45c957a6ce18"
+      "scenario": "replays-transfer",
+      "category": "database",
+      "selector": "/database/accounts/0/version",
+      "expected": {
+        "type": "number",
+        "bytes": 1,
+        "sha256": "ef2d127de37b942baad06145e54b0c619a1f22327b2ebbcfbec78f5564afe39d"
       },
-      "provenance": "baseline:rolls-back-insufficient-funds/ordering/3",
+      "actual": {
+        "type": "number",
+        "bytes": 1,
+        "sha256": "4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a"
+      },
+      "provenance": "baseline:replays-transfer/database/accounts/0/version",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "replays-transfer",
+      "category": "database",
+      "selector": "/database/accounts/1/balance",
+      "expected": {
+        "type": "number",
+        "bytes": 2,
+        "sha256": "1a6562590ef19d1045d06c4055742d38288e9e6dcd71ccde5cee80f1d5a774eb"
+      },
+      "actual": {
+        "type": "number",
+        "bytes": 2,
+        "sha256": "f5ca38f748a1d6eaf726b8a42fb575c3c71f1864a8143301782de13da2d9202b"
+      },
+      "provenance": "baseline:replays-transfer/database/accounts/1/balance",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "replays-transfer",
+      "category": "database",
+      "selector": "/database/accounts/1/version",
+      "expected": {
+        "type": "number",
+        "bytes": 1,
+        "sha256": "4e07408562bedb8b60ce05c1decfe3ad16b72230967de01f640b7e4729b49fce"
+      },
+      "actual": {
+        "type": "number",
+        "bytes": 1,
+        "sha256": "d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35"
+      },
+      "provenance": "baseline:replays-transfer/database/accounts/1/version",
       "repair": "candidate-code"
     },
     {
@@ -438,13 +473,18 @@
       "classification": "candidate-difference",
       "scenario": "replays-transfer",
       "category": "database",
-      "selector": "/database/transaction/rolledBack",
+      "selector": "/database/transaction/committed",
+      "expected": {
+        "type": "boolean",
+        "bytes": 4,
+        "sha256": "b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b"
+      },
       "actual": {
         "type": "boolean",
         "bytes": 5,
         "sha256": "fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa"
       },
-      "provenance": "baseline:replays-transfer/database/transaction/rolledBack",
+      "provenance": "baseline:replays-transfer/database/transaction/committed",
       "repair": "candidate-code"
     },
     {
@@ -459,6 +499,24 @@
       },
       "provenance": "baseline:replays-transfer/database/transaction/rollsBackOnFailure",
       "repair": "harness"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "replays-transfer",
+      "category": "http",
+      "selector": "/http/body/fromBalance",
+      "expected": {
+        "type": "number",
+        "bytes": 2,
+        "sha256": "ff5a1ae012afa5d4c889c50ad427aaf545d31a4fac04ffc1c4d03d403ba4250a"
+      },
+      "actual": {
+        "type": "number",
+        "bytes": 3,
+        "sha256": "ad57366865126e55649ecb23ae1d48887544976efea46a48eb5d85a6eeb4d306"
+      },
+      "provenance": "baseline:replays-transfer/http/body/fromBalance",
+      "repair": "candidate-code"
     },
     {
       "classification": "missing-observation",
@@ -476,18 +534,49 @@
     {
       "classification": "candidate-difference",
       "scenario": "replays-transfer",
-      "category": "messages",
-      "selector": "/messages/0",
+      "category": "http",
+      "selector": "/http/body/replayed",
       "actual": {
-        "type": "object",
-        "bytes": 801,
-        "sha256": "ddf2033fca7d446306e2cdaa6b5f6f671a93cf617d5fd61cdbdd6bb1ad1a91da"
+        "type": "boolean",
+        "bytes": 4,
+        "sha256": "b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b"
       },
-      "provenance": "baseline:replays-transfer/messages/0",
+      "provenance": "baseline:replays-transfer/http/body/replayed",
       "repair": "candidate-code"
     },
     {
       "classification": "candidate-difference",
+      "scenario": "replays-transfer",
+      "category": "http",
+      "selector": "/http/body/toBalance",
+      "expected": {
+        "type": "number",
+        "bytes": 2,
+        "sha256": "1a6562590ef19d1045d06c4055742d38288e9e6dcd71ccde5cee80f1d5a774eb"
+      },
+      "actual": {
+        "type": "number",
+        "bytes": 2,
+        "sha256": "f5ca38f748a1d6eaf726b8a42fb575c3c71f1864a8143301782de13da2d9202b"
+      },
+      "provenance": "baseline:replays-transfer/http/body/toBalance",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "replays-transfer",
+      "category": "http",
+      "selector": "/http/headers/idempotent-replay",
+      "actual": {
+        "type": "string",
+        "bytes": 6,
+        "sha256": "18d10c7d2b4b04aaf04254d1ae5d655a5dc0407cbcdd5a8c3986e985370f36ee"
+      },
+      "provenance": "baseline:replays-transfer/http/headers/idempotent-replay",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "missing-observation",
       "scenario": "replays-transfer",
       "category": "ordering",
       "selector": "/ordering/0",
@@ -496,16 +585,11 @@
         "bytes": 18,
         "sha256": "8dad140e6b50a8f8a4f4583ed944f098f0a16b3c2e73b4d48a59d62d7f5c1eab"
       },
-      "actual": {
-        "type": "string",
-        "bytes": 10,
-        "sha256": "2c9877104bf173f3ecf6b4d44be3e77da3b1b3c87e448be5f6cec01b12ccf804"
-      },
       "provenance": "baseline:replays-transfer/ordering/0",
-      "repair": "candidate-code"
+      "repair": "harness"
     },
     {
-      "classification": "candidate-difference",
+      "classification": "missing-observation",
       "scenario": "replays-transfer",
       "category": "ordering",
       "selector": "/ordering/1",
@@ -514,65 +598,8 @@
         "bytes": 10,
         "sha256": "9e2600195d657991fb57288e7458a0cc17a0c0fea215c849b16df7ca65ee9a7c"
       },
-      "actual": {
-        "type": "string",
-        "bytes": 15,
-        "sha256": "375a0d02b71629ad00cf2de6ac0fa8510fb5876296aeae109eaed111dabc0712"
-      },
       "provenance": "baseline:replays-transfer/ordering/1",
-      "repair": "candidate-code"
-    },
-    {
-      "classification": "candidate-difference",
-      "scenario": "replays-transfer",
-      "category": "ordering",
-      "selector": "/ordering/2",
-      "actual": {
-        "type": "string",
-        "bytes": 15,
-        "sha256": "2691948a99f67280dbfabd63b99dc691b1e78b5143981e65974520fbdccca1e8"
-      },
-      "provenance": "baseline:replays-transfer/ordering/2",
-      "repair": "candidate-code"
-    },
-    {
-      "classification": "candidate-difference",
-      "scenario": "replays-transfer",
-      "category": "ordering",
-      "selector": "/ordering/3",
-      "actual": {
-        "type": "string",
-        "bytes": 17,
-        "sha256": "4cb94ec9757b3baabad4bf2b8c32ed496531bb80fad461ea49b118df258d283e"
-      },
-      "provenance": "baseline:replays-transfer/ordering/3",
-      "repair": "candidate-code"
-    },
-    {
-      "classification": "candidate-difference",
-      "scenario": "replays-transfer",
-      "category": "ordering",
-      "selector": "/ordering/4",
-      "actual": {
-        "type": "string",
-        "bytes": 8,
-        "sha256": "5ea9c58673a69c87d0e5540a6f9978aad8f8e0a0b9ce3471cff139c730d97888"
-      },
-      "provenance": "baseline:replays-transfer/ordering/4",
-      "repair": "candidate-code"
-    },
-    {
-      "classification": "candidate-difference",
-      "scenario": "replays-transfer",
-      "category": "ordering",
-      "selector": "/ordering/5",
-      "actual": {
-        "type": "string",
-        "bytes": 15,
-        "sha256": "266a859cefe4f931c01f91926ac5f554303a47ba07d201ec8d5ca5b3dbb47790"
-      },
-      "provenance": "baseline:replays-transfer/ordering/5",
-      "repair": "candidate-code"
+      "repair": "harness"
     },
     {
       "classification": "candidate-difference",
@@ -678,19 +705,6 @@
       "repair": "candidate-code"
     },
     {
-      "classification": "candidate-difference",
-      "scenario": "rejects-version-conflict",
-      "category": "database",
-      "selector": "/database/transaction/rolledBack",
-      "actual": {
-        "type": "boolean",
-        "bytes": 5,
-        "sha256": "fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa"
-      },
-      "provenance": "baseline:rejects-version-conflict/database/transaction/rolledBack",
-      "repair": "candidate-code"
-    },
-    {
       "classification": "missing-observation",
       "scenario": "rejects-version-conflict",
       "category": "database",
@@ -746,6 +760,19 @@
       "classification": "candidate-difference",
       "scenario": "rejects-version-conflict",
       "category": "http",
+      "selector": "/http/body/fromVersion",
+      "actual": {
+        "type": "number",
+        "bytes": 1,
+        "sha256": "ef2d127de37b942baad06145e54b0c619a1f22327b2ebbcfbec78f5564afe39d"
+      },
+      "provenance": "baseline:rejects-version-conflict/http/body/fromVersion",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "rejects-version-conflict",
+      "category": "http",
       "selector": "/http/body/toBalance",
       "actual": {
         "type": "number",
@@ -753,6 +780,19 @@
         "sha256": "1a6562590ef19d1045d06c4055742d38288e9e6dcd71ccde5cee80f1d5a774eb"
       },
       "provenance": "baseline:rejects-version-conflict/http/body/toBalance",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "rejects-version-conflict",
+      "category": "http",
+      "selector": "/http/body/toVersion",
+      "actual": {
+        "type": "number",
+        "bytes": 1,
+        "sha256": "4e07408562bedb8b60ce05c1decfe3ad16b72230967de01f640b7e4729b49fce"
+      },
+      "provenance": "baseline:rejects-version-conflict/http/body/toVersion",
       "repair": "candidate-code"
     },
     {
@@ -781,7 +821,7 @@
       "actual": {
         "type": "number",
         "bytes": 3,
-        "sha256": "27badc983df1780b60c2b3fa9d3a19a00e46aac798451f0febdca52920faaddf"
+        "sha256": "43974ed74066b207c30ffd0fed5146762e6c60745ac977004bc14507c7c42b50"
       },
       "provenance": "baseline:rejects-version-conflict/http/status",
       "repair": "candidate-code"
@@ -811,8 +851,8 @@
       },
       "actual": {
         "type": "string",
-        "bytes": 10,
-        "sha256": "2c9877104bf173f3ecf6b4d44be3e77da3b1b3c87e448be5f6cec01b12ccf804"
+        "bytes": 17,
+        "sha256": "bc14a2af3930adc1b907e264048aacc22f1f3930ce182d60e7e665e0c8416864"
       },
       "provenance": "baseline:rejects-version-conflict/ordering/0",
       "repair": "candidate-code"
@@ -821,58 +861,32 @@
       "classification": "candidate-difference",
       "scenario": "rejects-version-conflict",
       "category": "ordering",
+      "selector": "/ordering/1",
+      "expected": {
+        "type": "string",
+        "bytes": 15,
+        "sha256": "375a0d02b71629ad00cf2de6ac0fa8510fb5876296aeae109eaed111dabc0712"
+      },
+      "actual": {
+        "type": "string",
+        "bytes": 17,
+        "sha256": "ac3bbc121c092350ccc7ef8c27b30cbb7731abdcfe3fc57bdcfe6d39ba2f0632"
+      },
+      "provenance": "baseline:rejects-version-conflict/ordering/1",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "missing-observation",
+      "scenario": "rejects-version-conflict",
+      "category": "ordering",
       "selector": "/ordering/2",
       "expected": {
         "type": "string",
         "bytes": 10,
         "sha256": "3770b198a03f18cbf37a3bfd4eba2fbbab9ea2eb9795b207678b45c957a6ce18"
       },
-      "actual": {
-        "type": "string",
-        "bytes": 15,
-        "sha256": "2691948a99f67280dbfabd63b99dc691b1e78b5143981e65974520fbdccca1e8"
-      },
       "provenance": "baseline:rejects-version-conflict/ordering/2",
-      "repair": "candidate-code"
-    },
-    {
-      "classification": "candidate-difference",
-      "scenario": "rejects-version-conflict",
-      "category": "ordering",
-      "selector": "/ordering/3",
-      "actual": {
-        "type": "string",
-        "bytes": 17,
-        "sha256": "4cb94ec9757b3baabad4bf2b8c32ed496531bb80fad461ea49b118df258d283e"
-      },
-      "provenance": "baseline:rejects-version-conflict/ordering/3",
-      "repair": "candidate-code"
-    },
-    {
-      "classification": "candidate-difference",
-      "scenario": "rejects-version-conflict",
-      "category": "ordering",
-      "selector": "/ordering/4",
-      "actual": {
-        "type": "string",
-        "bytes": 8,
-        "sha256": "5ea9c58673a69c87d0e5540a6f9978aad8f8e0a0b9ce3471cff139c730d97888"
-      },
-      "provenance": "baseline:rejects-version-conflict/ordering/4",
-      "repair": "candidate-code"
-    },
-    {
-      "classification": "candidate-difference",
-      "scenario": "rejects-version-conflict",
-      "category": "ordering",
-      "selector": "/ordering/5",
-      "actual": {
-        "type": "string",
-        "bytes": 15,
-        "sha256": "266a859cefe4f931c01f91926ac5f554303a47ba07d201ec8d5ca5b3dbb47790"
-      },
-      "provenance": "baseline:rejects-version-conflict/ordering/5",
-      "repair": "candidate-code"
+      "repair": "harness"
     },
     {
       "classification": "candidate-difference",
@@ -890,6 +904,865 @@
         "sha256": "fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa"
       },
       "provenance": "baseline:rejects-version-conflict/retryability",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "missing-observation",
+      "scenario": "moves-funds-atomically-holdout",
+      "category": "database",
+      "selector": "/database/idempotency",
+      "expected": {
+        "type": "object",
+        "bytes": 283,
+        "sha256": "ab4aeb0757053f85649291af363cf378977cb0f3af9191f5a49b859a75562ced"
+      },
+      "provenance": "baseline:moves-funds-atomically-holdout/database/idempotency",
+      "repair": "harness"
+    },
+    {
+      "classification": "missing-observation",
+      "scenario": "moves-funds-atomically-holdout",
+      "category": "database",
+      "selector": "/database/transaction/rollsBackOnFailure",
+      "expected": {
+        "type": "boolean",
+        "bytes": 4,
+        "sha256": "b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b"
+      },
+      "provenance": "baseline:moves-funds-atomically-holdout/database/transaction/rollsBackOnFailure",
+      "repair": "harness"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "moves-funds-atomically-holdout",
+      "category": "http",
+      "selector": "/http/body/fromVersion",
+      "actual": {
+        "type": "number",
+        "bytes": 2,
+        "sha256": "4a44dc15364204a80fe80e9039455cc1608281820fe2b24f1e5233ade6af1dd5"
+      },
+      "provenance": "baseline:moves-funds-atomically-holdout/http/body/fromVersion",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "missing-observation",
+      "scenario": "moves-funds-atomically-holdout",
+      "category": "http",
+      "selector": "/http/body/outcome",
+      "expected": {
+        "type": "string",
+        "bytes": 11,
+        "sha256": "a74985036e451327207c1cc05ef687341e0d00faafe012a0f656eb7037305623"
+      },
+      "provenance": "baseline:moves-funds-atomically-holdout/http/body/outcome",
+      "repair": "harness"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "moves-funds-atomically-holdout",
+      "category": "http",
+      "selector": "/http/body/toVersion",
+      "actual": {
+        "type": "number",
+        "bytes": 1,
+        "sha256": "d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35"
+      },
+      "provenance": "baseline:moves-funds-atomically-holdout/http/body/toVersion",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "moves-funds-atomically-holdout",
+      "category": "messages",
+      "selector": "/messages/0/fromId",
+      "actual": {
+        "type": "string",
+        "bytes": 7,
+        "sha256": "8ba44694ee38d4bcf08f0d922b14ae971287ce1b9bc9df8ae6eabc6c1d7ea788"
+      },
+      "provenance": "baseline:moves-funds-atomically-holdout/messages/0/fromId",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "moves-funds-atomically-holdout",
+      "category": "messages",
+      "selector": "/messages/0/idempotencyKey",
+      "actual": {
+        "type": "string",
+        "bytes": 7,
+        "sha256": "8650cbe70b8cf4498e98c98a43a99f04e1d6bfa22a03b8394c947aa3117c7aa2"
+      },
+      "provenance": "baseline:moves-funds-atomically-holdout/messages/0/idempotencyKey",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "moves-funds-atomically-holdout",
+      "category": "messages",
+      "selector": "/messages/0/toId",
+      "actual": {
+        "type": "string",
+        "bytes": 6,
+        "sha256": "4061b55b847e93ae1f07fe11e6e9e247ab75a2a7e2f8e568b79eb11249b300b3"
+      },
+      "provenance": "baseline:moves-funds-atomically-holdout/messages/0/toId",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "moves-funds-atomically-holdout",
+      "category": "messages",
+      "selector": "/messages/0/type",
+      "expected": {
+        "type": "string",
+        "bytes": 27,
+        "sha256": "95ea8e7881723606cb5a0ed91cdfcfdf98778652c898a11b5bbf8a82faa1e934"
+      },
+      "actual": {
+        "type": "string",
+        "bytes": 20,
+        "sha256": "149933468b36c905a36baea4cb247b6a09fa06fcbe1a84e8714353c5893ddbfe"
+      },
+      "provenance": "baseline:moves-funds-atomically-holdout/messages/0/type",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "moves-funds-atomically-holdout",
+      "category": "ordering",
+      "selector": "/ordering/0",
+      "expected": {
+        "type": "string",
+        "bytes": 6,
+        "sha256": "e9deb04763ac1bbf5687ea1ee52a5a92a54b495c3330cc1ebcee646634daa471"
+      },
+      "actual": {
+        "type": "string",
+        "bytes": 17,
+        "sha256": "bc14a2af3930adc1b907e264048aacc22f1f3930ce182d60e7e665e0c8416864"
+      },
+      "provenance": "baseline:moves-funds-atomically-holdout/ordering/0",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "moves-funds-atomically-holdout",
+      "category": "ordering",
+      "selector": "/ordering/1",
+      "expected": {
+        "type": "string",
+        "bytes": 7,
+        "sha256": "134cae4d68307d112295ce08addca34b680c6478b807f224c2c3d110c26daa55"
+      },
+      "actual": {
+        "type": "string",
+        "bytes": 17,
+        "sha256": "ac3bbc121c092350ccc7ef8c27b30cbb7731abdcfe3fc57bdcfe6d39ba2f0632"
+      },
+      "provenance": "baseline:moves-funds-atomically-holdout/ordering/1",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "missing-observation",
+      "scenario": "moves-funds-atomically-holdout",
+      "category": "ordering",
+      "selector": "/ordering/2",
+      "expected": {
+        "type": "string",
+        "bytes": 8,
+        "sha256": "8130bd48b98087f2683ed000fba66907267bd2e7599681efabe53c7da65dd336"
+      },
+      "provenance": "baseline:moves-funds-atomically-holdout/ordering/2",
+      "repair": "harness"
+    },
+    {
+      "classification": "missing-observation",
+      "scenario": "moves-funds-atomically-holdout",
+      "category": "ordering",
+      "selector": "/ordering/3",
+      "expected": {
+        "type": "string",
+        "bytes": 19,
+        "sha256": "b9d46c2f22ea551c0ad5065f49602ae83d215421341d4fcc13fb3cc32e2dd3c0"
+      },
+      "provenance": "baseline:moves-funds-atomically-holdout/ordering/3",
+      "repair": "harness"
+    },
+    {
+      "classification": "missing-observation",
+      "scenario": "moves-funds-atomically-holdout",
+      "category": "ordering",
+      "selector": "/ordering/4",
+      "expected": {
+        "type": "string",
+        "bytes": 9,
+        "sha256": "fd3830a0864dd9dfe2cf351f669ec8a152d4065b8b08d51c2ccf7d780e130543"
+      },
+      "provenance": "baseline:moves-funds-atomically-holdout/ordering/4",
+      "repair": "harness"
+    },
+    {
+      "classification": "missing-observation",
+      "scenario": "moves-funds-atomically-holdout",
+      "category": "ordering",
+      "selector": "/ordering/5",
+      "expected": {
+        "type": "string",
+        "bytes": 8,
+        "sha256": "5ea9c58673a69c87d0e5540a6f9978aad8f8e0a0b9ce3471cff139c730d97888"
+      },
+      "provenance": "baseline:moves-funds-atomically-holdout/ordering/5",
+      "repair": "harness"
+    },
+    {
+      "classification": "missing-observation",
+      "scenario": "rolls-back-insufficient-funds-holdout",
+      "category": "database",
+      "selector": "/database/idempotency",
+      "expected": {
+        "type": "object",
+        "bytes": 283,
+        "sha256": "76e7a99e0ec2635ebfd2e619e4586c06c5336a37212fd000320fc379eee7b5dd"
+      },
+      "provenance": "baseline:rolls-back-insufficient-funds-holdout/database/idempotency",
+      "repair": "harness"
+    },
+    {
+      "classification": "missing-observation",
+      "scenario": "rolls-back-insufficient-funds-holdout",
+      "category": "database",
+      "selector": "/database/transaction/rollsBackOnFailure",
+      "expected": {
+        "type": "boolean",
+        "bytes": 4,
+        "sha256": "b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b"
+      },
+      "provenance": "baseline:rolls-back-insufficient-funds-holdout/database/transaction/rollsBackOnFailure",
+      "repair": "harness"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "rolls-back-insufficient-funds-holdout",
+      "category": "failures",
+      "selector": "/failures/0/code",
+      "expected": {
+        "type": "string",
+        "bytes": 20,
+        "sha256": "b770aed8b51a391e16563e014d743df6198b6009ecf3d106b04e7cfa75d3b517"
+      },
+      "actual": {
+        "type": "string",
+        "bytes": 20,
+        "sha256": "5c6db652615b184f58fec55f3979f0ce8d89e016b80dc2da06090eedf4c9bfa9"
+      },
+      "provenance": "baseline:rolls-back-insufficient-funds-holdout/failures/0/code",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "missing-observation",
+      "scenario": "rolls-back-insufficient-funds-holdout",
+      "category": "failures",
+      "selector": "/failures/0/status",
+      "expected": {
+        "type": "number",
+        "bytes": 3,
+        "sha256": "5658b88806a236b6439a7ecd0a87af2475a02a848095304c6d25981ae5e7e9a9"
+      },
+      "provenance": "baseline:rolls-back-insufficient-funds-holdout/failures/0/status",
+      "repair": "harness"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "rolls-back-insufficient-funds-holdout",
+      "category": "http",
+      "selector": "/http/body/error",
+      "expected": {
+        "type": "object",
+        "bytes": 286,
+        "sha256": "d9fe1cc8099134f6ed43edfac33e561449e96b5d99b8a9b7d737a0c0cd43e854"
+      },
+      "actual": {
+        "type": "string",
+        "bytes": 20,
+        "sha256": "5c6db652615b184f58fec55f3979f0ce8d89e016b80dc2da06090eedf4c9bfa9"
+      },
+      "provenance": "baseline:rolls-back-insufficient-funds-holdout/http/body/error",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "rolls-back-insufficient-funds-holdout",
+      "category": "http",
+      "selector": "/http/body/transferId",
+      "actual": {
+        "type": "string",
+        "bytes": 12,
+        "sha256": "7afad091cde236644140c4e318656f9921d9539b9e3febbd3bae645a638b9a7d"
+      },
+      "provenance": "baseline:rolls-back-insufficient-funds-holdout/http/body/transferId",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "missing-observation",
+      "scenario": "rolls-back-insufficient-funds-holdout",
+      "category": "ordering",
+      "selector": "/ordering/0",
+      "expected": {
+        "type": "string",
+        "bytes": 6,
+        "sha256": "e9deb04763ac1bbf5687ea1ee52a5a92a54b495c3330cc1ebcee646634daa471"
+      },
+      "provenance": "baseline:rolls-back-insufficient-funds-holdout/ordering/0",
+      "repair": "harness"
+    },
+    {
+      "classification": "missing-observation",
+      "scenario": "rolls-back-insufficient-funds-holdout",
+      "category": "ordering",
+      "selector": "/ordering/1",
+      "expected": {
+        "type": "string",
+        "bytes": 15,
+        "sha256": "2691948a99f67280dbfabd63b99dc691b1e78b5143981e65974520fbdccca1e8"
+      },
+      "provenance": "baseline:rolls-back-insufficient-funds-holdout/ordering/1",
+      "repair": "harness"
+    },
+    {
+      "classification": "missing-observation",
+      "scenario": "rolls-back-insufficient-funds-holdout",
+      "category": "ordering",
+      "selector": "/ordering/2",
+      "expected": {
+        "type": "string",
+        "bytes": 10,
+        "sha256": "3770b198a03f18cbf37a3bfd4eba2fbbab9ea2eb9795b207678b45c957a6ce18"
+      },
+      "provenance": "baseline:rolls-back-insufficient-funds-holdout/ordering/2",
+      "repair": "harness"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "replays-transfer-holdout",
+      "category": "database",
+      "selector": "/database/accounts/0/balance",
+      "expected": {
+        "type": "number",
+        "bytes": 3,
+        "sha256": "dac53c17c250fd4d4d81eaf6d88435676dac1f3f3896441e277af839bf50ed8a"
+      },
+      "actual": {
+        "type": "number",
+        "bytes": 3,
+        "sha256": "1e472b39b105d349bcd069c4a711b44a2fffb8e274714bb07ecfff69a9a7f67b"
+      },
+      "provenance": "baseline:replays-transfer-holdout/database/accounts/0/balance",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "replays-transfer-holdout",
+      "category": "database",
+      "selector": "/database/accounts/0/version",
+      "expected": {
+        "type": "number",
+        "bytes": 2,
+        "sha256": "4a44dc15364204a80fe80e9039455cc1608281820fe2b24f1e5233ade6af1dd5"
+      },
+      "actual": {
+        "type": "number",
+        "bytes": 1,
+        "sha256": "19581e27de7ced00ff1ce50b2047e7a567c76b1cbaebabe5ef03f7c3017bb5b7"
+      },
+      "provenance": "baseline:replays-transfer-holdout/database/accounts/0/version",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "replays-transfer-holdout",
+      "category": "database",
+      "selector": "/database/accounts/1/balance",
+      "expected": {
+        "type": "number",
+        "bytes": 2,
+        "sha256": "f369cb89fc627e668987007d121ed1eacdc01db9e28f8bb26f358b7d8c4f08ac"
+      },
+      "actual": {
+        "type": "number",
+        "bytes": 1,
+        "sha256": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9"
+      },
+      "provenance": "baseline:replays-transfer-holdout/database/accounts/1/balance",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "replays-transfer-holdout",
+      "category": "database",
+      "selector": "/database/accounts/1/version",
+      "expected": {
+        "type": "number",
+        "bytes": 1,
+        "sha256": "d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35"
+      },
+      "actual": {
+        "type": "number",
+        "bytes": 1,
+        "sha256": "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b"
+      },
+      "provenance": "baseline:replays-transfer-holdout/database/accounts/1/version",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "missing-observation",
+      "scenario": "replays-transfer-holdout",
+      "category": "database",
+      "selector": "/database/idempotency",
+      "expected": {
+        "type": "object",
+        "bytes": 283,
+        "sha256": "1865251f66e7b30a86fc0917d29c6486c9add4361274c3fc1c22e5a34a1579ec"
+      },
+      "provenance": "baseline:replays-transfer-holdout/database/idempotency",
+      "repair": "harness"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "replays-transfer-holdout",
+      "category": "database",
+      "selector": "/database/transaction/committed",
+      "expected": {
+        "type": "boolean",
+        "bytes": 4,
+        "sha256": "b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b"
+      },
+      "actual": {
+        "type": "boolean",
+        "bytes": 5,
+        "sha256": "fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa"
+      },
+      "provenance": "baseline:replays-transfer-holdout/database/transaction/committed",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "missing-observation",
+      "scenario": "replays-transfer-holdout",
+      "category": "database",
+      "selector": "/database/transaction/rollsBackOnFailure",
+      "expected": {
+        "type": "boolean",
+        "bytes": 4,
+        "sha256": "b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b"
+      },
+      "provenance": "baseline:replays-transfer-holdout/database/transaction/rollsBackOnFailure",
+      "repair": "harness"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "replays-transfer-holdout",
+      "category": "http",
+      "selector": "/http/body/fromBalance",
+      "expected": {
+        "type": "number",
+        "bytes": 3,
+        "sha256": "dac53c17c250fd4d4d81eaf6d88435676dac1f3f3896441e277af839bf50ed8a"
+      },
+      "actual": {
+        "type": "number",
+        "bytes": 3,
+        "sha256": "1e472b39b105d349bcd069c4a711b44a2fffb8e274714bb07ecfff69a9a7f67b"
+      },
+      "provenance": "baseline:replays-transfer-holdout/http/body/fromBalance",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "missing-observation",
+      "scenario": "replays-transfer-holdout",
+      "category": "http",
+      "selector": "/http/body/outcome",
+      "expected": {
+        "type": "string",
+        "bytes": 10,
+        "sha256": "5bef571cf903a75d99d6d1cfa35bc113501f6d40463c3fe05019c45b5c7428c3"
+      },
+      "provenance": "baseline:replays-transfer-holdout/http/body/outcome",
+      "repair": "harness"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "replays-transfer-holdout",
+      "category": "http",
+      "selector": "/http/body/replayed",
+      "actual": {
+        "type": "boolean",
+        "bytes": 4,
+        "sha256": "b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b"
+      },
+      "provenance": "baseline:replays-transfer-holdout/http/body/replayed",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "replays-transfer-holdout",
+      "category": "http",
+      "selector": "/http/body/toBalance",
+      "expected": {
+        "type": "number",
+        "bytes": 2,
+        "sha256": "f369cb89fc627e668987007d121ed1eacdc01db9e28f8bb26f358b7d8c4f08ac"
+      },
+      "actual": {
+        "type": "number",
+        "bytes": 1,
+        "sha256": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9"
+      },
+      "provenance": "baseline:replays-transfer-holdout/http/body/toBalance",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "replays-transfer-holdout",
+      "category": "http",
+      "selector": "/http/headers/idempotent-replay",
+      "actual": {
+        "type": "string",
+        "bytes": 6,
+        "sha256": "18d10c7d2b4b04aaf04254d1ae5d655a5dc0407cbcdd5a8c3986e985370f36ee"
+      },
+      "provenance": "baseline:replays-transfer-holdout/http/headers/idempotent-replay",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "missing-observation",
+      "scenario": "replays-transfer-holdout",
+      "category": "ordering",
+      "selector": "/ordering/0",
+      "expected": {
+        "type": "string",
+        "bytes": 18,
+        "sha256": "8dad140e6b50a8f8a4f4583ed944f098f0a16b3c2e73b4d48a59d62d7f5c1eab"
+      },
+      "provenance": "baseline:replays-transfer-holdout/ordering/0",
+      "repair": "harness"
+    },
+    {
+      "classification": "missing-observation",
+      "scenario": "replays-transfer-holdout",
+      "category": "ordering",
+      "selector": "/ordering/1",
+      "expected": {
+        "type": "string",
+        "bytes": 10,
+        "sha256": "9e2600195d657991fb57288e7458a0cc17a0c0fea215c849b16df7ca65ee9a7c"
+      },
+      "provenance": "baseline:replays-transfer-holdout/ordering/1",
+      "repair": "harness"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "rejects-version-conflict-holdout",
+      "category": "database",
+      "selector": "/database/accounts/0/balance",
+      "expected": {
+        "type": "number",
+        "bytes": 3,
+        "sha256": "1e472b39b105d349bcd069c4a711b44a2fffb8e274714bb07ecfff69a9a7f67b"
+      },
+      "actual": {
+        "type": "number",
+        "bytes": 3,
+        "sha256": "dac53c17c250fd4d4d81eaf6d88435676dac1f3f3896441e277af839bf50ed8a"
+      },
+      "provenance": "baseline:rejects-version-conflict-holdout/database/accounts/0/balance",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "rejects-version-conflict-holdout",
+      "category": "database",
+      "selector": "/database/accounts/0/version",
+      "expected": {
+        "type": "number",
+        "bytes": 1,
+        "sha256": "19581e27de7ced00ff1ce50b2047e7a567c76b1cbaebabe5ef03f7c3017bb5b7"
+      },
+      "actual": {
+        "type": "number",
+        "bytes": 2,
+        "sha256": "4a44dc15364204a80fe80e9039455cc1608281820fe2b24f1e5233ade6af1dd5"
+      },
+      "provenance": "baseline:rejects-version-conflict-holdout/database/accounts/0/version",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "rejects-version-conflict-holdout",
+      "category": "database",
+      "selector": "/database/accounts/1/balance",
+      "expected": {
+        "type": "number",
+        "bytes": 1,
+        "sha256": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9"
+      },
+      "actual": {
+        "type": "number",
+        "bytes": 2,
+        "sha256": "f369cb89fc627e668987007d121ed1eacdc01db9e28f8bb26f358b7d8c4f08ac"
+      },
+      "provenance": "baseline:rejects-version-conflict-holdout/database/accounts/1/balance",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "rejects-version-conflict-holdout",
+      "category": "database",
+      "selector": "/database/accounts/1/version",
+      "expected": {
+        "type": "number",
+        "bytes": 1,
+        "sha256": "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b"
+      },
+      "actual": {
+        "type": "number",
+        "bytes": 1,
+        "sha256": "d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35"
+      },
+      "provenance": "baseline:rejects-version-conflict-holdout/database/accounts/1/version",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "missing-observation",
+      "scenario": "rejects-version-conflict-holdout",
+      "category": "database",
+      "selector": "/database/idempotency",
+      "expected": {
+        "type": "object",
+        "bytes": 283,
+        "sha256": "7185408d86acbbeaf67e4b11523a41fb7f9fc19cd0d1ca5c5de6dbedb47bb73b"
+      },
+      "provenance": "baseline:rejects-version-conflict-holdout/database/idempotency",
+      "repair": "harness"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "rejects-version-conflict-holdout",
+      "category": "database",
+      "selector": "/database/transaction/committed",
+      "expected": {
+        "type": "boolean",
+        "bytes": 5,
+        "sha256": "fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa"
+      },
+      "actual": {
+        "type": "boolean",
+        "bytes": 4,
+        "sha256": "b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b"
+      },
+      "provenance": "baseline:rejects-version-conflict-holdout/database/transaction/committed",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "missing-observation",
+      "scenario": "rejects-version-conflict-holdout",
+      "category": "database",
+      "selector": "/database/transaction/rollsBackOnFailure",
+      "expected": {
+        "type": "boolean",
+        "bytes": 4,
+        "sha256": "b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b"
+      },
+      "provenance": "baseline:rejects-version-conflict-holdout/database/transaction/rollsBackOnFailure",
+      "repair": "harness"
+    },
+    {
+      "classification": "missing-observation",
+      "scenario": "rejects-version-conflict-holdout",
+      "category": "failures",
+      "selector": "/failures/0",
+      "expected": {
+        "type": "object",
+        "bytes": 413,
+        "sha256": "156fdbcb6a5bb9c85ac3f78907c50021bcdc59d32f61c5f732bece185bd4e087"
+      },
+      "provenance": "baseline:rejects-version-conflict-holdout/failures/0",
+      "repair": "harness"
+    },
+    {
+      "classification": "missing-observation",
+      "scenario": "rejects-version-conflict-holdout",
+      "category": "http",
+      "selector": "/http/body/error",
+      "expected": {
+        "type": "object",
+        "bytes": 286,
+        "sha256": "c28ee6c9cc0a13a44d182fa9d52f9c3090fa0bb56744aec6d65cab5248d567e1"
+      },
+      "provenance": "baseline:rejects-version-conflict-holdout/http/body/error",
+      "repair": "harness"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "rejects-version-conflict-holdout",
+      "category": "http",
+      "selector": "/http/body/fromBalance",
+      "actual": {
+        "type": "number",
+        "bytes": 3,
+        "sha256": "dac53c17c250fd4d4d81eaf6d88435676dac1f3f3896441e277af839bf50ed8a"
+      },
+      "provenance": "baseline:rejects-version-conflict-holdout/http/body/fromBalance",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "rejects-version-conflict-holdout",
+      "category": "http",
+      "selector": "/http/body/fromVersion",
+      "actual": {
+        "type": "number",
+        "bytes": 2,
+        "sha256": "4a44dc15364204a80fe80e9039455cc1608281820fe2b24f1e5233ade6af1dd5"
+      },
+      "provenance": "baseline:rejects-version-conflict-holdout/http/body/fromVersion",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "rejects-version-conflict-holdout",
+      "category": "http",
+      "selector": "/http/body/toBalance",
+      "actual": {
+        "type": "number",
+        "bytes": 2,
+        "sha256": "f369cb89fc627e668987007d121ed1eacdc01db9e28f8bb26f358b7d8c4f08ac"
+      },
+      "provenance": "baseline:rejects-version-conflict-holdout/http/body/toBalance",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "rejects-version-conflict-holdout",
+      "category": "http",
+      "selector": "/http/body/toVersion",
+      "actual": {
+        "type": "number",
+        "bytes": 1,
+        "sha256": "d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35"
+      },
+      "provenance": "baseline:rejects-version-conflict-holdout/http/body/toVersion",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "rejects-version-conflict-holdout",
+      "category": "http",
+      "selector": "/http/body/transferId",
+      "actual": {
+        "type": "string",
+        "bytes": 12,
+        "sha256": "735390ff832029cd5705a444bcad092733c285783e41f66aeec7c1a9e39a74e3"
+      },
+      "provenance": "baseline:rejects-version-conflict-holdout/http/body/transferId",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "rejects-version-conflict-holdout",
+      "category": "http",
+      "selector": "/http/status",
+      "expected": {
+        "type": "number",
+        "bytes": 3,
+        "sha256": "480f5a496560ae4228bb7977ecf29b2c589d7a7aa6b609534566af8cbc229a9e"
+      },
+      "actual": {
+        "type": "number",
+        "bytes": 3,
+        "sha256": "43974ed74066b207c30ffd0fed5146762e6c60745ac977004bc14507c7c42b50"
+      },
+      "provenance": "baseline:rejects-version-conflict-holdout/http/status",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "rejects-version-conflict-holdout",
+      "category": "messages",
+      "selector": "/messages/0",
+      "actual": {
+        "type": "object",
+        "bytes": 801,
+        "sha256": "963fe1da2933cb9f55e25d9d9d4fbf29dd1afce132e1e730bebd5da4f5d37b12"
+      },
+      "provenance": "baseline:rejects-version-conflict-holdout/messages/0",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "rejects-version-conflict-holdout",
+      "category": "ordering",
+      "selector": "/ordering/0",
+      "expected": {
+        "type": "string",
+        "bytes": 6,
+        "sha256": "e9deb04763ac1bbf5687ea1ee52a5a92a54b495c3330cc1ebcee646634daa471"
+      },
+      "actual": {
+        "type": "string",
+        "bytes": 17,
+        "sha256": "bc14a2af3930adc1b907e264048aacc22f1f3930ce182d60e7e665e0c8416864"
+      },
+      "provenance": "baseline:rejects-version-conflict-holdout/ordering/0",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "rejects-version-conflict-holdout",
+      "category": "ordering",
+      "selector": "/ordering/1",
+      "expected": {
+        "type": "string",
+        "bytes": 15,
+        "sha256": "375a0d02b71629ad00cf2de6ac0fa8510fb5876296aeae109eaed111dabc0712"
+      },
+      "actual": {
+        "type": "string",
+        "bytes": 17,
+        "sha256": "ac3bbc121c092350ccc7ef8c27b30cbb7731abdcfe3fc57bdcfe6d39ba2f0632"
+      },
+      "provenance": "baseline:rejects-version-conflict-holdout/ordering/1",
+      "repair": "candidate-code"
+    },
+    {
+      "classification": "missing-observation",
+      "scenario": "rejects-version-conflict-holdout",
+      "category": "ordering",
+      "selector": "/ordering/2",
+      "expected": {
+        "type": "string",
+        "bytes": 10,
+        "sha256": "3770b198a03f18cbf37a3bfd4eba2fbbab9ea2eb9795b207678b45c957a6ce18"
+      },
+      "provenance": "baseline:rejects-version-conflict-holdout/ordering/2",
+      "repair": "harness"
+    },
+    {
+      "classification": "candidate-difference",
+      "scenario": "rejects-version-conflict-holdout",
+      "category": "retryability",
+      "selector": "/retryability",
+      "expected": {
+        "type": "boolean",
+        "bytes": 4,
+        "sha256": "b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b"
+      },
+      "actual": {
+        "type": "boolean",
+        "bytes": 5,
+        "sha256": "fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa"
+      },
+      "provenance": "baseline:rejects-version-conflict-holdout/retryability",
       "repair": "candidate-code"
     }
   ]

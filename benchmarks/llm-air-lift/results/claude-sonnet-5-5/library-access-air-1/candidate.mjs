@@ -3,55 +3,45 @@ for await (const chunk of process.stdin) source += chunk;
 const input = JSON.parse(source || "{}");
 const books = Array.isArray(input.books) ? input.books : [];
 const principal = input.principal ?? null;
-const isLibrarian = principal?.role === "librarian";
-const JSON_HEADERS = { "content-type": "application/json" };
+const query = { ...(input.filters ?? {}), ...(input.query ?? {}) };
+const param = (name) => query[name] ?? input[name];
 
-const respond = (status, body, database, failures = []) => {
+const json = { "content-type": "application/json" };
+const respond = (status, body, data = books, deleted = [], failures = []) => {
   console.log(JSON.stringify({
-    http: { status, headers: body === null ? {} : JSON_HEADERS, body },
-    database,
+    http: { status, headers: body === null ? {} : json, body },
+    database: { books: data, deleted },
     failures
   }));
 };
 
-const unchanged = { books, deleted: [] };
-const fail = (status, code) =>
-  respond(status, { error: { code } }, unchanged, [{ code, status, retryable: false }]);
-const project = (b) => ({ id: b.id, ownerId: b.ownerId, title: b.title, genre: b.genre });
-const cmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
-const toInt = (v, d) => {
-  const n = Number(v);
-  return v === undefined || v === null || !Number.isFinite(n) || n < 0 ? d : Math.floor(n);
-};
+const isLibrarian = principal?.role === "librarian";
+const isPrivate = (b) => b.visibility === "private" || b.private === true || b.public === false;
+const canSee = (b) => isLibrarian || b.ownerId === principal.id;
+const fail = (status, code) => respond(status, { error: { code } }, books, [], [{ code, status, retryable: false }]);
+const project = (b) => ({ id: b.id, title: b.title, genre: b.genre, ownerId: b.ownerId });
 
-if (!principal || principal.id === undefined) {
+if (!principal || principal.id == null) {
   fail(401, "unauthorized");
 } else if (input.operation === "delete") {
   const book = books.find((b) => b.id === input.bookId);
-  if (!book) {
-    fail(404, "not_found");
-  } else if (!isLibrarian && book.ownerId !== principal.id) {
-    fail(403, "forbidden");
-  } else {
-    respond(204, null, { books: books.filter((b) => b.id !== input.bookId), deleted: [input.bookId] });
-  }
+  if (!book) fail(404, "not_found");
+  else if (!(isLibrarian || book.ownerId === principal.id)) fail(403, "forbidden");
+  else respond(204, null, books.filter((b) => b.id !== input.bookId), [input.bookId]);
 } else {
-  const q = { ...(input.query ?? {}), ...(input.filter ?? {}), ...(input.filters ?? {}) };
-  let items = books.filter((b) => isLibrarian || b.ownerId === principal.id || b.visibility === "public" || b.public === true);
-  if (q.genre !== undefined) items = items.filter((b) => b.genre === q.genre);
-  if (q.ownerId !== undefined) items = items.filter((b) => b.ownerId === q.ownerId);
-  if (q.title !== undefined) items = items.filter((b) => b.title === q.title);
-  if (q.search !== undefined || q.q !== undefined) {
-    const s = String(q.search ?? q.q).toLowerCase();
-    items = items.filter((b) => String(b.title ?? "").toLowerCase().includes(s));
-  }
-  const sortKey = q.sort ?? input.sort;
-  const field = ["id", "title", "genre", "ownerId"].includes(sortKey) ? sortKey : "title";
-  const dir = (q.order ?? input.order) === "desc" ? -1 : 1;
-  items = [...items].sort((a, b) => dir * cmp(a[field], b[field]) || cmp(a.id, b.id));
+  const genre = param("genre");
+  const ownerId = param("ownerId");
+  const search = param("q") ?? param("title");
+  let items = books.filter(canSee);
+  if (genre != null) items = items.filter((b) => b.genre === genre);
+  if (ownerId != null) items = items.filter((b) => b.ownerId === ownerId);
+  if (search != null) items = items.filter((b) => String(b.title ?? "").toLowerCase().includes(String(search).toLowerCase()));
+  const cmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+  items.sort((a, b) => cmp(String(a.title ?? ""), String(b.title ?? "")) || cmp(String(a.id), String(b.id)));
   const total = items.length;
-  const offset = toInt(q.offset ?? input.offset, 0);
-  const limit = toInt(q.limit ?? input.limit, undefined);
-  items = items.slice(offset, limit === undefined ? undefined : offset + limit).map(project);
-  respond(200, { items, total, offset, limit }, unchanged);
+  const offset = Math.max(0, Number.parseInt(param("offset") ?? 0, 10) || 0);
+  const limitRaw = param("limit");
+  const limit = limitRaw == null ? total : Math.max(0, Number.parseInt(limitRaw, 10) || 0);
+  items = items.slice(offset, offset + limit).map(project);
+  respond(200, { items, total, offset, limit });
 }

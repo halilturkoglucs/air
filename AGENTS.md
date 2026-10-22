@@ -51,5 +51,5 @@ Any agent can stop at any time. State lives in Git, in `pnpm benchmark:status`, 
 
 ### Current work
 
-- Suite v1.2.0 pins two profiles: `gpt-6-astra` (Codex CLI) and `claude-sonnet-5-5` (Claude Code on the owner's subscription), both medium reasoning. Paid runs started 2026-10-22. `claude-sonnet-5-5` finished 18/18 and is published (AIR: pass@3 1/9 vs 0/9, escaped defects 125 → 58). `gpt-6-astra` waits on the Codex usage limit; a local job resumes it at 12:45 CEST. Run `pnpm benchmark:status` for progress and the exact resume commands; checkpoints live in `~/.cache/air-llm-benchmark/`. `pnpm benchmark:render` publishes only models where AIR beats control, so render freely once a model reaches 18/18.
-- v1.1.0 Codex checkpoints (0 completed rounds, usage-limited) are archived locally under `archive/v1.1.0-paused/`. v1.0.0 runs (0/12 passed; feedback was digest-only) are archived locally and must not be published.
+- Suite v1.3.0 (`claude-sonnet-5-5` via Claude Code, medium reasoning) is complete and published: AIR pass@3 9/9 vs 0/9 alone, escaped defects 222 -> 0, about 49k tokens per AIR run. Older suites (v1.0-v1.2) are archived locally under `benchmarks/llm-air-lift/archive/` and not published.
+- README badges point at `main`; they render once this branch is merged.

@@ -3,61 +3,63 @@ for await (const chunk of process.stdin) source += chunk;
 const input = JSON.parse(source || "{}");
 const books = Array.isArray(input.books) ? input.books : [];
 const principal = input.principal ?? null;
-const JSON_HEADERS = { "content-type": "application/json" };
+const query = { ...input, ...(input.query ?? {}) };
 
-const isLibrarian = principal?.role === "librarian";
-const isOwner = (book) => principal != null && book.ownerId === principal.id;
-const isPublic = (book) => book.public === true || book.visibility === "public";
-const visible = (book) => isLibrarian || isOwner(book) || isPublic(book);
-const project = (book) => ({ id: book.id, ownerId: book.ownerId, title: book.title, genre: book.genre });
-
-function fail(status, code, db) {
-  emit(status, { error: { code } }, db, [{ code, status, retryable: false }]);
-}
-
-function emit(status, body, db, failures = []) {
-  const http = { status, headers: body === null ? {} : JSON_HEADERS, body };
-  console.log(JSON.stringify({ http, database: db, failures }));
-}
-
+const json = { "content-type": "application/json" };
+const emit = (status, body, database, headers = json) =>
+  console.log(JSON.stringify({
+    http: { status, headers: body === null ? {} : headers, body },
+    database,
+    failures: []
+  }));
+const fail = (status, code) =>
+  console.log(JSON.stringify({
+    http: { status, headers: json, body: { error: { code } } },
+    database: unchanged,
+    failures: [{ code, status, retryable: false }]
+  }));
 const unchanged = { books, deleted: [] };
 
-function toInt(value, fallback) {
-  if (value === undefined || value === null || value === "") return fallback;
-  const n = Number(value);
-  return Number.isInteger(n) ? n : NaN;
-}
+const isLibrarian = principal?.role === "librarian";
+const isOwner = (book) => principal && book.ownerId === principal.id;
+const isPublic = (book) => book.visibility === "public" || book.public === true;
+const canSee = (book) => isLibrarian || isOwner(book) || isPublic(book);
 
-const cmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+const toInt = (value, fallback) => {
+  const n = Number.parseInt(value, 10);
+  return Number.isFinite(n) && n >= 0 ? n : fallback;
+};
 
-if (!principal || principal.id == null) {
-  fail(401, "unauthorized", unchanged);
+if (!principal || !principal.id) {
+  fail(401, "unauthorized");
 } else if (input.operation === "delete") {
   const book = books.find((b) => b.id === input.bookId);
   if (!book) {
-    fail(404, "not_found", unchanged);
-  } else if (!isOwner(book) && !isLibrarian) {
-    fail(403, "forbidden", unchanged);
+    fail(404, "not_found");
+  } else if (!(isLibrarian || isOwner(book))) {
+    fail(403, "forbidden");
   } else {
-    emit(204, null, { books: books.filter((b) => b.id !== input.bookId), deleted: [input.bookId] });
+    emit(204, null, {
+      books: books.filter((b) => b.id !== input.bookId),
+      deleted: [input.bookId]
+    });
   }
 } else {
-  const q = { ...(input.query ?? {}), ...(input.filter ?? input.filters ?? {}) };
-  const offset = toInt(input.offset ?? q.offset, 0);
-  const limit = toInt(input.limit ?? q.limit, undefined);
-  if (Number.isNaN(offset) || offset < 0 || Number.isNaN(limit) || (limit !== undefined && limit < 0)) {
-    fail(400, "invalid_pagination", unchanged);
-  } else {
-    let items = books.filter(visible);
-    if (q.genre !== undefined) items = items.filter((b) => b.genre === q.genre);
-    if (q.ownerId !== undefined) items = items.filter((b) => b.ownerId === q.ownerId);
-    if (q.title !== undefined) {
-      const t = String(q.title).toLowerCase();
-      items = items.filter((b) => String(b.title ?? "").toLowerCase().includes(t));
-    }
-    items.sort((a, b) => cmp(String(a.title ?? ""), String(b.title ?? "")) || cmp(String(a.id), String(b.id)));
-    const total = items.length;
-    const page = items.slice(offset, limit === undefined ? undefined : offset + limit).map(project);
-    emit(200, { items: page, total, offset, limit: limit ?? null }, unchanged);
+  let items = books.filter(canSee);
+  if (query.genre) items = items.filter((b) => b.genre === query.genre);
+  if (query.ownerId) items = items.filter((b) => b.ownerId === query.ownerId);
+  const text = query.q ?? query.title ?? query.search;
+  if (text) {
+    const needle = String(text).toLowerCase();
+    items = items.filter((b) => String(b.title ?? "").toLowerCase().includes(needle));
   }
+  items = items.slice().sort((a, b) => {
+    const t = String(a.title ?? "").localeCompare(String(b.title ?? ""));
+    return t !== 0 ? t : String(a.id).localeCompare(String(b.id));
+  });
+  const total = items.length;
+  const offset = toInt(query.offset, 0);
+  const limit = toInt(query.limit, total);
+  items = items.slice(offset, offset + limit);
+  emit(200, { items, total, offset, limit }, unchanged);
 }

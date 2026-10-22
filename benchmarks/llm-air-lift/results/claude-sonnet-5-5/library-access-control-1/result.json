@@ -1,8 +1,8 @@
 {
   "apiVersion": "air.dev/check-result/v0.1",
   "kind": "CheckResult",
-  "generatedAt": "2026-10-22T08:24:02.169Z",
-  "baselineId": "c8af3cebc16bbabbcbe80fd8e30c4e750b9a79d1df5a998da7bdeb2da6151e4c",
+  "generatedAt": "2026-10-22T08:40:53.448Z",
+  "baselineId": "89972ae1e78bee01a1f2b692660a40c15e808584386b4370de2614ee5e6b4bba",
   "candidate": {
     "name": "candidate",
     "targetHash": "665b2ecdd0ef2157bebeda0f24ae2012786e516d13d79b610d22592207a78d58"
@@ -15,7 +15,7 @@
   "scenarios": [
     {
       "id": "lists-owned-books",
-      "passed": false
+      "passed": true
     },
     {
       "id": "forbids-foreign-delete",
@@ -23,40 +23,30 @@
     },
     {
       "id": "returns-ordered-page",
-      "passed": false
+      "passed": true
     },
     {
       "id": "allows-owner-delete",
       "passed": true
+    },
+    {
+      "id": "lists-owned-books-holdout",
+      "passed": true
+    },
+    {
+      "id": "forbids-foreign-delete-holdout",
+      "passed": false
+    },
+    {
+      "id": "returns-ordered-page-holdout",
+      "passed": true
+    },
+    {
+      "id": "allows-owner-delete-holdout",
+      "passed": true
     }
   ],
   "mismatches": [
-    {
-      "classification": "missing-observation",
-      "scenario": "lists-owned-books",
-      "category": "http",
-      "selector": "/http/body/limit",
-      "expected": {
-        "type": "number",
-        "bytes": 1,
-        "sha256": "d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35"
-      },
-      "provenance": "baseline:lists-owned-books/http/body/limit",
-      "repair": "harness"
-    },
-    {
-      "classification": "missing-observation",
-      "scenario": "lists-owned-books",
-      "category": "http",
-      "selector": "/http/body/offset",
-      "expected": {
-        "type": "number",
-        "bytes": 1,
-        "sha256": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9"
-      },
-      "provenance": "baseline:lists-owned-books/http/body/offset",
-      "repair": "harness"
-    },
     {
       "classification": "missing-observation",
       "scenario": "forbids-foreign-delete",
@@ -90,29 +80,34 @@
     },
     {
       "classification": "missing-observation",
-      "scenario": "returns-ordered-page",
-      "category": "http",
-      "selector": "/http/body/limit",
+      "scenario": "forbids-foreign-delete-holdout",
+      "category": "failures",
+      "selector": "/failures/0",
       "expected": {
-        "type": "number",
-        "bytes": 1,
-        "sha256": "d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35"
+        "type": "object",
+        "bytes": 413,
+        "sha256": "d38dec469bfebd143c9de416b38034b3e88a6a245727b105707e85d15b53c9fb"
       },
-      "provenance": "baseline:returns-ordered-page/http/body/limit",
+      "provenance": "baseline:forbids-foreign-delete-holdout/failures/0",
       "repair": "harness"
     },
     {
-      "classification": "missing-observation",
-      "scenario": "returns-ordered-page",
+      "classification": "candidate-difference",
+      "scenario": "forbids-foreign-delete-holdout",
       "category": "http",
-      "selector": "/http/body/offset",
+      "selector": "/http/body/error",
       "expected": {
-        "type": "number",
-        "bytes": 1,
-        "sha256": "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b"
+        "type": "object",
+        "bytes": 155,
+        "sha256": "fa2ee70dd2ad0d01c04e19a63b9fb6e5b78ec525777ff049385ddbe8b4df237c"
       },
-      "provenance": "baseline:returns-ordered-page/http/body/offset",
-      "repair": "harness"
+      "actual": {
+        "type": "string",
+        "bytes": 11,
+        "sha256": "d049d3c38e9b1c0f1b2eb82353d5a9c2b29172b63c4a62aaf2cebdb09eb434c8"
+      },
+      "provenance": "baseline:forbids-foreign-delete-holdout/http/body/error",
+      "repair": "candidate-code"
     }
   ]
 }

@@ -1,8 +1,8 @@
 {
   "apiVersion": "air.dev/check-result/v0.1",
   "kind": "CheckResult",
-  "generatedAt": "2026-10-22T08:29:39.822Z",
-  "baselineId": "4d6c7a95da7e8726d7a4463c2a889a66d60f66a96a590999bdbb6f3cfd95c544",
+  "generatedAt": "2026-10-22T08:42:54.120Z",
+  "baselineId": "3b0b242004ebe1fde179e6317329e49741b6ce11938178656cef9a7cd9d3178c",
   "candidate": {
     "name": "candidate",
     "targetHash": "665b2ecdd0ef2157bebeda0f24ae2012786e516d13d79b610d22592207a78d58"
@@ -27,6 +27,22 @@
     },
     {
       "id": "allows-owner-delete",
+      "passed": true
+    },
+    {
+      "id": "lists-owned-books-holdout",
+      "passed": true
+    },
+    {
+      "id": "forbids-foreign-delete-holdout",
+      "passed": true
+    },
+    {
+      "id": "returns-ordered-page-holdout",
+      "passed": true
+    },
+    {
+      "id": "allows-owner-delete-holdout",
       "passed": true
     }
   ],

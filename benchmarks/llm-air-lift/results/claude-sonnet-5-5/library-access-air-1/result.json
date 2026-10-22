@@ -1,13 +1,13 @@
 {
   "apiVersion": "air.dev/check-result/v0.1",
   "kind": "CheckResult",
-  "generatedAt": "2026-10-22T08:27:36.278Z",
-  "baselineId": "8db5465fd6639be29e8f14d3afab968946cf4f83dc920704b27473fa47206753",
+  "generatedAt": "2026-10-22T08:40:10.178Z",
+  "baselineId": "95ee22d07162f26885ad07d864df22e67e9ffd1453f302cabccbd5ca20e17ecb",
   "candidate": {
     "name": "candidate",
     "targetHash": "665b2ecdd0ef2157bebeda0f24ae2012786e516d13d79b610d22592207a78d58"
   },
-  "passed": false,
+  "passed": true,
   "policy": {
     "passed": true,
     "violations": []
@@ -23,157 +23,28 @@
     },
     {
       "id": "returns-ordered-page",
-      "passed": false
+      "passed": true
     },
     {
       "id": "allows-owner-delete",
       "passed": true
+    },
+    {
+      "id": "lists-owned-books-holdout",
+      "passed": true
+    },
+    {
+      "id": "forbids-foreign-delete-holdout",
+      "passed": true
+    },
+    {
+      "id": "returns-ordered-page-holdout",
+      "passed": true
+    },
+    {
+      "id": "allows-owner-delete-holdout",
+      "passed": true
     }
   ],
-  "mismatches": [
-    {
-      "classification": "candidate-difference",
-      "scenario": "returns-ordered-page",
-      "category": "http",
-      "selector": "/http/body/items/0/genre",
-      "expected": {
-        "type": "string",
-        "bytes": 17,
-        "sha256": "c290690a4d8d25f9598500189f9da62fe341f0381e64ac58a468c2a7ffdcf28b"
-      },
-      "actual": {
-        "type": "string",
-        "bytes": 10,
-        "sha256": "c567f930f3f5bfa41389ff81a3061f79fcafc1b4c6d55e13f217253905815352"
-      },
-      "provenance": "baseline:returns-ordered-page/http/body/items/0/genre",
-      "repair": "candidate-code"
-    },
-    {
-      "classification": "candidate-difference",
-      "scenario": "returns-ordered-page",
-      "category": "http",
-      "selector": "/http/body/items/0/id",
-      "expected": {
-        "type": "string",
-        "bytes": 4,
-        "sha256": "60799eb29089f396fcde5286c6e1830601adf1c7c6a1049334f6701df998801c"
-      },
-      "actual": {
-        "type": "string",
-        "bytes": 4,
-        "sha256": "e319dbc5800ca35642e1a130bc0850b7bab86b26236fb779adabd3d5750fcccc"
-      },
-      "provenance": "baseline:returns-ordered-page/http/body/items/0/id",
-      "repair": "candidate-code"
-    },
-    {
-      "classification": "candidate-difference",
-      "scenario": "returns-ordered-page",
-      "category": "http",
-      "selector": "/http/body/items/0/ownerId",
-      "expected": {
-        "type": "string",
-        "bytes": 8,
-        "sha256": "5d08e7295b38b57c9e0f0e6419fce3b76289467d2304922603dcfb566f11be21"
-      },
-      "actual": {
-        "type": "string",
-        "bytes": 8,
-        "sha256": "9a0717f1de83fba143a8d463fc5e35118ff2e79e35b899db4c3170f3b26b0b36"
-      },
-      "provenance": "baseline:returns-ordered-page/http/body/items/0/ownerId",
-      "repair": "candidate-code"
-    },
-    {
-      "classification": "candidate-difference",
-      "scenario": "returns-ordered-page",
-      "category": "http",
-      "selector": "/http/body/items/0/title",
-      "expected": {
-        "type": "string",
-        "bytes": 6,
-        "sha256": "cf9a34cd9bf34faf7ee2b3cbf06f63a7a43c88dbcc83c8c86d9c5447ae77fb9b"
-      },
-      "actual": {
-        "type": "string",
-        "bytes": 9,
-        "sha256": "053830afe50be2aa82a9185e77625879e9befa891d9fafa3e93c564a3dddad49"
-      },
-      "provenance": "baseline:returns-ordered-page/http/body/items/0/title",
-      "repair": "candidate-code"
-    },
-    {
-      "classification": "candidate-difference",
-      "scenario": "returns-ordered-page",
-      "category": "http",
-      "selector": "/http/body/items/1/id",
-      "expected": {
-        "type": "string",
-        "bytes": 4,
-        "sha256": "b43ec1b3a3bc8c94ba440294d1a66b6aa9d1fca0f79f182d1e7774e1ec9edc78"
-      },
-      "actual": {
-        "type": "string",
-        "bytes": 4,
-        "sha256": "60799eb29089f396fcde5286c6e1830601adf1c7c6a1049334f6701df998801c"
-      },
-      "provenance": "baseline:returns-ordered-page/http/body/items/1/id",
-      "repair": "candidate-code"
-    },
-    {
-      "classification": "candidate-difference",
-      "scenario": "returns-ordered-page",
-      "category": "http",
-      "selector": "/http/body/items/1/ownerId",
-      "expected": {
-        "type": "string",
-        "bytes": 8,
-        "sha256": "1a90e1d2917b968c9ac77cae19b32a67cfecff3c06f54f108f3787e457859095"
-      },
-      "actual": {
-        "type": "string",
-        "bytes": 8,
-        "sha256": "5d08e7295b38b57c9e0f0e6419fce3b76289467d2304922603dcfb566f11be21"
-      },
-      "provenance": "baseline:returns-ordered-page/http/body/items/1/ownerId",
-      "repair": "candidate-code"
-    },
-    {
-      "classification": "candidate-difference",
-      "scenario": "returns-ordered-page",
-      "category": "http",
-      "selector": "/http/body/items/1/title",
-      "expected": {
-        "type": "string",
-        "bytes": 12,
-        "sha256": "48c832c1fc389290070deb24dda86c2d23b39d811c811bd52fe54ff6f24b4a3d"
-      },
-      "actual": {
-        "type": "string",
-        "bytes": 6,
-        "sha256": "cf9a34cd9bf34faf7ee2b3cbf06f63a7a43c88dbcc83c8c86d9c5447ae77fb9b"
-      },
-      "provenance": "baseline:returns-ordered-page/http/body/items/1/title",
-      "repair": "candidate-code"
-    },
-    {
-      "classification": "candidate-difference",
-      "scenario": "returns-ordered-page",
-      "category": "http",
-      "selector": "/http/body/total",
-      "expected": {
-        "type": "number",
-        "bytes": 1,
-        "sha256": "4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a"
-      },
-      "actual": {
-        "type": "number",
-        "bytes": 1,
-        "sha256": "ef2d127de37b942baad06145e54b0c619a1f22327b2ebbcfbec78f5564afe39d"
-      },
-      "provenance": "baseline:returns-ordered-page/http/body/total",
-      "repair": "candidate-code"
-    }
-  ]
+  "mismatches": []
 }

@@ -3,56 +3,49 @@ for await (const chunk of process.stdin) source += chunk;
 const input = JSON.parse(source || "{}");
 const books = Array.isArray(input.books) ? input.books : [];
 const principal = input.principal ?? null;
-const query = { ...(input.filters ?? {}), ...(input.query ?? {}) };
+const query = input.query ?? input.filters ?? {};
 
-const JSON_HEADERS = { "content-type": "application/json" };
-const respond = (status, body, data = books, deleted = []) => {
+const json = { "content-type": "application/json" };
+const isLibrarian = principal?.role === "librarian";
+
+function out(status, body, list = books, deleted = []) {
+  const headers = body === null ? {} : json;
   console.log(JSON.stringify({
-    http: { status, headers: body === null ? {} : JSON_HEADERS, body },
-    database: { books: data, deleted },
+    http: { status, headers, body },
+    database: { books: list, deleted },
     failures: []
   }));
-};
-const error = (status, message) => respond(status, { error: message });
-
-const isLibrarian = principal?.role === "librarian";
-const isPublic = (b) => b.visibility === "public" || b.public === true;
-const canSee = (b) => isLibrarian || b.ownerId === principal.id || isPublic(b);
-const project = (b) => ({ id: b.id, title: b.title, genre: b.genre, ownerId: b.ownerId });
-const cmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
-
-function toInt(value, fallback) {
-  if (value === undefined || value === null || value === "") return fallback;
-  const n = Number(value);
-  return Number.isInteger(n) ? n : NaN;
 }
 
-if (!principal || principal.id === undefined || principal.id === null) {
-  error(401, "unauthenticated");
+const project = (b) => ({ id: b.id, ownerId: b.ownerId, title: b.title, genre: b.genre });
+const cmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+
+if (!principal || principal.id == null) {
+  out(401, { error: "unauthorized" });
 } else if (input.operation === "delete") {
   const book = books.find((b) => b.id === input.bookId);
-  if (!book) error(404, "not found");
-  else if (book.ownerId !== principal.id && !isLibrarian) error(403, "forbidden");
-  else respond(204, null, books.filter((b) => b.id !== input.bookId), [input.bookId]);
-} else if (input.operation === "list") {
-  const offset = toInt(query.offset ?? input.offset, 0);
-  const limit = toInt(query.limit ?? input.limit, undefined);
-  if (Number.isNaN(offset) || offset < 0 || Number.isNaN(limit) || (limit !== undefined && limit < 0)) {
-    error(400, "invalid pagination");
-  } else {
-    let items = books.filter(canSee);
-    if (query.genre !== undefined) items = items.filter((b) => b.genre === query.genre);
-    if (query.ownerId !== undefined) items = items.filter((b) => b.ownerId === query.ownerId);
-    if (query.title !== undefined) items = items.filter((b) => b.title === query.title);
-    if (query.q !== undefined) {
-      const q = String(query.q).toLowerCase();
-      items = items.filter((b) => String(b.title ?? "").toLowerCase().includes(q));
-    }
-    items = [...items].sort((a, b) => cmp(a.title ?? "", b.title ?? "") || cmp(a.id, b.id));
-    const total = items.length;
-    const page = items.slice(offset, limit === undefined ? undefined : offset + limit).map(project);
-    respond(200, { items: page, total, offset, limit: limit ?? null });
-  }
+  if (!book) out(404, { error: "not found" });
+  else if (!isLibrarian && book.ownerId !== principal.id) out(403, { error: "forbidden" });
+  else out(204, null, books.filter((b) => b.id !== input.bookId), [input.bookId]);
 } else {
-  error(400, "unknown operation");
+  const get = (k) => query[k] ?? input[k];
+  let items = books.filter((b) => isLibrarian || b.ownerId === principal.id);
+  const genre = get("genre");
+  if (genre != null && genre !== "") items = items.filter((b) => b.genre === genre);
+  const ownerId = get("ownerId");
+  if (ownerId != null && ownerId !== "") items = items.filter((b) => b.ownerId === ownerId);
+  const q = get("q") ?? get("title");
+  if (q != null && q !== "") {
+    const needle = String(q).toLowerCase();
+    items = items.filter((b) => String(b.title ?? "").toLowerCase().includes(needle));
+  }
+  items = [...items].sort((a, b) =>
+    cmp(String(a.title ?? "").toLowerCase(), String(b.title ?? "").toLowerCase()) ||
+    cmp(String(a.id), String(b.id)));
+  const total = items.length;
+  const offset = Math.max(0, Number.parseInt(get("offset"), 10) || 0);
+  const limitRaw = Number.parseInt(get("limit"), 10);
+  const limit = Number.isFinite(limitRaw) && limitRaw >= 0 ? limitRaw : undefined;
+  items = items.slice(offset, limit === undefined ? undefined : offset + limit);
+  out(200, { items: items.map(project), total });
 }
