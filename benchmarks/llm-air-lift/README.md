@@ -6,7 +6,7 @@ Suite v1.3 pins Claude Sonnet 5.5 via Claude Code at medium reasoning. The runne
 
 ## Feedback boundary
 
-AIR check results store digests, not payloads. For the AIR arm, the harness re-runs the legacy oracle and the candidate on the **feedback** scenarios only. Each difference is shown with the reviewed expected value and the actual value, as a developer with local legacy access would see them. Sibling differences collapse into their parent and each scenario is capped at eight lines to keep tokens down.
+AIR check results store digests, not payloads. For the AIR arm, the harness re-runs the legacy oracle and the candidate on the **feedback** scenarios only. Each difference is shown with the reviewed expected value and the actual value, as a developer with local legacy access would see them. From suite v1.4 the feedback text is produced by the same formatter as `air check run --agent --reveal` (`air.dev/agent/v1`), so the AIR arm sees exactly what the shipped CLI prints: three or more sibling differences collapse into their parent, normalization failures come first, and the report stays inside a 40-line budget.
 
 Feedback covers every behavior once. Evaluation re-runs those scenarios plus one **held-out variant** per behavior with new identifiers, amounts, principals, and data. Neither arm ever sees the variants, so they measure whether a fix generalizes rather than whether it memorized one example.
 
