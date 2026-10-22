@@ -1,9 +1,10 @@
 import { execFileSync } from "node:child_process";
 import { readFile, readdir, stat } from "node:fs/promises";
-import { relative, resolve, sep } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import javascriptRules from "../rules/javascript.json" with { type: "json" };
 import pythonRules from "../rules/python.json" with { type: "json" };
 import goRules from "../rules/go.json" with { type: "json" };
+import sqlRules from "../rules/sql.json" with { type: "json" };
 
 // Static seam scan for any codebase. It only proposes: a seam counts as discovered once AIR has executed it
 // (evidence moves inferred -> runnable -> observed -> baselined). No call graph, no symbol index.
@@ -17,11 +18,15 @@ export interface CodeSeam {
 }
 export interface CodeSeamReport { readonly apiVersion: "air.dev/code-seams/v0.1"; readonly scope: { readonly path: string; readonly symbol?: string; readonly since?: string }; readonly files: number; readonly seams: readonly CodeSeam[]; readonly effects: readonly (SeamEffect & { readonly file: string })[] }
 
-interface SeamRule { readonly kind: SeamKind; readonly framework: string; readonly pattern: string; readonly method?: number; readonly route?: number; readonly name?: number; readonly defaultMethod?: string; readonly routeFromPath?: string; readonly routePrefix?: string; readonly fileFilter?: string }
+interface SeamRule { readonly kind: SeamKind; readonly framework: string; readonly pattern: string; readonly method?: number; readonly route?: number; readonly name?: number; readonly defaultMethod?: string; readonly routeFromPath?: string; readonly routePrefix?: string; readonly fileFilter?: string; readonly expand?: readonly string[]; readonly regexRoute?: boolean }
 interface EffectRule { readonly kind: SeamEffect["kind"]; readonly pattern: string; readonly name: number; readonly flags?: string }
-interface Ecosystem { readonly ecosystem: string; readonly extensions: readonly string[]; readonly lineComment: string; readonly seams: readonly SeamRule[]; readonly effects: readonly EffectRule[] }
+// Prefixes apply to routes declared later in the same file (a controller or router prefix).
+interface PrefixRule { readonly pattern: string; readonly prefix: number }
+// Mounts attach a prefix to routes in another file: a module, a dotted module path, a function, or an imported file.
+interface MountRule { readonly pattern: string; readonly target: number; readonly prefix: number; readonly targetKind: "module" | "dotted" | "function" | "import" }
+interface Ecosystem { readonly ecosystem: string; readonly extensions: readonly string[]; readonly lineComment: string; readonly seams: readonly SeamRule[]; readonly effects: readonly EffectRule[]; readonly prefixes?: readonly PrefixRule[]; readonly mounts?: readonly MountRule[] }
 
-const ECOSYSTEMS = [javascriptRules, pythonRules, goRules] as unknown as readonly Ecosystem[];
+const ECOSYSTEMS = [javascriptRules, pythonRules, goRules, sqlRules] as unknown as readonly Ecosystem[];
 const SKIP = new Set(["node_modules", ".git", "dist", "build", "out", "vendor", "venv", ".venv", "target", "__pycache__", "coverage", ".next", "graphify-out", ".air"]);
 const MAX_FILE_BYTES = 1024 * 1024;
 
@@ -45,6 +50,15 @@ function stripComments(source: string, lineComment: string): string {
 }
 
 const lineOf = (source: string, index: number): number => source.slice(0, index).split("\n").length;
+// Joins prefix and route segments; a trailing slash declared by the route itself is kept (Django redirects without it).
+const joinRoute = (...parts: readonly string[]): string => {
+  const joined = `/${parts.map((part) => part.replace(/^\/+|\/+$/gu, "")).filter(Boolean).join("/")}`;
+  const last = parts.at(-1) ?? "";
+  return last.length > 1 && last.endsWith("/") && joined !== "/" ? `${joined}/` : joined;
+};
+// Django-style regex routes become path templates: ^profiles/(?P<username>\w+)/?$ -> profiles/:username
+const fromRegexRoute = (route: string): string => route.replace(/^\^/u, "").replace(/\$$/u, "").replace(/\(\?P<(\w+)>[^)]*\)/gu, ":$1").replace(/\/\?/gu, "/").replace(/\?$/u, "");
+const withoutExtension = (file: string): string => file.replace(/\.[^./]+$/u, "");
 const slug = (value: string): string => value.toLowerCase().replace(/[^a-z0-9]+/gu, "-").replace(/^-|-$/gu, "").slice(0, 60) || "root";
 
 function symbolRange(source: string, symbol: string): { start: number; end: number } | undefined {
@@ -71,12 +85,17 @@ export async function scanCodeSeams(options: { readonly root: string; readonly p
     const touched = new Set([...changed, ...untracked]); files = files.filter((file) => touched.has(file));
   }
   const seams: CodeSeam[] = []; const allEffects: (SeamEffect & { file: string })[] = []; let scanned = 0;
+  const sources = new Map<string, string>(); const mounts: { rule: MountRule; target: string; prefix: string; file: string }[] = [];
   for (const file of files) {
     const ecosystem = ECOSYSTEMS.find((item) => item.extensions.some((extension) => file.endsWith(extension)));
     if (!ecosystem || (await stat(file)).size > MAX_FILE_BYTES) continue;
     scanned += 1;
     const relativeFile = relative(options.root, file).split(sep).join("/");
     const source = stripComments(await readFile(file, "utf8"), ecosystem.lineComment);
+    sources.set(relativeFile, source);
+    for (const rule of ecosystem.mounts ?? []) for (const match of source.matchAll(new RegExp(rule.pattern, "gmu"))) mounts.push({ rule, target: match[rule.target]!, prefix: match[rule.prefix] ?? "", file: relativeFile });
+    const prefixes = (ecosystem.prefixes ?? []).flatMap((rule) => [...source.matchAll(new RegExp(rule.pattern, "gmu"))].map((match) => ({ line: lineOf(source, match.index), prefix: match[rule.prefix] ?? "" }))).sort((left, right) => left.line - right.line);
+    const prefixAt = (line: number): string => prefixes.filter((item) => item.line <= line).at(-1)?.prefix ?? "";
     const range = options.symbol ? symbolRange(source, options.symbol) : undefined;
     if (options.symbol && !range) continue;
     const found: { line: number; seam: Omit<CodeSeam, "id" | "effects">; handler?: { start: number; end: number } | null }[] = [];
@@ -89,13 +108,15 @@ export async function scanCodeSeams(options: { readonly root: string; readonly p
         const line = lineOf(source, match.index);
         if (range && (line < range.start || line > range.end)) continue;
         const method = (rule.method !== undefined ? match[rule.method] : undefined)?.toUpperCase() ?? rule.defaultMethod;
-        const route = routeFromPath ? routeFromPath[1]!.replace(/\[([^[\]/]+)\]/gu, ":$1") || "/" : rule.route !== undefined ? `${rule.routePrefix ?? ""}${match[rule.route] ?? ""}` || "/" : undefined;
+        const route = routeFromPath ? routeFromPath[1]!.replace(/\[([^[\]/]+)\]/gu, ":$1") || "/" : rule.route !== undefined ? joinRoute(prefixAt(line), `${rule.routePrefix ?? ""}${rule.regexRoute ? fromRegexRoute(match[rule.route] ?? "") : match[rule.route] ?? ""}`) : undefined;
         const name = rule.name !== undefined ? (rule.name === 0 ? relativeFile : match[rule.name]) : undefined;
         // A route that registers a named handler (", pay)") owns that function's effects; an unresolved name owns none.
         const lineText = source.split("\n")[line - 1] ?? "";
         const handlerName = /,\s*([A-Za-z_][\w]*)\s*\)\s*;?\s*$/u.exec(lineText)?.[1];
         const handler = handlerName ? (symbolRange(source, handlerName) ?? null) : undefined;
-        found.push({ ...(handler === undefined ? {} : { handler }), line, seam: { kind: rule.kind, framework: rule.framework, ...(method ? { method } : {}), ...(route !== undefined ? { route } : {}), ...(name ? { name } : {}), file: relativeFile, line, evidence: "inferred" } });
+        // A resource registration (e.g. a REST framework router) expands into its conventional routes.
+        const variants = rule.expand && route !== undefined ? rule.expand.map((template) => { const [verb, path] = template.split(" "); return { method: verb!, route: joinRoute(route, path!.replace("{route}", "")) }; }) : [{ method, route }];
+        for (const variant of variants) found.push({ ...(handler === undefined ? {} : { handler }), line, seam: { kind: rule.kind, framework: rule.framework, ...(variant.method ? { method: variant.method } : {}), ...(variant.route !== undefined ? { route: variant.route } : {}), ...(name ? { name } : {}), file: relativeFile, line, evidence: "inferred" } });
       }
     }
     // Effects are collected for every file, seam or not: they show behavior that HTTP checks alone cannot see.
@@ -113,13 +134,34 @@ export async function scanCodeSeams(options: { readonly root: string; readonly p
       const [from, to] = entry.handler ? [entry.handler.start, entry.handler.end] : entry.handler === null ? [0, -1] : [entry.line, entry.seam.kind === "function" && range ? range.end : next - 1];
       const owned = effects.filter((effect) => effect.line >= from && effect.line <= to);
       const unique = [...new Map(owned.map((effect) => [`${effect.kind}:${effect.name}`, effect])).values()].sort((left, right) => left.line - right.line || left.name.localeCompare(right.name));
-      const { seam } = entry;
-      const id = seam.kind === "http" ? `http-${(seam.method ?? "any").toLowerCase()}-${slug(seam.route ?? "/")}` : `${seam.kind}-${slug(seam.name ?? seam.file)}`;
-      seams.push({ id, ...seam, effects: unique });
+      seams.push({ id: "", ...entry.seam, effects: unique });
     }
   }
+  // Mount prefixes come from other files, so they are applied once every file has been read.
+  const importTarget = (mount: (typeof mounts)[number]): string | undefined => {
+    const source = sources.get(mount.file) ?? "";
+    const escaped = mount.target.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+    const specifier = new RegExp(`import\\s+(?:\\{[^}]*\\b${escaped}\\b[^}]*\\}|${escaped})\\s+from\\s+["'](\\.[^"']+)["']|(?:const|let|var)\\s+${escaped}\\s*=\\s*require\\(\\s*["'](\\.[^"']+)["']`, "u").exec(source);
+    const path = specifier?.[1] ?? specifier?.[2];
+    return path ? withoutExtension(join(dirname(mount.file), path)).replace(/\/index$/u, "") : undefined;
+  };
+  const mountFor = (seam: CodeSeam): string => {
+    for (const mount of mounts) {
+      const kind = mount.rule.targetKind;
+      if (kind === "module" && withoutExtension(seam.file).split("/").at(-1) === mount.target) return mount.prefix;
+      if (kind === "dotted" && withoutExtension(seam.file).replaceAll("/", ".").endsWith(mount.target)) return mount.prefix;
+      if (kind === "function") { const range = symbolRange(sources.get(seam.file) ?? "", mount.target); if (range && seam.line >= range.start && seam.line <= range.end) return mount.prefix; }
+      if (kind === "import") { const target = importTarget(mount); if (target && (withoutExtension(seam.file) === target || withoutExtension(seam.file) === `${target}/index`)) return mount.prefix; }
+    }
+    return "";
+  };
+  const mounted = seams.map((seam) => {
+    const route = seam.kind === "http" && seam.route !== undefined ? joinRoute(mountFor(seam), seam.route) : seam.route;
+    const next = { ...seam, ...(route !== undefined ? { route } : {}) };
+    return { ...next, id: next.kind === "http" ? `http-${(next.method ?? "any").toLowerCase()}-${slug(next.route ?? "/")}` : `${next.kind}-${slug(next.name ?? next.file)}` };
+  });
   const counts = new Map<string, number>();
-  const unique = seams.sort((left, right) => left.file.localeCompare(right.file) || left.line - right.line).map((seam) => { const count = (counts.get(seam.id) ?? 0) + 1; counts.set(seam.id, count); return count === 1 ? seam : { ...seam, id: `${seam.id}-${count}` }; });
+  const unique = mounted.sort((left, right) => left.file.localeCompare(right.file) || left.line - right.line).map((seam) => { const count = (counts.get(seam.id) ?? 0) + 1; counts.set(seam.id, count); return count === 1 ? seam : { ...seam, id: `${seam.id}-${count}` }; });
   return { apiVersion: "air.dev/code-seams/v0.1", scope: { path: relative(options.root, scopePath).split(sep).join("/") || ".", ...(options.symbol ? { symbol: options.symbol } : {}), ...(options.since ? { since: options.since } : {}) }, files: scanned, seams: unique, effects: allEffects.sort((left, right) => left.file.localeCompare(right.file) || left.line - right.line || left.name.localeCompare(right.name)) };
 }
 
@@ -132,6 +174,6 @@ export function formatCodeSeams(report: CodeSeamReport): string {
     const effects = (["database", "outbound", "message"] as const).map((kind) => [kind, seam.effects.filter((effect) => effect.kind === kind).map((effect) => effect.name)] as const).filter(([, names]) => names.length > 0);
     if (effects.length > 0) lines.push(`  ${effects.map(([kind, names]) => `${kind === "database" ? "db" : kind === "outbound" ? "out" : "msg"}: ${names.join(", ")}`).join("   ")}`);
   }
-  lines.push(report.seams.length === 0 ? "NEXT no seams found in this scope; widen --path, pass --symbol, or record traffic with `air check record`." : "NEXT review the seams; executing them (`air protect`) arrives in the next step of this milestone.");
+  lines.push(report.seams.length === 0 ? "NEXT no seams found in this scope; widen --path, pass --symbol, or record traffic with `air check record`." : "NEXT run `air protect --url <running service>` to execute the safe ones; lock the rest with `air harness task`.");
   return `${lines.join("\n")}\n`;
 }

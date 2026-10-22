@@ -94,7 +94,7 @@ describe("air discover code", () => {
       "http ANY /carts/<int:pk>/  py/shop/urls.py:2 [django]",
       "http GET /api/books/:id  web/app/api/books/[id]/route.ts:1 [next-route]",
       "http DELETE /api/books/:id  web/app/api/books/[id]/route.ts:2 [next-route]",
-      "NEXT review the seams; executing them (`air protect`) arrives in the next step of this milestone.",
+      "NEXT run `air protect --url <running service>` to execute the safe ones; lock the rest with `air harness task`.",
       "",
     ].join("\n"));
     expect(report.seams.every((seam) => seam.evidence === "inferred")).toBe(true);

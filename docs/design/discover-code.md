@@ -65,6 +65,10 @@ At the owner's request, the agent-first entry point shipped before steps 4b–4d
 
 Parsing every technology (brokers, caches, schedulers, file and mail systems) does not scale. Instead, the coding agent that already works in the repository writes a small harness in the existing command-target contract, and AIR decides whether to trust it with deterministic checks only: identical results across runs (generated UUIDs and timestamps become proposed `typed-token` rules), different observations for different inputs, and a detected difference when the same harness runs against a throwaway copy of the code with an agent-supplied breaking patch applied. Observation categories are open, so a harness reports whatever matters (`events`, `cache`, `files`, ...). This replaces most of the planned per-language work in steps 4b–4d: the code scanner now points the agent at what to cover instead of trying to model it.
 
+### Measured recall
+
+Static seam detection is checked against public RealWorld ("Conduit") implementations, which expose the same 19 endpoints in every stack. Current recall: Express 19/19, NestJS 19/19, FastAPI 19/19, Go/gin 19/19, Django REST Framework 19/19, with each repository's data stores (TypeORM entities, `.sql` query files, GORM models, Django models) reported as effects. Prefixes held in runtime variables (for example `settings.API_V1_STR`) are not resolved; scenarios stay correct relative to the router and are completed by recording or OpenAPI.
+
 ## Everyday flow
 
 What the developer does: run `air agent install` once, then ask their agent for a change as usual.

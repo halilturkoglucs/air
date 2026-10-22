@@ -100,6 +100,35 @@
       "kind": "message",
       "pattern": "\\.(?:sendToQueue|publish)\\(\\s*['\"`]([^'\"`]+)",
       "name": 1
+    },
+    {
+      "kind": "database",
+      "pattern": "\\bRepository<\\s*([A-Z]\\w*)\\s*>",
+      "name": 1
+    },
+    {
+      "kind": "database",
+      "pattern": "\\bgetRepository\\(\\s*([A-Z]\\w*)\\s*\\)",
+      "name": 1
+    },
+    {
+      "kind": "database",
+      "pattern": "@Entity\\(\\s*[\"'`](\\w+)[\"'`]",
+      "name": 1
+    }
+  ],
+  "prefixes": [
+    {
+      "pattern": "@Controller\\(\\s*(?:[\"'`]([^\"'`]*)[\"'`])?",
+      "prefix": 1
+    }
+  ],
+  "mounts": [
+    {
+      "pattern": "\\.use\\(\\s*[\"'`](/[^\"'`]*)[\"'`]\\s*,\\s*([A-Za-z_$][\\w$]*)\\s*\\)",
+      "target": 2,
+      "prefix": 1,
+      "targetKind": "import"
     }
   ]
 }

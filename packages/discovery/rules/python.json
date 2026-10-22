@@ -8,7 +8,7 @@
     {
       "kind": "http",
       "framework": "flask-fastapi",
-      "pattern": "@\\w+\\.(get|post|put|patch|delete|head)\\(\\s*['\"](/[^'\"]*)",
+      "pattern": "@\\w+\\.(get|post|put|patch|delete|head)\\(\\s*[\"'](/?[^\"']*)",
       "method": 1,
       "route": 2
     },
@@ -23,11 +23,39 @@
     {
       "kind": "http",
       "framework": "django",
-      "pattern": "\\b(?:re_)?path\\(\\s*r?['\"]\\^?([^'\"]*)['\"]\\s*,",
+      "pattern": "\\b(?:re_)?path\\(\\s*r?[\"']([^\"']*)[\"']\\s*,\\s*(?!include\\()",
       "route": 1,
       "routePrefix": "/",
       "defaultMethod": "ANY",
-      "fileFilter": "urls\\.py$"
+      "fileFilter": "urls\\.py$",
+      "regexRoute": true
+    },
+    {
+      "kind": "http",
+      "framework": "django-url",
+      "pattern": "\\burl\\(\\s*r?[\"']([^\"']*)[\"']\\s*,\\s*(?!include\\()",
+      "route": 1,
+      "routePrefix": "/",
+      "defaultMethod": "ANY",
+      "fileFilter": "urls\\.py$",
+      "regexRoute": true
+    },
+    {
+      "kind": "http",
+      "framework": "drf-router",
+      "pattern": "\\b\\w+\\.register\\(\\s*r?[\"']([^\"']+)[\"']",
+      "route": 1,
+      "routePrefix": "/",
+      "fileFilter": "urls\\.py$",
+      "expand": [
+        "GET {route}",
+        "POST {route}",
+        "GET {route}/:id",
+        "PUT {route}/:id",
+        "PATCH {route}/:id",
+        "DELETE {route}/:id"
+      ],
+      "regexRoute": true
     },
     {
       "kind": "job",
@@ -85,6 +113,45 @@
       "kind": "message",
       "pattern": "\\.(?:send|produce)\\(\\s*['\"]([^'\"]+)",
       "name": 1
+    },
+    {
+      "kind": "database",
+      "pattern": "\\bselect\\(\\s*([A-Z]\\w*)\\b",
+      "name": 1
+    },
+    {
+      "kind": "database",
+      "pattern": "\\bsession\\.query\\(\\s*([A-Z]\\w*)\\b",
+      "name": 1
+    },
+    {
+      "kind": "database",
+      "pattern": "__tablename__\\s*=\\s*[\"'](\\w+)[\"']",
+      "name": 1
+    }
+  ],
+  "prefixes": [
+    {
+      "pattern": "\\bAPIRouter\\([^)]*?\\bprefix\\s*=\\s*[\"']([^\"']*)",
+      "prefix": 1
+    },
+    {
+      "pattern": "\\bBlueprint\\([^)]*?\\burl_prefix\\s*=\\s*[\"']([^\"']*)",
+      "prefix": 1
+    }
+  ],
+  "mounts": [
+    {
+      "pattern": "\\binclude_router\\(\\s*(\\w+)\\.router\\b[^)]*?\\bprefix\\s*=\\s*[\"']([^\"']*)[\"']",
+      "target": 1,
+      "prefix": 2,
+      "targetKind": "module"
+    },
+    {
+      "pattern": "\\b(?:url|path|re_path)\\(\\s*r?[\"']\\^?([^\"'$]*)\\$?[\"']\\s*,\\s*include\\(\\s*[\"']([\\w.]+)[\"']",
+      "target": 2,
+      "prefix": 1,
+      "targetKind": "dotted"
     }
   ]
 }

@@ -76,4 +76,4 @@ Any agent can stop at any time. State lives in Git, in `pnpm benchmark:status`, 
 ### Current work
 
 - v0.16.0 (milestones 2 and 3 of `docs/roadmap.md` §12a) is tagged and released through `release.yml`; the npm CLI tarball for 0.15.0 never appeared on the registry even though publish succeeded, so 0.16.0 supersedes it.
-- v0.17.0 is released. A field trial on a sandbox copy of mijnjuffie (never the real repo) led to `fix/protect-field-trial`: `--reset`, `--header`, `--rebaseline`, setup NOTEs, MongoDB rules, and stricter SQL detection. Next: rerun the sandbox trial with these, then milestone 5 (`ui` observations) and the developer-experience items in `docs/roadmap.md` §12a.
+- v0.17.0 is released and the field-trial fixes (#49) are merged. `feat/discover-prefixes` raises `air discover code` route recall to 19/19 on RealWorld implementations in Express, NestJS, FastAPI, Go/gin, and Django REST (evaluation script approach: compare against the 19 known endpoints; never run third-party code). Next: milestone 5 (`ui` observations) and the developer-experience items in `docs/roadmap.md` §12a.

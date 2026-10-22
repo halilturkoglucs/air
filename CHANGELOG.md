@@ -4,6 +4,11 @@ All notable changes are recorded here. AIR follows the pre-1.0 policy in `docs/v
 
 ## Unreleased
 
+Measured on public RealWorld implementations (the same 19-endpoint API in five stacks), route recall of `air discover code` went from Express 19, NestJS 16, FastAPI 11, Go/gin 13, Django REST 0 to 19/19 in all five:
+
+- Route prefixes declared away from the route are resolved: Nest `@Controller`, FastAPI `APIRouter(prefix=)`, Flask `Blueprint(url_prefix=)` in the same file, and cross-file mounts (FastAPI `include_router(module.router, prefix=)`, Django `url(..., include("dotted.module"))`, Go `Register(group.Group("/p"))` functions, Express `app.use("/p", importedRouter)`).
+- Django regex routes become path templates (`^profiles/(?P<username>\w+)/?$` to `/profiles/:username/`), old-style `url()` is supported, and Django REST Framework `router.register` expands to its conventional routes; FastAPI routes with an empty path are found.
+- Data effects now include TypeORM entities, SQLAlchemy/SQLModel models, GORM models, and plain `.sql` files.
 From a field trial of `air protect` on a production Next.js and MongoDB service:
 
 - `air protect --reset "<command>"` restores a clean state before each scenario, and `--header <Name>=<ENV_VAR>` signs requests in with a value read from an environment variable (only the name is stored, in the target's new `headers` field). `--rebaseline` re-captures behavior with the new setup and keeps the previous baseline.
