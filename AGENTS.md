@@ -75,6 +75,7 @@ Any agent can stop at any time. State lives in Git, in `pnpm benchmark:status`, 
 
 ### Current work
 
-- Suite v1.3.0 (`claude-sonnet-5-5` via Claude Code, medium reasoning) is complete and published: AIR pass@3 9/9 vs 0/9 alone, escaped defects 222 -> 0, about 49k tokens per AIR run. Older suites (v1.0-v1.2) are archived locally under `benchmarks/llm-air-lift/archive/` and not published.
 - v0.13.0 is released (npmjs, GitHub Packages, GitHub release, Homebrew `air-ir`).
-- Agent protocol `air.dev/agent/v1` (`air check run --agent --reveal`, `air mcp`) is in review. Next: switch the benchmark's AIR arm to call this CLI mode (suite v1.4) so published results measure the shipped product; a full rerun costs about 1M Claude tokens and needs the owner's go-ahead.
+- Agent protocol `air.dev/agent/v1` (`air check run --agent --reveal`, `air mcp`) is in PR #36.
+- Benchmark suite v1.4.0 is complete and published on `feat/benchmark-v1.4-agent-cli` (stacked on #36): with the shipped `air check run --agent --reveal` feedback, `claude-sonnet-5-5` reached pass@3 9/9 vs 0/9 alone, escaped defects 218 -> 0. Merge after #36.
+- v1.3 batches are archived locally under `benchmarks/llm-air-lift/archive/v1.3.0/`.
