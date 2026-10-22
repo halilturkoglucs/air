@@ -16,5 +16,5 @@
     "@air/schema": "workspace:*",
     "@halilturkoglucs/air-plugin-sdk": "workspace:*"
   },
-  "devDependencies": { "tsup": "^8.5.0" }
+  "devDependencies": { "tsup": "^9.0.0" }
 }

@@ -78,6 +78,6 @@
     "@air/target-python": "workspace:*",
     "@air/verifier": "workspace:*",
     "@halilturkoglucs/air-plugin-sdk": "workspace:*",
-    "tsup": "^8.5.0"
+    "tsup": "^9.0.0"
   }
 }
