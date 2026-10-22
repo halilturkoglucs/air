@@ -67,7 +67,7 @@ Methodology: `benchmarks/llm-air-lift/README.md`. Code: `scripts/*-llm-benchmark
 3. Exit code 75 means the agent hit a usage limit. Wait for the reset and rerun the same command.
 4. When 18/18 runs are complete: `pnpm benchmark:merge && pnpm benchmark:verify && pnpm benchmark:render`, then commit `results/` and `badges/`.
 
-Every file under `benchmarks/llm-air-lift/` except `results*/`, `badges/`, `archive/`, and `.checkpoints/` feeds the suite hash. Editing one, including that README, invalidates all evidence and checkpoints. Change the suite only when you mean to rerun everything. If you do, bump `suite.json` `version` and move old batches to `archive/<old-version>/`. Evidence also records `HEAD`, so commit harness changes before starting paid runs.
+Every file under `benchmarks/llm-air-lift/` except `results*/`, `badges/`, `archive/`, and `.checkpoints/` feeds the suite hash. Editing one, including that README, invalidates all evidence and checkpoints. Change the suite only when you mean to rerun everything. If you do, bump `suite.json` `version` and move old batches to `archive/<old-version>/`. Evidence records `HEAD` as provenance (not enforced, since squash merges rewrite history), so commit harness changes before starting paid runs.
 
 ## Handoff
 

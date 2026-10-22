@@ -123,8 +123,7 @@ export async function validateEvidence(evidence, options = {}) {
   if (evidence.budget.repairRounds !== suite.budget.repairRounds) throw new Error("Evidence repair budget does not match the suite.");
   const expectedSuiteHash = await suiteSha256();
   if (evidence.source.suiteSha256 !== expectedSuiteHash) throw new Error("Evidence suite hash is stale.");
-  try { execFileSync("git", ["merge-base", "--is-ancestor", evidence.source.commit, "HEAD"], { cwd: root, stdio: "ignore" }); }
-  catch { throw new Error(`Evidence source commit ${evidence.source.commit} is not an ancestor of HEAD.`); }
+  // source.commit is provenance only: squash merges rewrite history, so integrity rests on the suite hash, artifact checksums, and deterministic rescoring.
 
   const ids = new Set();
   for (const run of evidence.runs) {
