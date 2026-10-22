@@ -75,5 +75,5 @@ Any agent can stop at any time. State lives in Git, in `pnpm benchmark:status`, 
 
 ### Current work
 
-- v0.14.0 is released (npmjs, GitHub Packages, GitHub release, Homebrew `air-ir`).
-- Roadmap track "Any service, any change" is in `docs/roadmap.md` section 12a. Milestone 1 shipped in v0.15.0. Milestone 2 (`rename`/`internal-boundary` normalizations, `lifecycle.services`, `examples/extract-service`) is in review on `feat/m2-topology`. Next: milestone 3 (OpenTelemetry trace import, `check init --from-openapi`, `check coverage`). A benchmark rerun is allowed again after milestone 2 if the owner asks.
+- v0.15.0 is released. v0.16.0 (milestones 2 and 3 of `docs/roadmap.md` §12a: topology normalizations, `lifecycle.services`, `discover traces`, `check init --from-openapi`, `check coverage`) is prepared on `feat/m3-sources`; after that PR merges, tag `v0.16.0` on the merge commit.
+- Next: milestone 4 (a `ui` observation category produced by a user-owned script, no browser dependency in AIR), plus the developer-experience items listed in §12a. A benchmark rerun is allowed again if the owner asks.

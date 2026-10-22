@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
 import { copyFile, mkdir, mkdtemp, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
+import { parse as parseYaml } from "yaml";
 import {
   AirMigrationError,
   AirParseError,
@@ -23,7 +24,7 @@ import { importPostgres } from "@air/import-postgres";
 import { importOpenApiSource } from "@air/import-openapi";
 import { importNextjs } from "@air/import-nextjs";
 import { importSpring } from "@air/import-spring";
-import { CheckInfrastructureError, CheckInputError, adoptExtractedCapability, createCheckBaseline, discoverSpring, discoveryFromAirCandidate, extractCapability, ingestEvidence, initializeMigrationCheck, loadCheckBaseline, loadCheckPolicy, loadCheckTarget, loadMigrationCheck, mergeDiscoveryBundles, parseCheckResult, readDiscoveryBundle, runMigrationCheckDetailed, observeCheckTarget, approveBaselineScenarios, diffBaselines, checkFromExchanges, exchangesFromHar, recordHttpTraffic, writeRecordedCheck, type CheckBaseline, sameDigest, buildAgentReport, formatAgentReport, differenceKey, AGENT_PROTOCOL, startWorkbench, validateMigrationCheck, verifyImportedCapability, writeCheckBaseline, writeCheckResult, writeDiscoveryBundle, writeDiscoveryReport, type CheckMismatch, type DiscoveryBundle } from "@air/discovery";
+import { CheckInfrastructureError, CheckInputError, adoptExtractedCapability, createCheckBaseline, discoverSpring, discoveryFromAirCandidate, extractCapability, ingestEvidence, initializeMigrationCheck, loadCheckBaseline, loadCheckPolicy, loadCheckTarget, loadMigrationCheck, mergeDiscoveryBundles, parseCheckResult, readDiscoveryBundle, runMigrationCheckDetailed, observeCheckTarget, approveBaselineScenarios, diffBaselines, checkFromExchanges, exchangesFromHar, recordHttpTraffic, writeRecordedCheck, traceMapFromOtlp, formatTraceMap, checkFromOpenApi, checkCoverage, formatCoverage, type CheckBaseline, sameDigest, buildAgentReport, formatAgentReport, differenceKey, AGENT_PROTOCOL, startWorkbench, validateMigrationCheck, verifyImportedCapability, writeCheckBaseline, writeCheckResult, writeDiscoveryBundle, writeDiscoveryReport, type CheckMismatch, type DiscoveryBundle } from "@air/discovery";
 import { startLanguageServer } from "@air/language-server";
 import { NextjsTargetAdapter, type NextjsTargetOptions } from "@air/target-nextjs";
 import { RustTargetAdapter, type RustTargetOptions } from "@air/target-rust";
@@ -71,6 +72,8 @@ Usage:
   air check record --to <url> --output <dir> [--from-har <file>]  Record HTTP traffic (proxy or HAR) into a check
   air check approve <scenario>... --reason <text>  Accept the candidate's behavior for chosen scenarios
   air check diff-baseline <before> <after>    Show behavioral differences between two baselines
+  air check init --from-openapi <spec> --output <dir>  Scenario skeletons for every OpenAPI operation
+  air check coverage [<check.yaml>] --openapi <spec> | --traces <otlp.json> [--fail-under <percent>]
   air agent instructions                      Print the agent repair loop for AGENTS.md / CLAUDE.md
   air mcp                                     Serve air_check_* tools over MCP stdio
   air validate <file>                         Parse and validate AIR YAML
@@ -82,6 +85,7 @@ Usage:
   air import-openapi [options]                Import OpenAPI 3.x into reviewable AIR
   air import-nextjs [options]                 Import Next.js App Router + Drizzle into AIR
   air discover spring <repository> [options] Build an evidence-backed discovery bundle
+  air discover traces <otlp.json> [options]  Map endpoints to DB, outbound, and messaging from OpenTelemetry
   air discovery report <bundle> [options] Export a deterministic discovery report
   air evidence ingest <trace> [options]      Ingest redacted runtime/test evidence
   air evidence capture <profile> [options]   Run a command with self-hosted evidence adapters
@@ -975,7 +979,27 @@ async function importSpringCommand(args: readonly string[], io: CliIo): Promise<
   }
 }
 
+async function discoverTracesCommand(args: readonly string[], io: CliIo): Promise<number> {
+  const usage = "Usage: air discover traces <otlp.json> [--service <name>] [--output <file>] [--json]\n";
+  const [input, ...options] = args; const values = new Map<string, string>(); let json = false;
+  if (!input || input.startsWith("--")) { io.stderr(usage); return 2; }
+  for (let index = 0; index < options.length; index += 1) {
+    const option = options[index]!;
+    if (option === "--json") { json = true; continue; }
+    const value = options[index + 1];
+    if (!["--service", "--output"].includes(option) || !value || value.startsWith("--") || values.has(option)) { io.stderr(usage); return 2; }
+    values.set(option, value); index += 1;
+  }
+  try {
+    const map = traceMapFromOtlp(JSON.parse(await readFile(resolve(input), "utf8")), values.has("--service") ? { service: values.get("--service")! } : {});
+    if (values.has("--output")) await writeFile(resolve(values.get("--output")!), `${JSON.stringify(map, null, 2)}\n`, { encoding: "utf8", flag: "wx" });
+    io.stdout(json ? `${JSON.stringify(map)}\n` : formatTraceMap(map));
+    return 0;
+  } catch (error) { io.stderr(`${error instanceof Error ? error.message : String(error)}\n`); return 2; }
+}
+
 async function discoverCommand(args: readonly string[], io: CliIo): Promise<number> {
+  if (args[0] === "traces") return discoverTracesCommand(args.slice(1), io);
   const [framework, repository, ...options] = args;
   const usage = "Usage: air discover spring <repository> --output <directory> [--name <name>] [--analyzer auto|source|openrewrite]\n";
   if (framework !== "spring" || !repository || repository.startsWith("--")) { io.stderr(usage); return 2; }
@@ -1163,8 +1187,11 @@ async function readCheckProfile(root: string): Promise<CheckProfile | undefined>
   catch (error) { if (error instanceof Error && "code" in error && error.code === "ENOENT") return undefined; throw new CheckInputError(`.air/check.json is not valid JSON: ${error instanceof Error ? error.message : String(error)}`); }
 }
 
+// Per-developer run state; AIR_STATE_DIR relocates it (tests, CI) so it never lands in the repository.
+const lastRunPath = (root: string): string => resolve(process.env.AIR_STATE_DIR ?? resolve(root, ".air"), "last-run.json");
+
 async function readLastRun(root: string): Promise<LastRun | undefined> {
-  try { return JSON.parse(await readFile(resolve(root, ".air/last-run.json"), "utf8")) as LastRun; } catch { return undefined; }
+  try { return JSON.parse(await readFile(lastRunPath(root), "utf8")) as LastRun; } catch { return undefined; }
 }
 
 async function checkCommand(args: readonly string[], io: CliIo): Promise<number> {
@@ -1172,6 +1199,8 @@ async function checkCommand(args: readonly string[], io: CliIo): Promise<number>
   if (action === "record") return checkRecordCommand(rest, io);
   if (action === "approve") return checkApproveCommand(rest, io);
   if (action === "diff-baseline") return checkDiffBaselineCommand(rest, io);
+  if (action === "coverage") return checkCoverageCommand(rest, io);
+  if (action === "init" && rest.includes("--from-openapi")) return checkInitOpenApiCommand(rest, io);
   const usages = {
     init: "Usage: air check init <discovery> --capability <id> --output <directory>\n",
     profile: "Usage: air check profile --check <check.yaml> --baseline <directory> --legacy <target> --candidate <target> --output <directory> [--policy <file>] [--at <git-ref>] [--at-setup <command>]\n",
@@ -1306,8 +1335,8 @@ async function checkCommand(args: readonly string[], io: CliIo): Promise<number>
       const last = await readLastRun(root);
       const report = buildAgentReport({ result, values: revealed, previousKeys: last?.baselineId === result.baselineId ? last.keys : undefined, maxLines, notes });
       const lastRun: LastRun = { v: AGENT_PROTOCOL, baselineId: result.baselineId, at: result.generatedAt, passed: report.passed, total: report.total, differences: report.differences, keys: result.mismatches.map(differenceKey) };
-      await mkdir(resolve(root, ".air"), { recursive: true });
-      await writeFile(resolve(root, ".air/last-run.json"), `${JSON.stringify(lastRun)}\n`, "utf8");
+      await mkdir(dirname(lastRunPath(root)), { recursive: true });
+      await writeFile(lastRunPath(root), `${JSON.stringify(lastRun)}\n`, "utf8");
       io.stdout(json ? `${JSON.stringify({ ...report, result: path })}\n` : formatAgentReport(report));
       return result.passed ? 0 : 1;
     }
@@ -1442,6 +1471,58 @@ async function checkDiffBaselineCommand(args: readonly string[], io: CliIo): Pro
     io.stderr(`${error instanceof Error ? error.message : String(error)}\n`);
     return checkFailureCode(error);
   }
+}
+
+const readSpec = async (path: string): Promise<unknown> => parseYaml(await readFile(resolve(path), "utf8")) as unknown;
+
+function parseFlags(args: readonly string[], allowed: readonly string[], booleans: readonly string[]): { readonly values: Map<string, string>; readonly flags: Set<string>; readonly positional: string[] } | undefined {
+  const values = new Map<string, string>(); const flags = new Set<string>(); const positional: string[] = [];
+  for (let index = 0; index < args.length; index += 1) {
+    const option = args[index]!;
+    if (!option.startsWith("--")) { positional.push(option); continue; }
+    if (booleans.includes(option)) { flags.add(option); continue; }
+    const value = args[index + 1];
+    if (!allowed.includes(option) || !value || value.startsWith("--") || values.has(option)) return undefined;
+    values.set(option, value); index += 1;
+  }
+  return { values, flags, positional };
+}
+
+async function checkInitOpenApiCommand(args: readonly string[], io: CliIo): Promise<number> {
+  const usage = "Usage: air check init --from-openapi <spec> --output <directory> [--name <name>] [--base-url <url>]\n";
+  const parsed = parseFlags(args, ["--from-openapi", "--output", "--name", "--base-url"], []);
+  if (!parsed || parsed.positional.length > 0 || !parsed.values.get("--from-openapi") || !parsed.values.get("--output")) { io.stderr(usage); return 2; }
+  try {
+    const name = parsed.values.get("--name") ?? "openapi-check";
+    const { check, baseUrl } = checkFromOpenApi(await readSpec(parsed.values.get("--from-openapi")!), { name });
+    const upstream = parsed.values.get("--base-url") ?? baseUrl;
+    if (!upstream) throw new CheckInputError("The spec has no absolute servers[0].url; pass --base-url for the legacy service.");
+    const paths = await writeRecordedCheck(resolve(parsed.values.get("--output")!), check, new URL(upstream).toString());
+    io.stdout(`Created ${check.spec.scenarios.length} scenario skeleton(s) from OpenAPI.\nCheck: ${paths.check}\nLegacy target: ${paths.target}\nNext: replace example values marked "TODO review" with realistic inputs, then run \`air check baseline\`.\n`);
+    return 0;
+  } catch (error) {
+    io.stderr(`${error instanceof Error && "code" in error && error.code === "EEXIST" ? "Output already contains a check; AIR will not overwrite it." : error instanceof Error ? error.message : String(error)}\n`);
+    return 2;
+  }
+}
+
+async function checkCoverageCommand(args: readonly string[], io: CliIo): Promise<number> {
+  const usage = "Usage: air check coverage [<check.yaml>] [--openapi <spec>] [--traces <otlp.json>] [--fail-under <percent>] [--json]\n";
+  const parsed = parseFlags(args, ["--openapi", "--traces", "--fail-under"], ["--json"]);
+  const failUnder = parsed?.values.has("--fail-under") ? Number(parsed.values.get("--fail-under")) : undefined;
+  if (!parsed || parsed.positional.length > 1 || (!parsed.values.has("--openapi") && !parsed.values.has("--traces")) || (failUnder !== undefined && !(failUnder >= 0 && failUnder <= 100))) { io.stderr(usage); return 2; }
+  try {
+    const root = projectRoot(); const profile = await readCheckProfile(root);
+    const checkPath = parsed.positional[0] ? resolve(parsed.positional[0]) : profile ? resolve(root, profile.check) : undefined;
+    if (!checkPath) throw new CheckInputError("No check file. Pass <check.yaml> or create a profile with `air check profile`.");
+    const report = checkCoverage(await loadMigrationCheck(checkPath), {
+      ...(parsed.values.has("--openapi") ? { openapi: await readSpec(parsed.values.get("--openapi")!) } : {}),
+      ...(parsed.values.has("--traces") ? { traces: traceMapFromOtlp(JSON.parse(await readFile(resolve(parsed.values.get("--traces")!), "utf8"))) } : {}),
+    });
+    io.stdout(parsed.flags.has("--json") ? `${JSON.stringify(report)}\n` : formatCoverage(report));
+    const percent = report.total === 0 ? 100 : (report.covered / report.total) * 100;
+    return failUnder !== undefined && percent < failUnder ? 1 : 0;
+  } catch (error) { io.stderr(`${error instanceof Error ? error.message : String(error)}\n`); return checkFailureCode(error); }
 }
 
 async function verify(args: readonly string[], io: CliIo): Promise<number> {
