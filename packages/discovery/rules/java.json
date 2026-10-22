@@ -42,6 +42,30 @@
       "framework": "java",
       "pattern": "\\bpublic\\s+static\\s+void\\s+main\\s*\\(",
       "name": 0
+    },
+    {
+      "kind": "consumer",
+      "framework": "spring-kafka",
+      "pattern": "@KafkaListener\\((?:[^()\"@]*?topics\\s*=\\s*\\{?\\s*\"([^\"]+)\")?",
+      "name": 1
+    },
+    {
+      "kind": "consumer",
+      "framework": "spring-rabbit",
+      "pattern": "@RabbitListener\\((?:[^()\"@]*?queues\\s*=\\s*\\{?\\s*\"([^\"]+)\")?",
+      "name": 1
+    },
+    {
+      "kind": "consumer",
+      "framework": "jms",
+      "pattern": "@JmsListener\\((?:[^()\"@]*?destination\\s*=\\s*\"([^\"]+)\")?",
+      "name": 1
+    },
+    {
+      "kind": "consumer",
+      "framework": "kafka-client",
+      "pattern": "\\bKafkaConsumer\\s*<",
+      "name": 0
     }
   ],
   "effects": [
@@ -71,6 +95,31 @@
       "kind": "message",
       "pattern": "\\b(?:kafkaTemplate|rabbitTemplate)\\.(?:send|convertAndSend)\\(\\s*\"([^\"]+)\"",
       "name": 1
+    },
+    {
+      "kind": "message",
+      "pattern": "\\b(?:jmsTemplate|jmsMessagingTemplate)\\.(?:send|convertAndSend)\\(\\s*\"([^\"]+)\"",
+      "name": 1
+    },
+    {
+      "kind": "message",
+      "pattern": "\\bstreamBridge\\.send\\(\\s*\"([^\"]+)\"",
+      "name": 1
+    },
+    {
+      "kind": "message",
+      "pattern": "\\bKafkaProducer\\s*<",
+      "name": "kafka"
+    },
+    {
+      "kind": "cache",
+      "pattern": "@Cacheable\\(\\s*(?:(?:value|cacheNames)\\s*=\\s*)?\\{?\\s*\"([^\"]+)\"",
+      "name": 1
+    },
+    {
+      "kind": "cache",
+      "pattern": "\\b(?:RedisTemplate|StringRedisTemplate|Jedis|JedisPool|RedissonClient|RedisClient)\\b",
+      "name": "redis"
     }
   ]
 }

@@ -34,6 +34,24 @@
       "framework": "go",
       "pattern": "^func\\s+main\\(\\)",
       "name": 0
+    },
+    {
+      "kind": "consumer",
+      "framework": "sarama",
+      "pattern": "\\bsarama\\.NewConsumer(?:Group)?\\(",
+      "name": 0
+    },
+    {
+      "kind": "consumer",
+      "framework": "kafka-go",
+      "pattern": "\\bkafka\\.NewReader\\(",
+      "name": 0
+    },
+    {
+      "kind": "consumer",
+      "framework": "amqp",
+      "pattern": "\\.Consume(?:WithContext)?\\(\\s*(?:\\w+\\s*,\\s*)?\"([^\"]+)\"",
+      "name": 1
     }
   ],
   "effects": [
@@ -73,6 +91,31 @@
       "kind": "database",
       "pattern": "\\.AutoMigrate\\(\\s*&?(\\w+)\\s*\\{",
       "name": 1
+    },
+    {
+      "kind": "message",
+      "pattern": "\\bsarama\\.New(?:Async|Sync)Producer\\(",
+      "name": "kafka"
+    },
+    {
+      "kind": "message",
+      "pattern": "\\bkafka\\.(?:NewWriter\\(|Writer\\s*\\{)",
+      "name": "kafka"
+    },
+    {
+      "kind": "message",
+      "pattern": "\\.Publish(?:WithContext)?\\(\\s*\\w+\\s*,\\s*\"([^\"]*)\"\\s*,\\s*\"([^\"]+)\"",
+      "name": 2
+    },
+    {
+      "kind": "message",
+      "pattern": "\\bnats\\.Connect\\(",
+      "name": "nats"
+    },
+    {
+      "kind": "cache",
+      "pattern": "\\bredis\\.New(?:Client|ClusterClient|UniversalClient|FailoverClient)\\(",
+      "name": "redis"
     }
   ],
   "mounts": [

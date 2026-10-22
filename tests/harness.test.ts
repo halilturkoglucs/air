@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdir, mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -58,10 +58,14 @@ describe("agent-written harnesses", () => {
     const patch = resolve(root, "..", `break-${Date.now()}.patch`);
     await writeFile(patch, git("diff", "--", "orders.mjs").stdout);
     git("checkout", "--", "orders.mjs");
-    const accepted = air("harness", "verify", "orders", "--mutation", patch);
+    // --teardown runs in the project after the planted change, to restore anything a --setup deployed.
+    const teardown = resolve(root, "..", `teardown-${Date.now()}.mjs`); const restored = `${teardown}.done`;
+    await writeFile(teardown, `import { writeFileSync } from "node:fs"; writeFileSync(${JSON.stringify(restored)}, process.cwd());\n`);
+    const accepted = air("harness", "verify", "orders", "--mutation", patch, "--teardown", `node ${teardown}`);
     expect(accepted.code, accepted.out + accepted.err).toBe(0);
     expect(accepted.out).toContain("HARNESS ACCEPTED orders");
     await stat(resolve(directory, "verified.json"));
+    expect(await realpath(await readFile(restored, "utf8"))).toBe(await realpath(root));
     expect(spawnSync("git", ["worktree", "list"], { cwd: root, encoding: "utf8" }).stdout.trim().split("\n")).toHaveLength(1);
 
     const baseline = air("protect");

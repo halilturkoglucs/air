@@ -24,7 +24,7 @@ import { importPostgres } from "@air/import-postgres";
 import { importOpenApiSource } from "@air/import-openapi";
 import { importNextjs } from "@air/import-nextjs";
 import { importSpring } from "@air/import-spring";
-import { CheckInfrastructureError, CheckInputError, adoptExtractedCapability, createCheckBaseline, discoverSpring, discoveryFromAirCandidate, extractCapability, ingestEvidence, initializeMigrationCheck, loadCheckBaseline, loadCheckPolicy, loadCheckTarget, loadMigrationCheck, mergeDiscoveryBundles, parseCheckResult, readDiscoveryBundle, runMigrationCheckDetailed, observeCheckTarget, approveBaselineScenarios, diffBaselines, checkFromExchanges, exchangesFromHar, recordHttpTraffic, writeRecordedCheck, traceMapFromOtlp, formatTraceMap, observeAllScenarios, generatedFormat, differingPointers, type NormalizationRule, addBaselineScenarios, templatePattern, verifyHarness, createCheckBaselineDetailed, observationDigest, checkFromOpenApi, checkCoverage, formatCoverage, type CheckBaseline, sameDigest, buildAgentReport, formatAgentReport, differenceKey, AGENT_PROTOCOL, startWorkbench, validateMigrationCheck, verifyImportedCapability, writeCheckBaseline, writeCheckResult, writeDiscoveryBundle, writeDiscoveryReport, type CheckMismatch, type CheckDocument, type DiscoveryBundle, scanCodeSeams, formatCodeSeams } from "@air/discovery";
+import { CheckInfrastructureError, CheckInputError, adoptExtractedCapability, createCheckBaseline, discoverSpring, discoveryFromAirCandidate, extractCapability, ingestEvidence, initializeMigrationCheck, loadCheckBaseline, loadCheckPolicy, loadCheckTarget, loadMigrationCheck, mergeDiscoveryBundles, parseCheckResult, readDiscoveryBundle, runMigrationCheckDetailed, observeCheckTarget, approveBaselineScenarios, diffBaselines, checkFromExchanges, exchangesFromHar, recordHttpTraffic, writeRecordedCheck, traceMapFromOtlp, formatTraceMap, observeAllScenarios, generatedFormat, differingPointers, type NormalizationRule, addBaselineScenarios, templatePattern, verifyHarness, detectsMutation, createCheckBaselineDetailed, observationDigest, checkFromOpenApi, checkCoverage, formatCoverage, type CheckBaseline, sameDigest, buildAgentReport, formatAgentReport, differenceKey, AGENT_PROTOCOL, startWorkbench, validateMigrationCheck, verifyImportedCapability, writeCheckBaseline, writeCheckResult, writeDiscoveryBundle, writeDiscoveryReport, type CheckMismatch, type CheckDocument, type DiscoveryBundle, scanCodeSeams, formatCodeSeams } from "@air/discovery";
 import { startLanguageServer } from "@air/language-server";
 import { NextjsTargetAdapter, type NextjsTargetOptions } from "@air/target-nextjs";
 import { RustTargetAdapter, type RustTargetOptions } from "@air/target-rust";
@@ -1634,7 +1634,15 @@ async function stabilize(root: string, profile: CheckProfile, io: CliIo): Promis
     await writeExpectedCache(root, check.metadata.name, observations);
     io.stdout(`NOTE normalized ${rules.size} generated value(s) that change on every run (${[...rules.values()].map((rule) => `${rule.pointer} as ${rule.kind === "typed-token" ? rule.format : ""}`).slice(0, 4).join(", ")}${rules.size > 4 ? ", ..." : ""}); they are still type-checked.\n`);
   }
-  if (unstable.length > 0) io.stdout(`NOTE ${unstable.length} value(s) changed between two identical runs and will fail every check: ${unstable.slice(0, 6).join(", ")}${unstable.length > 6 ? ", ..." : ""}. If they depend on stored state, add --reset; if they are random or counters, add an ignore rule with a reason to the check file.\n`);
+  if (unstable.length > 0) {
+    // One suggestion per scenario, at the deepest pointer that holds all of its unstable values.
+    const byScenario = new Map<string, string[][]>();
+    for (const item of unstable) { const [id, ...segments] = item.split("/"); byScenario.set(id!, [...(byScenario.get(id!) ?? []), segments]); }
+    // Stops above array indexes: random items in a list are covered by shaping the whole list.
+    const common = (paths: string[][]): string => { const first = paths[0]!; let length = 0; while (length < first.length && paths.every((path) => path[length] === first[length])) length += 1; const index = first.findIndex((segment) => /^\d+$/u.test(segment)); return `/${first.slice(0, Math.max(index === -1 ? length : Math.min(length, index), 1)).join("/")}`; };
+    const suggestions = [...byScenario].map(([id, paths]) => `  - { kind: shape, pointer: ${common(paths)}, scenarios: [${id}], reason: "<why it varies>" }`);
+    io.stdout(`NOTE ${unstable.length} value(s) in ${byScenario.size} scenario(s) changed between two identical runs and will fail every check: ${unstable.slice(0, 4).join(", ")}${unstable.length > 4 ? ", ..." : ""}.\nIf they depend on stored state, add --reset. If they are random by design, check only their structure (keys and types) by adding to normalization in ${profile.check}, then run air protect --rebaseline:\n${suggestions.join("\n")}\n`);
+  }
 }
 
 function credentialNotes(recorded: { readonly chained: number; readonly untraced: number }, io: CliIo): void {
@@ -1752,7 +1760,7 @@ async function protectCommand(args: readonly string[], io: CliIo): Promise<numbe
       if (note) io.stderr(note);
       io.stderr(`${built ? `Built ${check.spec.scenarios.length} read-only scenario(s) from ${built}` : `Recorded ${check.spec.scenarios.length} scenario(s)${skipped > 0 ? ` (skipped ${skipped} non-JSON or static)` : ""}`}.\n`);
       const policyPath = resolve(output, "policy.yaml");
-      await writeFile(policyPath, "apiVersion: air.dev/check-policy/v0.1\nkind: CheckPolicy\nmetadata: { name: air-protect }\nspec:\n  allowedNormalizations: [ignore, typed-token, unordered-array, rename, internal-boundary]\n  # The baseline comes from the running service, not from a committed tree.\n  requireCleanBaseline: false\n", { encoding: "utf8", flag: "wx" });
+      await writeFile(policyPath, "apiVersion: air.dev/check-policy/v0.1\nkind: CheckPolicy\nmetadata: { name: air-protect }\nspec:\n  allowedNormalizations: [ignore, shape, typed-token, unordered-array, rename, internal-boundary]\n  # The baseline comes from the running service, not from a committed tree.\n  requireCleanBaseline: false\n", { encoding: "utf8", flag: "wx" });
       profile = { check: relative(root, paths.check), policy: relative(root, policyPath), baseline: relative(root, resolve(output, "baseline")), legacy: relative(root, paths.target), candidate: relative(root, paths.target), output: ".air/runs" };
       await mkdir(resolve(root, ".air"), { recursive: true });
       await writeFile(resolve(root, ".air/check.json"), `${JSON.stringify(profile, null, 2)}\n`, "utf8");
@@ -1948,6 +1956,17 @@ async function harnessFingerprint(directory: string): Promise<string> {
   return createHash("sha256").update(material.join("\n")).digest("hex");
 }
 
+// Behavior an HTTP check cannot see, most likely to matter first: consumers and events, caches, jobs, RPC methods, then data.
+function hiddenBehavior(report: Awaited<ReturnType<typeof scanCodeSeams>>): { label: string; at: string }[] {
+  const rank = ["consumer", "event", "cache", "job", "rpc", "data"];
+  const label = { message: "event", cache: "cache", database: "data", outbound: "" } as const;
+  const items = [
+    ...report.seams.filter((seam) => seam.kind === "job" || seam.kind === "consumer" || seam.kind === "rpc").map((seam) => ({ kind: seam.kind as string, label: `${seam.kind} ${seam.route ?? seam.name ?? seam.file}`, at: `${seam.file}:${seam.line}` })),
+    ...report.effects.filter((effect) => effect.kind !== "outbound").map((effect) => ({ kind: label[effect.kind], label: `${label[effect.kind]} ${effect.name}`, at: `${effect.file}:${effect.line}` })),
+  ];
+  return [...new Map(items.map((item) => [item.label, item])).values()].sort((left, right) => rank.indexOf(left.kind) - rank.indexOf(right.kind) || left.label.localeCompare(right.label));
+}
+
 async function harnessNames(root: string, profile: CheckProfile | undefined): Promise<string[]> {
   try { return (await readdir(harnessesRoot(root, profile), { withFileTypes: true })).filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort(); } catch { return []; }
 }
@@ -1957,7 +1976,7 @@ async function protectHarnesses(root: string, profile: CheckProfile, passThrough
   const names = await harnessNames(root, profile); let code = 0;
   if (names.length === 0) {
     const report = await scanCodeSeams({ root }).catch(() => undefined);
-    const hidden = report ? [...new Set([...report.seams.filter((seam) => seam.kind === "job" || seam.kind === "consumer").map((seam) => `${seam.kind} ${seam.name ?? seam.file}`), ...report.effects.filter((effect) => effect.kind !== "outbound").map((effect) => `${effect.kind === "message" ? "event" : "data"} ${effect.name}`)])].sort() : [];
+    const hidden = report ? hiddenBehavior(report).map((item) => item.label) : [];
     if (hidden.length > 0) io.stdout(`TASK the code also has behavior HTTP checks cannot see (${hidden.slice(0, 6).join(", ")}${hidden.length > 6 ? `, +${hidden.length - 6} more` : ""}). Run \`air harness task\` and follow it to lock it.\n`);
     return 0;
   }
@@ -2005,17 +2024,17 @@ console.log(JSON.stringify(observation));
 
 async function harnessCommand(args: readonly string[], io: CliIo): Promise<number> {
   const [action, ...rest] = args;
-  const usage = "Usage:\n  air harness task\n  air harness new <name> [--observe <category,...>]\n  air harness verify <name> --mutation <patch> [--mutation <patch>]... [--runs <n>] [--setup <command>] [--json]\n";
+  const usage = "Usage:\n  air harness task\n  air harness new <name> [--observe <category,...>]\n  air harness verify <name> --mutation <patch> [--mutation <patch>]... [--runs <n>] [--setup <command>] [--teardown <command>] [--json]\n";
   // --mutation may repeat: every planted break must be detected.
   const patches: string[] = []; const others: string[] = [];
   for (let index = 0; index < rest.length; index += 1) { if (rest[index] === "--mutation" && rest[index + 1]) { patches.push(rest[index + 1]!); index += 1; } else others.push(rest[index]!); }
-  const parsed = parseFlags(others, ["--observe", "--runs", "--setup"], ["--json"]);
+  const parsed = parseFlags(others, ["--observe", "--runs", "--setup", "--teardown"], ["--json"]);
   if (!parsed || !action) { io.stderr(usage); return 2; }
   try {
     const root = projectRoot(); const profile = await readCheckProfile(root);
     if (action === "task" && parsed.positional.length === 0) {
       const report = await scanCodeSeams({ root });
-      const lines = [...report.seams.filter((seam) => seam.kind === "job" || seam.kind === "consumer").map((seam) => `  ${seam.kind} ${seam.name ?? ""} (${seam.file}:${seam.line})`), ...report.effects.filter((effect) => effect.kind !== "outbound").map((effect) => `  ${effect.kind === "message" ? "event" : "data"} ${effect.name} (${effect.file}:${effect.line})`)];
+      const lines = hiddenBehavior(report).map((item) => `  ${item.label} (${item.at})`);
       const base = relative(root, harnessesRoot(root, profile));
       io.stdout(`TASK lock behavior that HTTP checks cannot see (events, caches, data, jobs, files, emails, ...).
 ${lines.length > 0 ? `Found in the code:\n${[...new Set(lines)].join("\n")}\n` : "Nothing was found automatically; use what you know about this code.\n"}For each behavior worth protecting (ask the developer if unsure what matters):
@@ -2051,13 +2070,14 @@ Never weaken a harness or its check to make a run pass.
     const problems = [...verdict.problems];
     if (patches.length === 0) problems.push("no --mutation patch: AIR cannot confirm that the harness notices a broken behavior");
     for (const patch of patches) {
-      const planted = await withMutatedCopy({ root: repository.root, patch: resolve(patch), setup: parsed.values.get("--setup"), run: (mutatedRoot) => verifyHarness({ check, target, repositoryRoot: repository.root, runs: 2, mutatedRoot }) });
-      if (!planted.mutationDetected) problems.push(`the planted change in ${relative(repository.root, resolve(patch))} was not detected; the harness does not observe the behavior it claims to cover`);
+      const planted = await withMutatedCopy({ root: repository.root, patch: resolve(patch), setup: parsed.values.get("--setup"), teardown: parsed.values.get("--teardown"), run: (mutatedRoot) => detectsMutation({ check, target, mutatedRoot, verdict }) });
+      if (!planted) problems.push(`the planted change in ${relative(repository.root, resolve(patch))} was not detected; the harness does not observe the behavior it claims to cover`);
     }
     if (verdict.proposedNormalization.length > 0) problems.push(`generated values change between runs; add to check.yaml normalization: ${verdict.proposedNormalization.map((rule) => `{ kind: typed-token, pointer: ${rule.pointer}, format: ${rule.kind === "typed-token" ? rule.format : ""} }`).join(", ")}`);
     const accepted = problems.length === 0;
     if (accepted) await writeFile(resolve(directory, "verified.json"), `${JSON.stringify({ v: 1, fingerprint: await harnessFingerprint(directory), runs, mutations: patches.length }, null, 2)}\n`, "utf8");
-    if (parsed.flags.has("--json")) io.stdout(`${JSON.stringify({ ...verdict, accepted, problems })}\n`);
+    const { reference: _reference, ...report } = verdict;
+    if (parsed.flags.has("--json")) io.stdout(`${JSON.stringify({ ...report, accepted, problems })}\n`);
     else io.stdout(`${accepted ? `HARNESS ACCEPTED ${name}: stable over ${runs} runs, input-sensitive, every declared category observed, and caught ${patches.length} planted change(s).` : `HARNESS REJECTED ${name}:\n${problems.map((problem) => `- ${problem}`).join("\n")}`}\nNEXT ${accepted ? "run `air protect` to baseline it; it is checked on every run from now on." : "fix the harness or its scenarios (never weaken them to pass), then verify again."}\n`);
     return accepted ? 0 : 1;
   } catch (error) {
@@ -2067,7 +2087,9 @@ Never weaken a harness or its check to make a run pass.
 }
 
 // A throwaway copy of the current working tree (HEAD + uncommitted + untracked files) with a patch applied.
-async function withMutatedCopy<T>(input: { readonly root: string; readonly patch: string; readonly setup: string | undefined; readonly run: (mutatedRoot: string) => Promise<T> }): Promise<T> {
+// --setup runs in the mutated copy (build or deploy it); --teardown runs in the project afterwards, even on failure,
+// to restore anything the setup replaced (a container running the mutated build).
+async function withMutatedCopy<T>(input: { readonly root: string; readonly patch: string; readonly setup: string | undefined; readonly teardown?: string | undefined; readonly run: (mutatedRoot: string) => Promise<T> }): Promise<T> {
   const copy = await mkdtemp(resolve(tmpdir(), "air-mutation-"));
   const git = (args: readonly string[], cwd: string, stdin?: string) => spawnSync("git", args, { cwd, encoding: "utf8", shell: false, ...(stdin === undefined ? {} : { input: stdin }) });
   const added = git(["worktree", "add", "--detach", "--force", copy, "HEAD"], input.root);
@@ -2089,7 +2111,10 @@ async function withMutatedCopy<T>(input: { readonly root: string; readonly patch
       if (setup.status !== 0) throw new CheckInfrastructureError(`--setup failed with exit ${setup.status}: ${setup.stderr.trim().split("\n").slice(-2).join(" ")}`);
     }
     return await input.run(copy);
-  } finally { git(["worktree", "remove", "--force", copy], input.root); }
+  } finally {
+    if (input.teardown) { const [program, ...args] = input.teardown.split(/\s+/u).filter(Boolean); spawnSync(program!, args, { cwd: input.root, encoding: "utf8", shell: false }); }
+    git(["worktree", "remove", "--force", copy], input.root);
+  }
 }
 
 async function verify(args: readonly string[], io: CliIo): Promise<number> {

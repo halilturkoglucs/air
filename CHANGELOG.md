@@ -4,6 +4,13 @@ All notable changes are recorded here. AIR follows the pre-1.0 policy in `docs/v
 
 ## Unreleased
 
+From a field trial on the OpenTelemetry demo (gRPC, Kafka, Valkey, PostgreSQL across nine languages):
+
+- `air discover code` finds gRPC methods in `.proto` files, Kafka/RabbitMQ/JMS (ActiveMQ)/BullMQ/MassTransit/Service Bus producers and consumers (Go, C#, Java/Kotlin, Node.js, Python, Rust), caches (Redis/Valkey clients, Spring `@Cacheable`, ASP.NET cache interfaces, Rails and Laravel caches), and Next.js `pages/api` routes. Effects whose target comes from configuration are named by technology (`event kafka`, `cache redis`). String literals in `.sql` files are no longer read as table names, and Locust `@task` is no longer reported as a job.
+- `air protect` and `air harness task` list behavior HTTP cannot see in order of likely importance: consumers, events, caches, jobs, RPC methods, then data.
+- New `shape` normalization keeps keys and value types but not values, for content that is random by design. When values change between identical runs, `air protect` prints a ready `shape` rule per scenario instead of only listing pointers.
+- `air harness verify` runs the normal harness runs before any `--setup`, observes each planted change once, and runs the new `--teardown <command>` afterwards even on failure, so a harness can verify a service that must be rebuilt and redeployed. A harness error that the normal code also produces no longer counts as detecting the planted change.
+
 - Narrower product surface: `air --help` leads with the everyday commands (`protect`, `agent install`, `check approve/status/run`, `harness`, `mcp`), then discovery, then `air check` in detail, with the Application IR, compiler, generators, providers, and importers grouped as the legacy toolchain. The README keeps the behavior-check story; the IR reference moved unchanged to `docs/legacy-toolchain.md` and the manual check steps to `docs/manual-check-workflow.md`. No command was removed.
 - `air protect --add --tests` grows coverage from the project's own API tests: AIR finds the test command (npm scripts, pytest, go test, rspec, phpunit, Maven, Gradle, cargo), points base-URL environment variables the tests read at its recording proxy, and appends and baselines only the new requests. `--add -- <command>` and `--add --from-har` work the same way; the previous baseline is kept.
 - `air protect` prints a COVERAGE line (HTTP routes found in the code versus routes exercised) and, when the code stores data, suggests the project's own reset command (npm scripts, Prisma, Rails, Laravel, Django).

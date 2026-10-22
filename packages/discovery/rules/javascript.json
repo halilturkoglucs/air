@@ -56,6 +56,19 @@
       "framework": "node",
       "pattern": "^#!.*\\bnode\\b",
       "name": 0
+    },
+    {
+      "kind": "consumer",
+      "framework": "bullmq",
+      "pattern": "\\bnew\\s+Worker\\(\\s*['\"`]([^'\"`]+)",
+      "name": 1
+    },
+    {
+      "kind": "http",
+      "framework": "next-pages-api",
+      "pattern": "^export\\s+default\\b",
+      "defaultMethod": "ANY",
+      "routeFromPath": "(?:^|/)pages(/api(?:/.*?)?)(?:/index)?\\.[cm]?[jt]sx?$"
     }
   ],
   "effects": [
@@ -115,6 +128,21 @@
       "kind": "database",
       "pattern": "@Entity\\(\\s*[\"'`](\\w+)[\"'`]",
       "name": 1
+    },
+    {
+      "kind": "message",
+      "pattern": "\\.producer\\(\\s*\\)",
+      "name": "kafka"
+    },
+    {
+      "kind": "message",
+      "pattern": "\\bnew\\s+Queue\\(\\s*['\"`]([^'\"`]+)",
+      "name": 1
+    },
+    {
+      "kind": "cache",
+      "pattern": "(?:from\\s+|require\\(\\s*)['\"](?:redis|ioredis|@redis/client)['\"]",
+      "name": "redis"
     }
   ],
   "prefixes": [

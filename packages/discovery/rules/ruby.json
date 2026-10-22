@@ -23,6 +23,11 @@
       "kind": "database",
       "pattern": "\\bclass\\s+(\\w+)\\s*<\\s*(?:ApplicationRecord|ActiveRecord::Base)\\b",
       "name": 1
+    },
+    {
+      "kind": "cache",
+      "pattern": "\\b(?:Rails\\.cache\\.|Redis\\.new\\b)",
+      "name": "cache"
     }
   ]
 }

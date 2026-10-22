@@ -24,6 +24,12 @@
       "framework": "rust",
       "pattern": "^(?:#\\[[^\\]]+\\]\\s*)*(?:async\\s+)?fn\\s+main\\s*\\(",
       "name": 0
+    },
+    {
+      "kind": "consumer",
+      "framework": "rdkafka",
+      "pattern": "\\b(?:StreamConsumer|BaseConsumer)\\b",
+      "name": 0
     }
   ],
   "effects": [
@@ -38,6 +44,16 @@
       "pattern": "[\"'`]\\s*UPDATE\\s+[`\"\\[]?([A-Za-z_][\\w.]*)[`\"\\]]?\\s+SET\\b",
       "name": 1,
       "flags": "i"
+    },
+    {
+      "kind": "cache",
+      "pattern": "\\bredis::(?:Client|aio)\\b",
+      "name": "redis"
+    },
+    {
+      "kind": "message",
+      "pattern": "\\b(?:FutureProducer|BaseProducer)\\b",
+      "name": "kafka"
     }
   ]
 }

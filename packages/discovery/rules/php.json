@@ -65,6 +65,11 @@
       "kind": "database",
       "pattern": "\\bDB::table\\(\\s*['\"](\\w+)['\"]",
       "name": 1
+    },
+    {
+      "kind": "cache",
+      "pattern": "\\b(?:Cache|Redis)::\\w+\\(",
+      "name": "cache"
     }
   ]
 }

@@ -65,6 +65,15 @@ At the owner's request, the agent-first entry point shipped before steps 4b–4d
 
 Parsing every technology (brokers, caches, schedulers, file and mail systems) does not scale. Instead, the coding agent that already works in the repository writes a small harness in the existing command-target contract, and AIR decides whether to trust it with deterministic checks only: identical results across runs (generated UUIDs and timestamps become proposed `typed-token` rules), different observations for different inputs, and a detected difference when the same harness runs against a throwaway copy of the code with an agent-supplied breaking patch applied. Observation categories are open, so a harness reports whatever matters (`events`, `cache`, `files`, ...). This replaces most of the planned per-language work in steps 4b–4d: the code scanner now points the agent at what to cover instead of trying to model it.
 
+#### Field trial: OpenTelemetry demo
+
+The [OpenTelemetry demo](https://github.com/open-telemetry/opentelemetry-demo) is a polyglot shop (Go, C#, Kotlin, Java, Node.js, Python, Rust, PHP, C++) with gRPC between services, Kafka for orders, Valkey for carts, and PostgreSQL for accounting. Run locally in Docker (core and Kafka services, no load generator):
+
+- `air discover code` finds the 21 gRPC methods from `.proto` files, the checkout Kafka producer, the accounting (C#) and fraud-detection (Kotlin) consumers, the Valkey cart cache, and the Next.js `pages/api` routes.
+- `air protect --url` plus a recorded checkout journey (`--add -- node flow.mjs`) covers 9 of 12 HTTP routes in 14 scenarios. `orderId` and `shippingTrackingId` are normalized automatically. Ads and recommendations are random by design; AIR names them and suggests a `shape` rule (keys and types only). With a once-per-run cart reset (`--reset-scope run`), two reruns pass 14/14.
+- An agent-style harness places orders and reports the Kafka order event (as decoded by the accounting consumer) and the accounting rows. `air harness verify --setup <build and deploy checkout from the copy> --teardown <redeploy the release>` accepts it after catching a planted change.
+- The planted change publishes only the first item of an order to Kafka. The HTTP check still passes 14/14; the harness fails with `/events/0/order/items/1` and `/data/items/1` missing.
+
 ### Measured recall
 
 Static seam detection is checked against public RealWorld ("Conduit") implementations, which expose the same 19 endpoints in every stack. They are scanned only; third-party code is never installed or run.
