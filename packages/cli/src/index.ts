@@ -61,24 +61,38 @@ export const VERSION = packageJson.version;
 
 const HELP = `AIR verification and compiler toolkit ${VERSION}
 
-Usage:
+Everyday (start here):
+  air protect [--url <url>] [--add] [--tests | -- <command>] [--reset <cmd>] [--header N=ENV]
+                                              Protect a running service once; afterwards check every change
+  air agent install [--mcp]                   Add AIR's loop to AGENTS.md / CLAUDE.md (and register MCP)
+  air check approve <scenario>... --reason <text>  Accept the candidate's behavior for chosen scenarios
+  air check status [--json]                   Check profile and last-run summary (runs nothing)
+  air check run [<check.yaml>] [--baseline <dir>] [--target <file>] [--output <dir>] [--policy <file>] [--agent] [--reveal] [--max-lines <n>] [--json]
+  air harness task | new <name> | verify <name> --mutation <patch>  Lock events, caches, data, jobs via verified harnesses
+  air mcp                                     Serve air_check_* tools over MCP stdio
+  air agent instructions                      Print the agent repair loop for AGENTS.md / CLAUDE.md
+
+Find what to protect:
+  air check record --to <url> --output <dir> [--from-har <file>]  Record HTTP traffic (proxy or HAR) into a check
+  air check init --from-openapi <spec> --output <dir>  Scenario skeletons for every OpenAPI operation
+  air check coverage [<check.yaml>] --openapi <spec> | --traces <otlp.json> [--fail-under <percent>]
+  air discover spring <repository> [options] Build an evidence-backed discovery bundle
+  air discover traces <otlp.json> [options]  Map endpoints to DB, outbound, and messaging from OpenTelemetry
+  air discover code [<path>] [--symbol <name>] [--since <ref>]  Propose behavioral seams from source code
+  air discovery report <bundle> [options] Export a deterministic discovery report
+  air evidence ingest <trace> [options]      Ingest redacted runtime/test evidence
+  air evidence capture <profile> [options]   Run a command with self-hosted evidence adapters
+  air workbench <discovery> [options]        Start the local architecture workbench
+
+air check in detail (what air protect runs for you):
   air check init <discovery> --capability <id> --output <directory>
   air check profile --check <file> --baseline <dir> --legacy <file> --candidate <file> --output <dir> [--policy <file>]
   air check validate [<check.yaml>] [--policy <file>] [--json]
   air check baseline [<check.yaml>] [--target <file>] [--output <directory>] [--policy <file>] [--allow-dirty] [--json]
-  air check run [<check.yaml>] [--baseline <dir>] [--target <file>] [--output <dir>] [--policy <file>] [--agent] [--reveal] [--max-lines <n>] [--json]
   air check explain <result.json> [--agent] [--json]
-  air check status [--json]                   Check profile and last-run summary (runs nothing)
-  air check record --to <url> --output <dir> [--from-har <file>]  Record HTTP traffic (proxy or HAR) into a check
-  air check approve <scenario>... --reason <text>  Accept the candidate's behavior for chosen scenarios
   air check diff-baseline <before> <after>    Show behavioral differences between two baselines
-  air check init --from-openapi <spec> --output <dir>  Scenario skeletons for every OpenAPI operation
-  air check coverage [<check.yaml>] --openapi <spec> | --traces <otlp.json> [--fail-under <percent>]
-  air protect [--url <url> -- <command>]      Record and baseline a running service once; afterwards check every change
-  air agent install [--mcp]                   Add AIR's loop to AGENTS.md / CLAUDE.md (and register MCP)
-  air harness task | new <name> | verify <name> --mutation <patch>  Lock events, caches, data, jobs via verified harnesses
-  air agent instructions                      Print the agent repair loop for AGENTS.md / CLAUDE.md
-  air mcp                                     Serve air_check_* tools over MCP stdio
+
+Legacy AIR IR toolchain (supported; not the main path; see docs/legacy-toolchain.md):
   air validate <file>                         Parse and validate AIR YAML
   air inspect <file>                          Print a semantic summary
   air migrate <file> [options]                Migrate AIR to a newer schema
@@ -87,13 +101,6 @@ Usage:
   air import-postgres [options]               Import a PostgreSQL schema into AIR
   air import-openapi [options]                Import OpenAPI 3.x into reviewable AIR
   air import-nextjs [options]                 Import Next.js App Router + Drizzle into AIR
-  air discover spring <repository> [options] Build an evidence-backed discovery bundle
-  air discover traces <otlp.json> [options]  Map endpoints to DB, outbound, and messaging from OpenTelemetry
-  air discover code [<path>] [--symbol <name>] [--since <ref>]  Propose behavioral seams in any JS/TS, Python, or Go code
-  air discovery report <bundle> [options] Export a deterministic discovery report
-  air evidence ingest <trace> [options]      Ingest redacted runtime/test evidence
-  air evidence capture <profile> [options]   Run a command with self-hosted evidence adapters
-  air workbench <discovery> [options]        Start the local architecture workbench
   air extract <discovery> [options]          EXPERIMENTAL: extract one reviewed capability
   air verify-import <capability> [options]   EXPERIMENTAL: compare legacy and candidate behavior
   air verify <file> --scenarios <file> [--output <file>]
@@ -118,6 +125,7 @@ Usage:
   air provider-check <deployment> [--json] [--live]
                                                Validate provider bindings and health
   air import-spring [options]                Import Spring messaging into reviewable AIR
+
   air help                                    Show this help
 
 Compile options:
