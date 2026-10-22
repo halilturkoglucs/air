@@ -85,6 +85,18 @@ NEXT edit candidate code only, then rerun `air check run --agent`.
 
 In AIR's LLM verification-lift benchmark, this feedback style (compact, value-revealing differences) took Claude Sonnet 5.5 from 0/9 to 9/9 behaviorally correct migrations.
 
+### Refactors, recorded traffic, and intentional changes
+
+```text
+air check profile ... --at main                   # legacy = the code at a Git ref
+air check baseline                                # runs legacy in a temporary worktree
+air check record --to http://localhost:3000 --output checks/api   # or --from-har session.har
+air check approve <scenario>... --reason "..."    # accept an intentional change, recorded in the baseline
+air check diff-baseline <before> <after>          # review what an approval changed
+```
+
+`--at-setup "<command>"` prepares the worktree (for example `npm ci`) without a shell. Recording keeps only replayable JSON/HTTP exchanges for the chosen origin, never stores `Authorization` or cookies unless `--keep-header` names them, and writes requests only: the baseline is created by replaying them against legacy. Approvals require a clean tree (or `--allow-dirty` for a non-releasable baseline) and keep the previous baseline for review.
+
 ### MCP without extra dependencies
 
 `air mcp` serves four tools over MCP stdio from the same binary: `air_check_status`, `air_check_run` (`reveal`, `maxLines`), `air_check_explain`, and `air_check_baseline`. They wrap the compact mode above.

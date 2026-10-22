@@ -11,3 +11,4 @@ export * from "./report.js";
 export * from "./capture-profile.js";
 export * from "./check.js";
 export * from "./agent-format.js";
+export * from "./record.js";

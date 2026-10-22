@@ -4,6 +4,10 @@ All notable changes are recorded here. AIR follows the pre-1.0 policy in `docs/v
 
 ## Unreleased
 
+- Added `air check baseline --at <ref>` (with `--at-setup`): legacy runs from a clean Git worktree, so refactors and upgrades in place need no second running copy. `run --reveal` uses the same ref.
+- Added `air check record`: a built-in recording proxy or a HAR file becomes reviewable HTTP check scenarios for any language; credentials are dropped unless explicitly kept.
+- Added `air check approve` and `air check diff-baseline` for auditable, per-scenario approval of intentional behavior changes; baselines can now carry an `approvals` record.
+
 ## 0.14.0 - 2026-10-22
 
 - Added the compact agent protocol `air.dev/agent/v1`: `air check profile` stores a check's paths in `.air/check.json`, so `air check run --agent` needs no arguments and prints a deterministic, line-budgeted report with progress since the last run.
