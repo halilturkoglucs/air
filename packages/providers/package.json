@@ -17,5 +17,5 @@
     "postgres": "^3.4.7",
     "redis": "^6.3.0"
   },
-  "devDependencies": { "tsup": "^8.5.0" }
+  "devDependencies": { "tsup": "^9.0.0" }
 }
