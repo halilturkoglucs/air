@@ -75,6 +75,7 @@ Any agent can stop at any time. State lives in Git, in `pnpm benchmark:status`, 
 
 ### Current work
 
-- Suite v1.3.0 (`claude-sonnet-5-5` via Claude Code, medium reasoning) is complete and published: AIR pass@3 9/9 vs 0/9 alone, escaped defects 222 -> 0, about 49k tokens per AIR run. Older suites (v1.0-v1.2) are archived locally under `benchmarks/llm-air-lift/archive/` and not published.
 - v0.13.0 is released (npmjs, GitHub Packages, GitHub release, Homebrew `air-ir`).
-- Agent protocol `air.dev/agent/v1` (`air check run --agent --reveal`, `air mcp`) is in review. Next: switch the benchmark's AIR arm to call this CLI mode (suite v1.4) so published results measure the shipped product; a full rerun costs about 1M Claude tokens and needs the owner's go-ahead.
+- Agent protocol `air.dev/agent/v1` (`air check run --agent --reveal`, `air mcp`) is in PR #36.
+- Benchmark suite v1.4.0 (branch `feat/benchmark-v1.4-agent-cli`, stacked on #36) feeds the AIR arm the exact `air check run --agent --reveal` output. The 18-run `claude-sonnet-5-5` rerun started 2026-10-22 and may pause on usage limits (exit 75). To continue: `pnpm build && pnpm benchmark:status`, then rerun the three printed `pnpm benchmark:llm -- --model claude-sonnet-5-5 --slice … --batch …` commands (they skip completed runs and resume checkpoints). At 18/18: `pnpm benchmark:merge && pnpm benchmark:verify && pnpm benchmark:render`, commit `results/` and `badges/` on this branch, and push. Until then, the README still shows the v1.3 results; `benchmark:verify` fails on this branch because the suite hash changed.
+- v1.3 batches are archived locally under `benchmarks/llm-air-lift/archive/v1.3.0/`.
