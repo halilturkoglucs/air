@@ -1,5 +1,5 @@
 diff --git a/candidate.mjs b/candidate.mjs
-index c62384c..a2d586c 100644
+index c62384c..601a8a0 100644
 --- a/candidate.mjs
 +++ b/candidate.mjs
 @@ -1,18 +1,51 @@
@@ -9,57 +9,58 @@ index c62384c..a2d586c 100644
 -const books = input.books ?? [];
 +const books = Array.isArray(input.books) ? input.books : [];
 +const principal = input.principal ?? null;
-+const query = input.query ?? input.filters ?? {};
++const params = { ...(input.query && typeof input.query === "object" ? input.query : {}), ...input };
  
 -if (input.operation === "delete") {
 +const json = { "content-type": "application/json" };
-+const isLibrarian = principal?.role === "librarian";
-+
-+function out(status, body, list = books, deleted = []) {
-+  const headers = body === null ? {} : json;
++const respond = (status, body, data = books, deleted = [], failures = []) => {
    console.log(JSON.stringify({
 -    http: { status: 204, headers: {}, body: null },
 -    database: { books: books.filter((book) => book.id !== input.bookId), deleted: [input.bookId] },
-+    http: { status, headers, body },
-+    database: { books: list, deleted },
-     failures: []
+-    failures: []
++    http: { status, headers: body === null ? {} : json, body },
++    database: { books: data, deleted },
++    failures
    }));
-+}
++};
 +
-+const project = (b) => ({ id: b.id, ownerId: b.ownerId, title: b.title, genre: b.genre });
++const isLibrarian = principal?.role === "librarian";
++const isOwner = (book) => principal != null && book.ownerId === principal.id;
++
 +const cmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
++const project = (b) => ({ id: b.id, ownerId: b.ownerId, title: b.title, genre: b.genre });
 +
 +if (!principal || principal.id == null) {
-+  out(401, { error: "unauthorized" });
++  respond(401, { error: "unauthorized" });
 +} else if (input.operation === "delete") {
 +  const book = books.find((b) => b.id === input.bookId);
-+  if (!book) out(404, { error: "not found" });
-+  else if (!isLibrarian && book.ownerId !== principal.id) out(403, { error: "forbidden" });
-+  else out(204, null, books.filter((b) => b.id !== input.bookId), [input.bookId]);
++  if (!book) {
++    respond(404, { error: "not found" });
++  } else if (!isOwner(book) && !isLibrarian) {
++    respond(403, { error: "forbidden" });
++  } else {
++    respond(204, null, books.filter((b) => b.id !== input.bookId), [input.bookId]);
++  }
  } else {
 -  console.log(JSON.stringify({
 -    http: { status: 200, headers: { "content-type": "application/json" }, body: { items: books, total: books.length } },
 -    database: { books, deleted: [] },
 -    failures: []
 -  }));
-+  const get = (k) => query[k] ?? input[k];
-+  let items = books.filter((b) => isLibrarian || b.ownerId === principal.id);
-+  const genre = get("genre");
-+  if (genre != null && genre !== "") items = items.filter((b) => b.genre === genre);
-+  const ownerId = get("ownerId");
-+  if (ownerId != null && ownerId !== "") items = items.filter((b) => b.ownerId === ownerId);
-+  const q = get("q") ?? get("title");
++  let items = books.filter((b) => isLibrarian || isOwner(b));
++  if (params.genre != null) items = items.filter((b) => b.genre === params.genre);
++  if (params.ownerId != null) items = items.filter((b) => b.ownerId === params.ownerId);
++  const q = params.q ?? params.search ?? params.title;
 +  if (q != null && q !== "") {
 +    const needle = String(q).toLowerCase();
 +    items = items.filter((b) => String(b.title ?? "").toLowerCase().includes(needle));
 +  }
-+  items = [...items].sort((a, b) =>
-+    cmp(String(a.title ?? "").toLowerCase(), String(b.title ?? "").toLowerCase()) ||
-+    cmp(String(a.id), String(b.id)));
++  const field = ["id", "title", "genre", "ownerId"].includes(params.sort) ? params.sort : "title";
++  const dir = params.order === "desc" ? -1 : 1;
++  items = [...items].sort((a, b) => dir * cmp(a[field] ?? "", b[field] ?? "") || cmp(a.id, b.id));
 +  const total = items.length;
-+  const offset = Math.max(0, Number.parseInt(get("offset"), 10) || 0);
-+  const limitRaw = Number.parseInt(get("limit"), 10);
-+  const limit = Number.isFinite(limitRaw) && limitRaw >= 0 ? limitRaw : undefined;
++  const offset = Math.max(0, Number.isInteger(+params.offset) ? +params.offset : 0);
++  const limit = params.limit != null && Number.isInteger(+params.limit) && +params.limit >= 0 ? +params.limit : undefined;
 +  items = items.slice(offset, limit === undefined ? undefined : offset + limit);
-+  out(200, { items: items.map(project), total });
++  respond(200, { items: items.map(project), total, offset, limit: limit ?? null });
  }

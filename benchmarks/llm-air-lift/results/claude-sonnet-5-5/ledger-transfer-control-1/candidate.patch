@@ -1,8 +1,8 @@
 diff --git a/candidate.mjs b/candidate.mjs
-index b3a4f65..6f48b29 100644
+index b3a4f65..b050f62 100644
 --- a/candidate.mjs
 +++ b/candidate.mjs
-@@ -1,14 +1,73 @@
+@@ -1,14 +1,70 @@
  let source = "";
  for await (const chunk of process.stdin) source += chunk;
  const input = JSON.parse(source || "{}");
@@ -19,71 +19,68 @@ index b3a4f65..6f48b29 100644
 -}));
 +
 +const headers = { "content-type": "application/json" };
-+const { transferId, fromId, toId, amount } = input;
-+const fromVersion = input.fromVersion;
-+const toVersion = input.toVersion;
++const { transferId, idempotencyKey, fromId, toId, amount, fromBalance, toBalance, fromVersion, toVersion } = input;
 +
-+function out(status, body, { accounts, committed, messages = [], ordering = [], failures = [], retryable = false }) {
++const accounts = (f, t, fv, tv) => [
++  { id: fromId, balance: f, version: fv },
++  { id: toId, balance: t, version: tv }
++];
++
++function emit(status, body, db, committed, messages, ordering, failures, retryability, extra = {}) {
 +  console.log(JSON.stringify({
-+    http: { status, headers, body },
-+    database: { accounts, transaction: { committed } },
++    http: { status, headers, body, ...extra },
++    database: { accounts: db, transaction: { committed, rolledBack: !committed } },
 +    messages,
 +    ordering,
 +    failures,
-+    retryability: retryable
++    retryability
 +  }));
 +}
 +
-+const unchanged = [
-+  { id: fromId, balance: input.fromBalance, version: fromVersion },
-+  { id: toId, balance: input.toBalance, version: toVersion }
-+];
++const unchanged = accounts(fromBalance, toBalance, fromVersion, toVersion);
++const fail = (status, code, retryable) =>
++  emit(status, { error: code, transferId }, unchanged, false, [], [], [{ code, status, retryable }], retryable);
 +
-+const replay = input.replay ?? input.existingTransfer ?? input.idempotentReplay;
-+if (replay) {
-+  const prior = typeof replay === "object" ? replay : {};
-+  const body = prior.body ?? {
++const replay = input.replay ?? input.existingTransfer ?? input.idempotencyRecord ?? input.previousResult;
++const replayed = input.replayed === true || input.isReplay === true || input.duplicate === true;
++
++if (replay || replayed) {
++  const prior = replay && typeof replay === "object" ? (replay.body ?? replay) : {};
++  const body = {
 +    transferId: prior.transferId ?? transferId,
-+    fromBalance: prior.fromBalance ?? input.fromBalance,
-+    toBalance: prior.toBalance ?? input.toBalance,
++    fromBalance: prior.fromBalance ?? fromBalance,
++    toBalance: prior.toBalance ?? toBalance,
 +    fromVersion: prior.fromVersion ?? fromVersion,
-+    toVersion: prior.toVersion ?? toVersion
++    toVersion: prior.toVersion ?? toVersion,
++    replayed: true
 +  };
-+  out(prior.status ?? 200, body, {
-+    accounts: unchanged,
-+    committed: false,
-+    ordering: ["idempotency-lookup", "return-stored-response"]
-+  });
-+} else if (
-+  (input.currentFromVersion !== undefined && input.currentFromVersion !== fromVersion) ||
-+  (input.currentToVersion !== undefined && input.currentToVersion !== toVersion)
-+) {
-+  out(409, { error: "version_conflict", transferId }, {
-+    accounts: unchanged,
-+    committed: false,
-+    ordering: ["idempotency-lookup", "load-accounts", "version-check", "rollback"],
-+    failures: [{ code: "version_conflict", status: 409, retryable: true }],
-+    retryable: true
-+  });
-+} else if (!(input.fromBalance >= amount)) {
-+  out(422, { error: "insufficient_funds", transferId }, {
-+    accounts: unchanged,
-+    committed: false,
-+    ordering: ["idempotency-lookup", "load-accounts", "balance-check", "rollback"],
-+    failures: [{ code: "insufficient_funds", status: 422, retryable: false }]
-+  });
++  emit(200, body, accounts(body.fromBalance, body.toBalance, body.fromVersion, body.toVersion), false, [], ["idempotent-replay"], [], false,
++    { headers: { ...headers, "idempotency-key": idempotencyKey ?? "" } });
++} else if (!Number.isInteger(amount) || amount <= 0 || !fromId || !toId || fromId === toId) {
++  fail(400, "invalid_request", false);
 +} else {
-+  const fromBalance = input.fromBalance - amount;
-+  const toBalance = input.toBalance + amount;
-+  const newFromVersion = fromVersion + 1;
-+  const newToVersion = toVersion + 1;
-+  out(201, { transferId, fromBalance, toBalance, fromVersion: newFromVersion, toVersion: newToVersion }, {
-+    accounts: [
-+      { id: fromId, balance: fromBalance, version: newFromVersion },
-+      { id: toId, balance: toBalance, version: newToVersion }
-+    ],
-+    committed: true,
-+    messages: [{ type: "transfer.completed", transferId, fromId, toId, amount }],
-+    ordering: ["idempotency-lookup", "load-accounts", "debit", "credit", "commit", "publish-event"]
-+  });
++  const curFrom = input.currentFromVersion ?? input.actualFromVersion ?? fromVersion;
++  const curTo = input.currentToVersion ?? input.actualToVersion ?? toVersion;
++  const expFrom = input.expectedFromVersion ?? fromVersion;
++  const expTo = input.expectedToVersion ?? toVersion;
++  if (curFrom !== expFrom || curTo !== expTo) {
++    fail(409, "version_conflict", true);
++  } else if (fromBalance < amount) {
++    fail(422, "insufficient_funds", false);
++  } else {
++    const f = fromBalance - amount;
++    const t = toBalance + amount;
++    const fv = fromVersion + 1;
++    const tv = toVersion + 1;
++    emit(
++      201,
++      { transferId, fromBalance: f, toBalance: t, fromVersion: fv, toVersion: tv },
++      accounts(f, t, fv, tv),
++      true,
++      [{ type: "transfer.completed", transferId, fromId, toId, amount }],
++      ["debit", "credit", "commit", "event"],
++      [],
++      false
++    );
++  }
 +}

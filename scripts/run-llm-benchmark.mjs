@@ -199,7 +199,7 @@ for (const target of targets) {
     let airFeedback = "";
     if (target.arm === "air") {
       const feedbackResult = await evaluateCandidate(target.slice, resolve(workspace, "candidate.mjs"), "feedback");
-      airFeedback = `\n\n${explainResult(feedbackResult, await feedbackValues(target.slice, resolve(workspace, "candidate.mjs")))}`;
+      airFeedback = `\n\n${await explainResult(feedbackResult, await feedbackValues(target.slice, resolve(workspace, "candidate.mjs")))}`;
     }
     state.previousFeedback = `${ordinary.code === 0 ? "npm test: pass." : `npm test: FAIL (exit ${ordinary.code}).\n${`${ordinary.stdout}${ordinary.stderr}`.slice(-3000)}`}${airFeedback}`.trim();
     state.transcriptParts.push(JSON.stringify({ kind: "ordinary-tests", round, exitCode: ordinary.code, stdout: ordinary.stdout, stderr: ordinary.stderr }));

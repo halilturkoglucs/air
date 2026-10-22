@@ -1,8 +1,8 @@
 {
   "apiVersion": "air.dev/check-result/v0.1",
   "kind": "CheckResult",
-  "generatedAt": "2026-10-22T08:42:42.148Z",
-  "baselineId": "882623f7608edca875c8f7f3e0c019c3416d957dc6b883188cc3d7d67e745e43",
+  "generatedAt": "2026-10-22T11:31:35.711Z",
+  "baselineId": "caace8546bdd8b312904aa105e41013c73f18f86cd5ed6153fc94a3a3b693fe2",
   "candidate": {
     "name": "candidate",
     "targetHash": "665b2ecdd0ef2157bebeda0f24ae2012786e516d13d79b610d22592207a78d58"

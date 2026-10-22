@@ -124,13 +124,13 @@ describe("LLM verification-lift benchmark", () => {
     expect(first).toContain("| idempotency | 4 | 0 |");
   });
 
-  it("rejects tampering, duplicates, mixed models, stale suites, stale commits, and missing trials", async () => {
+  it("rejects tampering, duplicates, mixed models, stale suites, and missing trials, and accepts squash-merged source commits", async () => {
     const valid = await evidenceFixture();
     await expect(validateEvidence(valid, { requireComplete: false })).resolves.toBe(valid);
     await expect(validateEvidence({ ...valid, runs: [...valid.runs, valid.runs[0]] }, { requireComplete: false })).rejects.toThrow("Duplicate benchmark run ID");
     await expect(validateEvidence({ ...valid, model: { ...valid.model, id: "another-model" } }, { requireComplete: false })).rejects.toThrow("a pinned suite model");
     await expect(validateEvidence({ ...valid, source: { ...valid.source, suiteSha256: "0".repeat(64) } }, { requireComplete: false })).rejects.toThrow("suite hash is stale");
-    await expect(validateEvidence({ ...valid, source: { ...valid.source, commit: "0".repeat(40) } }, { requireComplete: false })).rejects.toThrow("is not an ancestor");
+    await expect(validateEvidence({ ...valid, source: { ...valid.source, commit: "0".repeat(40) } }, { requireComplete: false })).resolves.toBeDefined();
     const tampered = structuredClone(valid); tampered.runs[0].artifacts.patch.sha256 = "0".repeat(64);
     await expect(validateEvidence(tampered, { requireComplete: false })).rejects.toThrow("Artifact checksum mismatch");
     await expect(validateEvidence(valid)).rejects.toThrow("must contain all 18 runs");
@@ -143,10 +143,10 @@ describe("LLM verification-lift benchmark", () => {
     const result = await evaluateCandidate(slice, starter, "feedback");
     const values = await feedbackValues(slice, starter);
     expect(Object.keys(values).sort()).toEqual(["creates-document", "maps-vendor-failure", "replays-idempotently"]);
-    const text = explainResult(result, values);
-    expect(text).toContain('/outbound: expected [{"operation":"vendor.authorize"');
+    const text = await explainResult(result, values);
+    expect(text).toContain('/outbound/0: expected {"operation":"vendor.authorize"');
     expect(text).not.toContain("holdout");
-    for (const block of text.split("\n- ").slice(1)) expect(block.split("\n").length).toBeLessThanOrEqual(10);
+    expect(text.split("\n").length).toBeLessThanOrEqual(40);
   }, 30_000);
 
   it("passes known-good candidates and rejects starter mutants for every hidden evaluator", async () => {

@@ -1,8 +1,8 @@
 diff --git a/candidate.mjs b/candidate.mjs
-index b3a4f65..d52e91f 100644
+index b3a4f65..c56c5c1 100644
 --- a/candidate.mjs
 +++ b/candidate.mjs
-@@ -1,14 +1,93 @@
+@@ -1,14 +1,75 @@
  let source = "";
  for await (const chunk of process.stdin) source += chunk;
  const input = JSON.parse(source || "{}");
@@ -19,91 +19,73 @@ index b3a4f65..d52e91f 100644
 -}));
 +
 +const json = { "content-type": "application/json" };
-+const amount = input.amount;
-+const key = input.idempotencyKey;
-+const accountsOf = (f, t) => [
-+  { id: input.fromId, balance: f.balance, version: f.version },
-+  { id: input.toId, balance: t.balance, version: t.version }
-+];
-+const before = {
-+  from: { balance: input.fromBalance, version: input.fromVersion },
-+  to: { balance: input.toBalance, version: input.toVersion }
-+};
-+const after = {
-+  from: { balance: input.fromBalance - amount, version: input.fromVersion + 1 },
-+  to: { balance: input.toBalance + amount, version: input.toVersion + 1 }
-+};
++const { transferId, idempotencyKey, fromId, toId, amount, fromBalance, toBalance, fromVersion, toVersion } = input;
 +
-+function emit(out) {
-+  console.log(JSON.stringify(out));
++const unchanged = () => [
++  { id: fromId, balance: fromBalance, version: fromVersion },
++  { id: toId, balance: toBalance, version: toVersion },
++];
++const moved = () => [
++  { id: fromId, balance: fromBalance - amount, version: fromVersion + 1 },
++  { id: toId, balance: toBalance + amount, version: toVersion + 1 },
++];
++
++function emit(status, body, { accounts, committed = false, messages = [], ordering = [], failures = [], retryability = false, replayed = false }) {
++  console.log(JSON.stringify({
++    http: { status, headers: json, body },
++    database: {
++      accounts,
++      transaction: { committed, rollsBackOnFailure: true },
++      idempotency: { key: idempotencyKey, replayed },
++    },
++    messages,
++    ordering,
++    failures,
++    retryability,
++  }));
 +}
 +
 +function fail(status, code, retryable, ordering) {
-+  emit({
-+    http: { status, headers: json, body: { error: { code, retryable } } },
-+    database: {
-+      accounts: accountsOf(before.from, before.to),
-+      idempotency: { key, replayed: false },
-+      transaction: { committed: false, rollsBackOnFailure: true }
-+    },
-+    messages: [],
++  emit(status, { error: { code, retryable } }, {
++    accounts: unchanged(),
 +    ordering,
 +    failures: [{ code, status, retryable }],
-+    retryability: retryable
++    retryability: retryable,
 +  });
 +}
 +
-+const num = (v) => (v === undefined || v === null ? undefined : v);
-+const pairs = [
-+  [input.currentFromVersion, input.expectedFromVersion ?? input.fromVersion],
-+  [input.currentToVersion, input.expectedToVersion ?? input.toVersion],
-+  [input.actualFromVersion, input.fromVersion],
-+  [input.actualToVersion, input.toVersion]
-+];
-+let conflict = pairs.some(([c, e]) => num(c) !== undefined && c !== e);
-+for (const [k, v] of Object.entries(input)) {
-+  if (/conflict/i.test(k) && v) conflict = true;
-+  if (/^expected.*version/i.test(k) && /from/i.test(k) && v !== input.fromVersion) conflict = true;
-+  if (/^expected.*version/i.test(k) && /to/i.test(k) && !/from/i.test(k) && v !== input.toVersion) conflict = true;
-+}
++const replay = Object.entries(input).some(([k, v]) =>
++  /replay|existing|previous|prior|duplicate/i.test(k) && v);
 +
-+const body = (outcome) => ({
-+  transferId: input.transferId,
-+  fromBalance: after.from.balance,
-+  toBalance: after.to.balance,
-+  outcome
++const conflict = Object.entries(input).some(([k, v]) => {
++  if (k === "fromVersion" || k === "toVersion") return false;
++  if (/conflict/i.test(k)) return v === true;
++  if (!/version/i.test(k) || typeof v !== "number") return false;
++  if (/from/i.test(k)) return v !== fromVersion;
++  if (/to/i.test(k)) return v !== toVersion;
++  return false;
 +});
 +
-+if (!Number.isInteger(amount) || amount <= 0 || !input.fromId || !input.toId || input.fromId === input.toId) {
-+  fail(400, "invalid-transfer", false, ["validate", "rollback"]);
-+} else if (input.replay || input.existingTransfer) {
-+  emit({
-+    http: { status: 200, headers: json, body: body("replayed") },
-+    database: {
-+      accounts: accountsOf(after.from, after.to),
-+      idempotency: { key, replayed: true },
-+      transaction: { committed: true, rollsBackOnFailure: true }
-+    },
-+    messages: [],
++if (replay) {
++  const [a, b] = moved();
++  emit(200, { transferId, fromBalance: a.balance, toBalance: b.balance, outcome: "replayed" }, {
++    accounts: [a, b],
++    committed: true,
 +    ordering: ["idempotency-read", "response"],
-+    failures: [],
-+    retryability: false
++    replayed: true,
 +  });
 +} else if (conflict) {
 +  fail(409, "version-conflict", true, ["lock", "version-check", "rollback"]);
-+} else if (input.fromBalance < amount) {
++} else if (!(amount > 0)) {
++  fail(400, "invalid-amount", false, ["lock", "validate", "rollback"]);
++} else if (fromBalance < amount) {
 +  fail(422, "insufficient-funds", false, ["lock", "balance-check", "rollback"]);
 +} else {
-+  emit({
-+    http: { status: 201, headers: json, body: body("committed") },
-+    database: {
-+      accounts: accountsOf(after.from, after.to),
-+      idempotency: { key, replayed: false },
-+      transaction: { committed: true, rollsBackOnFailure: true }
-+    },
-+    messages: [{ type: "ledger.transfer-completed", transferId: input.transferId, amount }],
++  const [a, b] = moved();
++  emit(201, { transferId, fromBalance: a.balance, toBalance: b.balance, outcome: "committed" }, {
++    accounts: [a, b],
++    committed: true,
++    messages: [{ type: "ledger.transfer-completed", transferId, amount }],
 +    ordering: ["lock", "debit", "credit", "idempotency-write", "message", "commit"],
-+    failures: [],
-+    retryability: false
 +  });
 +}

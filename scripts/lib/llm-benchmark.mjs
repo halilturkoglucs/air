@@ -123,8 +123,7 @@ export async function validateEvidence(evidence, options = {}) {
   if (evidence.budget.repairRounds !== suite.budget.repairRounds) throw new Error("Evidence repair budget does not match the suite.");
   const expectedSuiteHash = await suiteSha256();
   if (evidence.source.suiteSha256 !== expectedSuiteHash) throw new Error("Evidence suite hash is stale.");
-  try { execFileSync("git", ["merge-base", "--is-ancestor", evidence.source.commit, "HEAD"], { cwd: root, stdio: "ignore" }); }
-  catch { throw new Error(`Evidence source commit ${evidence.source.commit} is not an ancestor of HEAD.`); }
+  // source.commit is provenance only: squash merges rewrite history, so integrity rests on the suite hash, artifact checksums, and deterministic rescoring.
 
   const ids = new Set();
   for (const run of evidence.runs) {
@@ -346,30 +345,10 @@ export async function feedbackValues(slice, candidatePath) {
   return values;
 }
 
-const shown = (value) => {
-  if (value === undefined) return "<missing>";
-  const text = JSON.stringify(value);
-  return text.length > 160 ? `${text.slice(0, 157)}...` : text;
-};
-
-const feedbackLinesPerScenario = 8;
-
-// Compact feedback keeps tokens down: sibling leaf mismatches collapse into their parent, and each scenario is capped.
-export function explainResult(result, values) {
-  if (result.passed) return "AIR check: PASS. Candidate matches the reviewed feedback boundary.";
-  const lines = [];
-  for (const scenario of [...new Set(result.mismatches.map((item) => item.scenario))]) {
-    const items = result.mismatches.filter((item) => item.scenario === scenario);
-    const parent = (selector) => selector.split("/").slice(0, -1).join("/") || "/";
-    const siblings = {};
-    for (const item of items) siblings[parent(item.selector)] = (siblings[parent(item.selector)] ?? 0) + 1;
-    const selectors = [...new Set(items.map((item) => (siblings[parent(item.selector)] > 1 && parent(item.selector) !== "/" ? parent(item.selector) : item.selector)))];
-    const observed = values?.[scenario];
-    const shownSelectors = selectors.slice(0, feedbackLinesPerScenario).map((selector) => `  ${selector}: ${observed ? `expected ${shown(pointerValue(observed.expected, selector))}, got ${shown(pointerValue(observed.actual, selector))}` : "differs"}`);
-    if (selectors.length > feedbackLinesPerScenario) shownSelectors.push(`  ...and ${selectors.length - feedbackLinesPerScenario} more differences`);
-    lines.push(`- ${scenario} (${items.length} differences):`, ...shownSelectors);
-  }
-  return `AIR check: FAIL. Fix candidate.mjs so its observation matches the expected values.\n${lines.join("\n")}`;
+// Suite v1.4+: the AIR arm reads exactly what `air check run --agent --reveal` prints, so results measure the shipped CLI.
+export async function explainResult(result, values) {
+  const discovery = await import(pathToFileURL(resolve(root, "packages/discovery/dist/index.js")).href);
+  return discovery.formatAgentReport(discovery.buildAgentReport({ result, values: new Map(Object.entries(values ?? {})) })).trimEnd();
 }
 
 export function scrubTranscript(source) {
