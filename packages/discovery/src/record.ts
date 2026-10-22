@@ -60,12 +60,21 @@ const readBody = async (request: IncomingMessage): Promise<string> => { let text
 // Minimal recording reverse proxy: forwards each request upstream unchanged and remembers the exchange.
 export async function recordHttpTraffic(options: { readonly upstream: string; readonly port?: number; readonly maxRequests?: number; readonly signal?: AbortSignal; readonly onListening?: (url: string) => void; readonly onExchange?: (exchange: RecordedExchange) => void }): Promise<RecordedExchange[]> {
   const exchanges: RecordedExchange[] = [];
+  const upstreamBase = new URL(options.upstream);
   const server = createServer((request, response) => {
     void (async () => {
       try {
+        // Only origin-form paths are forwarded, and only to the configured upstream origin: an absolute-form
+        // request URL ("http://other/") or a "//host" path must never redirect the proxy elsewhere (SSRF).
+        const path = request.url ?? "/";
+        const targetUrl = new URL(path, upstreamBase);
+        if (!path.startsWith("/") || path.startsWith("//") || targetUrl.origin !== upstreamBase.origin) {
+          response.writeHead(400, { "content-type": "text/plain" }).end("AIR recorder forwards only paths on the configured upstream.");
+          return;
+        }
         const body = await readBody(request);
         const headers = Object.fromEntries(Object.entries(request.headers).filter(([name, value]) => !HOP_HEADERS.has(name) && typeof value === "string") as [string, string][]);
-        const upstream = await fetch(new URL(request.url ?? "/", options.upstream), { method: request.method ?? "GET", headers, redirect: "manual", ...(body && request.method !== "GET" && request.method !== "HEAD" ? { body } : {}) });
+        const upstream = await fetch(targetUrl, { method: request.method ?? "GET", headers, redirect: "manual", ...(body && request.method !== "GET" && request.method !== "HEAD" ? { body } : {}) });
         const payload = Buffer.from(await upstream.arrayBuffer());
         const responseHeaders = Object.fromEntries([...upstream.headers.entries()].filter(([name]) => !HOP_HEADERS.has(name) && name !== "content-encoding"));
         response.writeHead(upstream.status, responseHeaders).end(payload);

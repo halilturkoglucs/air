@@ -1,5 +1,6 @@
 import { spawn, spawnSync } from "node:child_process";
 import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { request as httpRequest } from "node:http";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -86,6 +87,11 @@ describe("air check for refactors and recorded traffic", () => {
       const recorder = spawn(process.execPath, [bin, "check", "record", "--to", upstream, "--output", "live", "--listen", String(proxyPort), "--max", "2"], { cwd: root });
       let stderr = ""; recorder.stderr.on("data", (chunk) => { stderr += chunk; });
       await new Promise<void>((ready) => { const wait = (): void => { if (stderr.includes("Recording:")) ready(); else setTimeout(wait, 50); }; wait(); });
+      // Absolute-form and protocol-relative request targets must be refused, not forwarded (SSRF guard).
+      for (const target of ["http://169.254.169.254/latest/meta-data", "//169.254.169.254/latest"]) {
+        const refused = await new Promise<number>((done) => { const request = httpRequest({ host: "127.0.0.1", port: proxyPort, path: target }, (response) => { response.resume(); done(response.statusCode ?? 0); }); request.end(); });
+        expect(refused).toBe(400);
+      }
       expect(await (await fetch(`http://127.0.0.1:${proxyPort}/api/items`)).json()).toEqual({ path: "/api/items", method: "GET" });
       await fetch(`http://127.0.0.1:${proxyPort}/api/items`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "x" }) });
       expect(await new Promise<number | null>((done) => recorder.once("close", done))).toBe(0);
