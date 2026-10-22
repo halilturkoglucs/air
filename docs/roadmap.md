@@ -193,7 +193,7 @@ The root workspace, CLI, and plugin SDK are versioned together and distributed i
 
 Public-corpus work is product evidence, not a customer ROI claim. AIR never claims that matching legacy behavior proves that behavior correct or that uncaptured behavior is equivalent.
 
-## 12a. Any service, any change — milestone 1 delivered
+## 12a. Any service, any change — milestones 1–2 delivered
 
 AIR's check engine is already language- and framework-neutral (argv or HTTP targets); only check authoring depended on Spring discovery. This track widens what developers can verify without adding code generators or per-framework analyzers.
 
@@ -201,7 +201,7 @@ AIR's check engine is already language- and framework-neutral (argv or HTTP targ
    - `air check baseline --at <ref>` runs legacy from a clean Git worktree, so refactors, framework upgrades, and in-place rewrites need no second running copy. `--reveal` uses the same ref.
    - `air check record` turns live traffic (built-in recording proxy) or a HAR file into reviewable HTTP check scenarios for any language. Credentials are dropped unless a header is explicitly kept.
    - `air check approve <scenario> --reason` accepts intentional changes per scenario with an auditable record; `air check diff-baseline` reviews them.
-2. Topology changes (monolith to services and back): `internal-boundary` and `rename` normalizations, multi-process candidates, and extract/merge examples.
+2. Topology changes (monolith to services and back) — delivered: `rename` and `internal-boundary` normalizations, `lifecycle.services` for multi-process candidates, and `examples/extract-service` (merging is the same check in reverse).
 3. Framework-neutral discovery from existing artifacts: OpenTelemetry trace import, `air check init --from-openapi`, and `air check coverage`.
 4. UI refactors: a `ui` observation category (accessibility tree, page network calls, console errors, visible text) produced by a user-owned script; no browser dependency in AIR.
 

@@ -278,6 +278,10 @@ AIR supports only deterministic, reviewable normalization:
 - `typed-token` verifies UUIDs or UTC timestamps and can bind the same generated value across several locations on each side;
 - `unordered-array` sorts an array by a declared unique key;
 - `ignore` removes one JSON pointer and requires a written reason.
+- `rename` moves a value to a canonical pointer with a written reason, for example a table that moved to another service's database (`/database/billing_invoices` to `/database/invoices`); it is a no-op where the pointer is absent and fails if the destination already exists;
+- `internal-boundary` drops array items that match a subset pattern, with a written reason, for calls or steps that became internal when a service was extracted or merged (for example `match: { service: billing }` on `/outbound`).
+
+For topology changes, a target can also start supporting processes with `lifecycle.services` (each with an optional `readinessUrl`) so a candidate made of several services runs together. See `examples/extract-service` for a monolith-to-service split.
 
 AIR does not run regular expressions, scripts, LLM judgments, percentage similarity, or arbitrary comparison code. Keep policies narrow; an ignored value is an unproven value.
 

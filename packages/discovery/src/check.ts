@@ -21,7 +21,9 @@ type CheckRequest =
 export type NormalizationRule =
   | { readonly kind: "ignore"; readonly pointer: string; readonly reason: string }
   | { readonly kind: "typed-token"; readonly pointer: string; readonly format: "uuid" | "timestamp"; readonly binding?: string }
-  | { readonly kind: "unordered-array"; readonly pointer: string; readonly key: string };
+  | { readonly kind: "unordered-array"; readonly pointer: string; readonly key: string }
+  | { readonly kind: "rename"; readonly pointer: string; readonly to: string; readonly reason: string }
+  | { readonly kind: "internal-boundary"; readonly pointer: string; readonly match: unknown; readonly reason: string };
 
 export interface CheckDocument {
   readonly apiVersion: "air.dev/check/v0.1";
@@ -48,7 +50,7 @@ export interface CheckTarget {
     readonly baseUrlEnv?: string;
     readonly command?: CommandDefinition;
     readonly observationPath?: string;
-    readonly lifecycle?: { readonly start?: CommandDefinition; readonly reset?: CommandDefinition; readonly readiness?: { readonly path: string; readonly timeoutMs?: number } };
+    readonly lifecycle?: { readonly start?: CommandDefinition; readonly reset?: CommandDefinition; readonly readiness?: { readonly path: string; readonly timeoutMs?: number }; readonly services?: readonly { readonly name: string; readonly command: CommandDefinition; readonly readinessUrl?: string; readonly timeoutMs?: number }[] };
     readonly evidenceCaptureProfile?: string;
   };
 }
@@ -124,7 +126,7 @@ const DEFAULT_POLICY: CheckPolicy = {
   apiVersion: "air.dev/check-policy/v0.1",
   kind: "CheckPolicy",
   metadata: { name: "air-default" },
-  spec: { allowedNormalizations: ["ignore", "typed-token", "unordered-array"], requireCleanBaseline: true, unmatchedEvidence: "fail" },
+  spec: { allowedNormalizations: ["ignore", "typed-token", "unordered-array", "rename", "internal-boundary"], requireCleanBaseline: true, unmatchedEvidence: "fail" },
 };
 
 function validationError(label: string, validate: ValidateFunction<unknown>): CheckInputError {
@@ -217,10 +219,37 @@ function at(parent: Record<string, unknown> | unknown[], key: string): unknown {
 function setAt(parent: Record<string, unknown> | unknown[], key: string, value: unknown): void { if (Array.isArray(parent)) parent[Number(key)] = value; else Object.defineProperty(parent, key, { value, enumerable: true, configurable: true, writable: true }); }
 function deleteAt(parent: Record<string, unknown> | unknown[], key: string): void { if (Array.isArray(parent)) parent.splice(Number(key), 1); else Reflect.deleteProperty(parent, key); }
 
+function optionalParent(root: unknown, pointer: string): { parent: Record<string, unknown> | unknown[]; key: string } | undefined {
+  try { return getParent(root, pointer); } catch (error) { if (error instanceof CheckInputError && error.message.endsWith("does not exist.")) return undefined; throw error; }
+}
+
+function matchesPattern(value: unknown, pattern: unknown): boolean {
+  if (pattern && typeof pattern === "object" && !Array.isArray(pattern)) {
+    return !!value && typeof value === "object" && !Array.isArray(value) && Object.entries(pattern as Record<string, unknown>).every(([key, expected]) => Object.hasOwn(value, key) && matchesPattern((value as Record<string, unknown>)[key], expected));
+  }
+  return canonical(value) === canonical(pattern);
+}
+
+function applyTopologyRule(root: unknown, rule: Extract<NormalizationRule, { kind: "rename" | "internal-boundary" }>): void {
+  const location = optionalParent(root, rule.pointer); if (!location) return;
+  const value = at(location.parent, location.key); if (value === undefined) return;
+  if (rule.kind === "internal-boundary") {
+    if (!Array.isArray(value)) throw new CheckInputError(`internal-boundary ${rule.pointer} must point to an array.`);
+    setAt(location.parent, location.key, value.filter((item) => !matchesPattern(item, rule.match)));
+    return;
+  }
+  const destination = getParent(root, rule.to);
+  if (at(destination.parent, destination.key) !== undefined) throw new CheckInputError(`rename target ${rule.to} already exists.`);
+  deleteAt(location.parent, location.key);
+  setAt(destination.parent, destination.key, value);
+}
+
 function applyNormalization(observation: unknown, rules: readonly NormalizationRule[]): unknown {
   const copy = JSON.parse(JSON.stringify(observation)) as unknown;
   const bindings = new Map<string, string>();
   for (const rule of rules) {
+    // Topology rules apply only where one side has the data (a split moves tables or adds internal calls), so a missing pointer is a no-op.
+    if (rule.kind === "rename" || rule.kind === "internal-boundary") { applyTopologyRule(copy, rule); continue; }
     const { parent, key } = getParent(copy, rule.pointer);
     const value = at(parent, key);
     if (value === undefined) throw new CheckInputError(`Normalization pointer ${rule.pointer} does not exist.`);
@@ -358,6 +387,15 @@ async function readBoundedResponse(response: Response, label: string): Promise<s
   return source + decoder.decode();
 }
 
+async function waitForUrl(url: string, timeoutMs: number, label: string): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try { const response = await fetch(url, { redirect: "manual", signal: AbortSignal.timeout(1000) }); if (response.ok) return; } catch { /* retry bounded readiness */ }
+    await new Promise((complete) => setTimeout(complete, 100));
+  }
+  throw new CheckInfrastructureError(`${label} did not become ready within ${timeoutMs}ms.`);
+}
+
 async function waitForReadiness(target: CheckTarget): Promise<void> {
   const readiness = target.spec.lifecycle?.readiness; if (!readiness) return;
   const deadline = Date.now() + (readiness.timeoutMs ?? 30_000); const url = scopedUrl(targetBaseUrl(target), readiness.path);
@@ -396,12 +434,20 @@ interface CheckExecution { readonly scenarios: readonly { readonly id: string; r
 
 // keepRaw retains normalized observations in memory only, for local value reveal; nothing raw is ever written to disk.
 async function executeScenarios(check: CheckDocument, target: CheckTarget, repositoryRoot: string, keepRaw = false): Promise<CheckExecution> {
-  let started: ReturnType<typeof spawn> | undefined;
+  let started: ReturnType<typeof spawn> | undefined; const services: ReturnType<typeof spawn>[] = [];
   try {
     const observesEffects = check.spec.observations.some((category) => category !== "http");
     if (observesEffects && !target.spec.fixtureIsolation) throw new CheckInputError(`Target ${target.metadata.name} must explicitly declare fixtureIsolation for observable side effects.`);
     if (target.spec.fixtureIsolation === "process" && target.spec.type !== "command") throw new CheckInputError("Process fixture isolation is valid only for command targets that start a fresh process per scenario.");
     if (target.spec.fixtureIsolation === "reset-command" && !target.spec.lifecycle?.reset) throw new CheckInputError("reset-command fixture isolation requires an explicit lifecycle.reset argv command.");
+    for (const service of target.spec.lifecycle?.services ?? []) {
+      const [program, ...arguments_] = service.command.argv;
+      if (!program) throw new CheckInputError(`Service ${service.name} argv cannot be empty.`);
+      const child = spawn(program, arguments_, { cwd: safeWorkingDirectory(repositoryRoot, target.spec.workingDirectory, service.command.workingDirectory), env: { ...safeBaseEnvironment(), ...commandEnvironment(target.spec.environment), ...commandEnvironment(service.command.environment) }, shell: false, stdio: "ignore" });
+      services.push(child);
+      await new Promise<void>((complete, reject) => { child.once("spawn", complete); child.once("error", (error) => reject(new CheckInfrastructureError(`Could not start service ${service.name}: ${error.message}`))); });
+      if (service.readinessUrl) await waitForUrl(service.readinessUrl, service.timeoutMs ?? 30_000, `Service ${service.name}`);
+    }
     if (target.spec.lifecycle?.start) {
       const definition = target.spec.lifecycle.start; const [program, ...arguments_] = definition.argv;
       if (!program) throw new CheckInputError("Start command argv cannot be empty.");
@@ -438,7 +484,10 @@ async function executeScenarios(check: CheckDocument, target: CheckTarget, repos
       }
     }
     return { scenarios: output, issues };
-  } finally { if (started && !started.killed) started.kill("SIGTERM"); }
+  } finally {
+    if (started && !started.killed) started.kill("SIGTERM");
+    for (const service of services.reverse()) if (!service.killed) service.kill("SIGTERM");
+  }
 }
 
 function hashesFor(check: CheckDocument, policy: CheckPolicy, target: CheckTarget, repositoryHash: string): CheckBaseline["hashes"] {

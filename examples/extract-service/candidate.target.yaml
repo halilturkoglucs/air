@@ -1,0 +1,13 @@
+apiVersion: air.dev/check-target/v0.1
+kind: CheckTarget
+metadata: { name: orders-plus-billing }
+spec:
+  type: command
+  fixtureIsolation: process
+  workingDirectory: examples/extract-service
+  command: { argv: [node, orders.mjs] }
+  lifecycle:
+    services:
+      - name: billing
+        command: { argv: [node, billing.mjs] }
+        readinessUrl: http://127.0.0.1:4710/health

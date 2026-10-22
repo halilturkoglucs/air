@@ -1,0 +1,6 @@
+apiVersion: air.dev/check-policy/v0.1
+kind: CheckPolicy
+metadata: { name: extract-billing }
+spec:
+  allowedNormalizations: [rename, internal-boundary]
+  requiredObservations: [http, database, ordering, outbound]

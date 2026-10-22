@@ -1,0 +1,15 @@
+apiVersion: air.dev/check/v0.1
+kind: Check
+metadata: { name: extract-billing }
+spec:
+  capability: { id: orders.create }
+  observations: [http, database, ordering, outbound]
+  scenarios:
+    - { id: small-order, request: { kind: command, input: { orderId: o-1, amount: 20 } } }
+    - { id: large-order, request: { kind: command, input: { orderId: o-2, amount: 900 } } }
+  normalization:
+    # The invoices table moved to the billing service's database.
+    - { kind: rename, pointer: /database/billing_invoices, to: /database/invoices, reason: invoices table moved to the billing service }
+    # Calls between the two halves of the old monolith are internal, not externally visible behavior.
+    - { kind: internal-boundary, pointer: /outbound, match: { service: billing }, reason: orders to billing is an internal call after the split }
+    - { kind: internal-boundary, pointer: /ordering, match: billing.request, reason: internal hop introduced by the split }

@@ -1,0 +1,8 @@
+apiVersion: air.dev/check-target/v0.1
+kind: CheckTarget
+metadata: { name: monolith }
+spec:
+  type: command
+  fixtureIsolation: process
+  workingDirectory: examples/extract-service
+  command: { argv: [node, monolith.mjs] }
