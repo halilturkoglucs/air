@@ -79,5 +79,6 @@ Any agent can stop at any time. State lives in Git, in `pnpm benchmark:status`, 
 
 ### Current work
 
-- v0.17.0 is released. Merged since: #51 (Java, C#, PHP, Rust, Ruby discovery), #52 (coverage, sign-in replay, stability pass), #53 (narrower CLI/README surface). #54 adds events, caches and gRPC discovery, `shape` normalization, and `harness verify --teardown`, from a Docker trial on the OpenTelemetry demo.
-- Next: release v0.18.0 after #54. Open items: UI observations (roadmap Milestone 5), `watch`, `--failed-only`, `--repeat`, `--format github`, and a trial with a real user's service.
+- v0.18.0 is released (#55). Earlier, after v0.17.0: #51 (Java, C#, PHP, Rust, Ruby discovery), #52 (coverage, sign-in replay, stability pass), #53 (narrower CLI/README surface). #54 adds events, caches and gRPC discovery, `shape` normalization, and `harness verify --teardown`, from a Docker trial on the OpenTelemetry demo.
+- `docs/comparison-keploy.md`: Keploy (open-source build) missed the planted OpenTelemetry demo bug because it mocks `checkout`; AIR's harness caught it.
+- Open items: UI observations (roadmap Milestone 5), `watch`, `--failed-only`, `--repeat`, `--format github`, and a trial with a real user's service.
