@@ -4,6 +4,8 @@ All notable changes are recorded here. AIR follows the pre-1.0 policy in `docs/v
 
 ## Unreleased
 
+- Docs: [AIR and Keploy on the same planted bug](docs/comparison-keploy.md), run on the OpenTelemetry demo.
+
 ## 0.18.0 - 2026-10-22
 
 From a field trial on the OpenTelemetry demo (gRPC, Kafka, Valkey, PostgreSQL across nine languages):

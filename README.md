@@ -86,7 +86,7 @@ Every new baseline is run twice. Generated IDs, timestamps, and JWTs that differ
 
 Events, caches, data, jobs, files, and emails are covered without AIR parsing every technology: `air protect` prints a `TASK`, your coding agent writes a small harness in any language (`air harness new`), and AIR accepts it only after `air harness verify --mutation <patch>` proves it is stable across runs, reacts to its input, and catches a deliberately broken copy of the code. Verified harnesses are baselined and checked by every `air protect` run. For a service in containers, `--setup` builds and deploys the broken copy and `--teardown` restores the original.
 
-On the [OpenTelemetry demo](docs/design/discover-code.md#field-trial-opentelemetry-demo) (nine languages, gRPC, Kafka, Valkey), a planted checkout bug that sent only the first order item to Kafka passed all 14 HTTP scenarios; the harness caught it in both the Kafka event and the accounting database.
+On the [OpenTelemetry demo](docs/design/discover-code.md#field-trial-opentelemetry-demo) (nine languages, gRPC, Kafka, Valkey), a planted checkout bug that sent only the first order item to Kafka passed all 14 HTTP scenarios; the harness caught it in both the Kafka event and the accounting database. The same bug [passed Keploy's replay tests](docs/comparison-keploy.md): Keploy mocks `checkout`, so the changed code never ran.
 
 ### Ways to start
 
