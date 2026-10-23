@@ -81,4 +81,6 @@ Any agent can stop at any time. State lives in Git, in `pnpm benchmark:status`, 
 
 - v0.18.0 is released (#55). Earlier, after v0.17.0: #51 (Java, C#, PHP, Rust, Ruby discovery), #52 (coverage, sign-in replay, stability pass), #53 (narrower CLI/README surface). #54 adds events, caches and gRPC discovery, `shape` normalization, and `harness verify --teardown`, from a Docker trial on the OpenTelemetry demo.
 - `docs/comparison-keploy.md`: Keploy (open-source build) missed the planted OpenTelemetry demo bug because it mocks `checkout`; AIR's harness caught it.
+- 2026-10-23: the repository was shared publicly (a Slack group, X @pearcoder, LinkedIn Pearcoder) to find first users. Triage incoming issues and reproduce them before changing code. Fork PRs need approval to run CI for all outside contributors. Merge commits are off and merged branches are deleted automatically. Third-party actions are pinned to commit SHAs (#57). A tag ruleset for `v*` is deferred while the owner is the only writer.
+- Next, in order: real-user feedback from the launch, a benchmark rerun with a second model family, then the open items.
 - Open items: UI observations (roadmap Milestone 5), `watch`, `--failed-only`, `--repeat`, `--format github`, and a trial with a real user's service.
