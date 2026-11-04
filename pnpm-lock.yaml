@@ -64,8 +64,8 @@ importers:
         specifier: ^22.15.0
         version: 22.20.5
       postgres:
-        specifier: ^3.4.7
-        version: 3.4.9
+        specifier: ^4.0.0
+        version: 4.0.0
       tsup:
         specifier: ^9.0.0
         version: 9.0.0(postcss@8.5.28)(typescript@5.9.3)(yaml@2.9.1)
@@ -102,8 +102,8 @@ importers:
         specifier: ^2.2.4
         version: 2.2.4
       postgres:
-        specifier: ^3.4.7
-        version: 3.4.9
+        specifier: ^4.0.0
+        version: 4.0.0
       redis:
         specifier: ^6.3.0
         version: 6.3.0
@@ -221,8 +221,8 @@ importers:
         specifier: workspace:*
         version: link:../air-schema
       postgres:
-        specifier: ^3.4.8
-        version: 3.4.9
+        specifier: ^4.0.0
+        version: 4.0.0
 
   packages/import-spring:
     dependencies:
@@ -258,8 +258,8 @@ importers:
         specifier: ^2.2.4
         version: 2.2.4
       postgres:
-        specifier: ^3.4.7
-        version: 3.4.9
+        specifier: ^4.0.0
+        version: 4.0.0
       redis:
         specifier: ^6.3.0
         version: 6.3.0
@@ -857,9 +857,9 @@ packages:
     resolution: {integrity: sha512-RRuzqDtt5Y9h3quz5hWhK+TPnsmVs6WwSU6LkJMeY4HstUEDuYTG8UJSdawMRzmzAtV+KEoG8N3Qg2qLy5vM/A==}
     engines: {node: ^10 || ^12 || >=14}
 
-  postgres@3.4.9:
-    resolution: {integrity: sha512-GD3qdB0x1z9xgFI6cdRD6xu2Sp2WCOEoe3mtnyB5Ee0XrrL5Pe+e4CCnJrRMnL1zYtRDZmQQVbvOttLnKDLnaw==}
-    engines: {node: '>=12'}
+  postgres@4.0.0:
+    resolution: {integrity: sha512-kBh8qXtcvvIAc00DftQyOxz7M/3Zxww1tRMXZPLzipNXXl5PIzHml+9zB3Mrge2U8ldc0WF1ZdLp1iYQi7Kh3A==}
+    engines: {node: '>=20'}
 
   readdirp@5.1.1:
     resolution: {integrity: sha512-Kko+Y5XQ6fM+Ce3dq3m9YGxnacYZYl9cA1wZjaF3Vbry2L3i1qVg8+CAgNPsXRArPMUMCaOR7oa9Nqntc43JKA==}
@@ -1409,7 +1409,7 @@ snapshots:
       picocolors: 1.1.1
       source-map-js: 1.2.2
 
-  postgres@3.4.9: {}
+  postgres@4.0.0: {}
 
   readdirp@5.1.1: {}
 

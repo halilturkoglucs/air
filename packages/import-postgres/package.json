@@ -17,6 +17,6 @@
   },
   "dependencies": {
     "@air/schema": "workspace:*",
-    "postgres": "^3.4.8"
+    "postgres": "^4.0.0"
   }
 }
