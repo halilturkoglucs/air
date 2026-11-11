@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@halilturkoglucs/air-plugin-sdk": "workspace:*",
-    "amqplib": "^2.2.0",
+    "amqplib": "^2.3.1",
     "kafkajs": "^2.2.4",
     "postgres": "^3.4.7",
     "redis": "^6.3.0"
