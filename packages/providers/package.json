@@ -14,7 +14,7 @@
     "@halilturkoglucs/air-plugin-sdk": "workspace:*",
     "amqplib": "^2.2.0",
     "kafkajs": "^2.2.4",
-    "postgres": "^3.4.7",
+    "postgres": "^4.1.0",
     "redis": "^6.3.0"
   },
   "devDependencies": { "tsup": "^9.0.0" }
